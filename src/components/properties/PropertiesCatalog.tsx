@@ -76,7 +76,9 @@ export function PropertiesCatalog() {
           <span>⌕</span>
           <input value={search} onChange={(event) => setSearch(event.target.value)} type="search" placeholder="Адрес, ЖК или номер объекта" />
         </label>
-        <button className={styles.primaryButton} type="button" onClick={() => setIsCreating(true)}>＋ Новый объект</button>
+        <button className={styles.primaryButton} type="button" aria-label="Новый объект" onClick={() => setIsCreating(true)}>
+          <span aria-hidden="true">＋</span><span className={styles.actionLabel}>Новый объект</span>
+        </button>
       </header>
 
       <div className={styles.content}>

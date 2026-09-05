@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { mockTasks } from "@/data/mock-tasks";
 import type { CrmTask, TaskKind, TaskPeriod } from "@/types/crm";
 import { CompleteTaskModal } from "./CompleteTaskModal";
 import { NewTaskModal, type NewTaskDraft } from "./NewTaskModal";
+import { useTasks } from "./TasksContext";
 import styles from "./tasks.module.css";
 
 type PeriodFilter = "active" | TaskPeriod;
@@ -20,7 +20,7 @@ const periodLabels: Record<TaskPeriod, string> = {
 const kindIcons: Record<TaskKind, string> = { Звонок: "☎", Встреча: "□", Сообщение: "↗", Другое: "✓" };
 
 export function TasksCenter() {
-  const [tasks, setTasks] = useState(mockTasks);
+  const { tasks, setTasks } = useTasks();
   const [period, setPeriod] = useState<PeriodFilter>("active");
   const [assignee, setAssignee] = useState("all");
   const [kind, setKind] = useState<"all" | TaskKind>("all");
@@ -63,6 +63,7 @@ export function TasksCenter() {
       title: draft.title.trim(),
       kind: draft.kind,
       period: draft.period,
+      dueDate: draft.period === "today" ? "2026-09-05" : "2026-09-06",
       dueLabel: periodLabels[draft.period],
       dueTime: draft.dueTime || undefined,
       assignee: draft.assignee,
@@ -79,7 +80,9 @@ export function TasksCenter() {
       <header className={styles.topbar}>
         <h1>Задачи</h1>
         <label className={styles.search}><span>⌕</span><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Задача, контакт или сделка" /></label>
-        <button className={styles.primaryButton} type="button" onClick={() => setIsCreating(true)}>＋ Новая задача</button>
+        <button className={styles.primaryButton} type="button" aria-label="Новая задача" onClick={() => setIsCreating(true)}>
+          <span aria-hidden="true">＋</span><span className={styles.actionLabel}>Новая задача</span>
+        </button>
       </header>
 
       <div className={styles.content}>

@@ -10,7 +10,7 @@ const primaryItems = [
   ["◎", "Контакты", "/contacts"],
   ["◇", "Объекты", "/objects"],
   ["✓", "Задачи", "/tasks"],
-  ["□", "Календарь", "#"],
+  ["□", "Календарь", "/calendar"],
 ];
 
 const secondaryItems = [
@@ -20,17 +20,25 @@ const secondaryItems = [
   ["⚙", "Настройки", "#"],
 ];
 
-export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
+interface SidebarProps {
+  collapsed: boolean;
+  mobileOpen: boolean;
+  onMobileClose: () => void;
+  onToggle: () => void;
+}
+
+export function Sidebar({ collapsed, mobileOpen, onMobileClose, onToggle }: SidebarProps) {
   const pathname = usePathname();
 
   return (
-    <aside className={`${styles.sidebar} ${collapsed ? styles.sidebarCollapsed : ""}`}>
+    <aside className={`${styles.sidebar} ${collapsed ? styles.sidebarCollapsed : ""} ${mobileOpen ? styles.sidebarMobileOpen : ""}`}>
       <div className={styles.brand}>
         <span className={styles.brandMark}>E</span>
         <span>Estate CRM</span>
         <button className={styles.collapseButton} type="button" aria-label={collapsed ? "Развернуть меню" : "Свернуть меню"} onClick={onToggle}>
           {collapsed ? "›" : "‹"}
         </button>
+        <button className={styles.mobileCloseButton} type="button" aria-label="Закрыть меню" onClick={onMobileClose}>×</button>
       </div>
 
       <nav className={styles.navigation} aria-label="Основная навигация">
@@ -40,6 +48,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
               className={`${styles.navItem} ${(href === "/" ? pathname === "/" : pathname.startsWith(href)) ? styles.navItemActive : ""}`}
               href={href}
               key={label}
+              onClick={onMobileClose}
             >
               <span className={styles.navIcon}>{icon}</span>
               <span>{label}</span>
@@ -52,7 +61,7 @@ export function Sidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle:
 
         <div className={styles.navGroup}>
           {secondaryItems.map(([icon, label, href]) => (
-            <Link className={styles.navItem} href={href} key={label}>
+            <Link className={styles.navItem} href={href} key={label} onClick={onMobileClose}>
               <span className={styles.navIcon}>{icon}</span>
               <span>{label}</span>
             </Link>

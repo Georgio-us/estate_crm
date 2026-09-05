@@ -1,4 +1,50 @@
 :root {
+  /* Typography */
+  --font-family-sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-size-caption: 12px;
+  --font-size-body-sm: 13px;
+  --font-size-body: 14px;
+  --font-size-body-lg: 16px;
+  --font-size-heading-sm: 20px;
+  --font-size-heading-md: 26px;
+  --font-size-heading-lg: 32px;
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.65;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 680;
+  --font-weight-heavy: 700;
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* Shape and elevation */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-pill: 999px;
+  --shadow-focus: 0 0 0 3px #edf3ff;
+  --shadow-panel: 0 3px 14px rgba(25, 25, 23, .06);
+  --shadow-drawer: -10px 0 34px rgba(25, 25, 23, .1);
+  --shadow-modal: 0 20px 60px rgba(28, 28, 26, .19);
+
+  /* Controls */
+  --control-height-sm: 34px;
+  --control-height: 40px;
+  --control-height-lg: 44px;
+
+  /* Color */
   --background: #f7f7f5;
   --surface: #ffffff;
   --surface-muted: #f3f3f1;
@@ -6,7 +52,7 @@
   --border-strong: #d9d9d4;
   --text: #262625;
   --text-muted: #777772;
-  --text-subtle: #a1a19c;
+  --text-subtle: #90908a;
   --primary: #2563eb;
   --primary-hover: #1d4ed8;
   --sidebar-width: 248px;
@@ -23,7 +69,9 @@ body {
   min-height: 100%;
   background: var(--background);
   color: var(--text);
-  font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-normal);
   -webkit-font-smoothing: antialiased;
 }
 

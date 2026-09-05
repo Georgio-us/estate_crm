@@ -274,7 +274,7 @@ export function PipelineBoard() {
           <span className={styles.notificationDot} />
         </button>
         <button className={styles.primaryButton} type="button" onClick={() => setNewDealStageId(stages[0]?.id || "unassigned")}>
-          <span>＋</span> Новая сделка
+          <span aria-hidden="true">＋</span><span className={styles.actionLabel}>Новая сделка</span>
         </button>
       </header>
 

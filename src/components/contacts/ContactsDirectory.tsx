@@ -78,7 +78,9 @@ export function ContactsDirectory() {
       <header className={styles.topbar}>
         <h1>Контакты</h1>
         <label className={styles.search}><span>⌕</span><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Имя, телефон, email или Telegram" /></label>
-        <button className={styles.primaryButton} type="button" onClick={() => setIsCreating(true)}>＋ Новый контакт</button>
+        <button className={styles.primaryButton} type="button" aria-label="Новый контакт" onClick={() => setIsCreating(true)}>
+          <span aria-hidden="true">＋</span><span className={styles.actionLabel}>Новый контакт</span>
+        </button>
       </header>
 
       <div className={styles.content}>

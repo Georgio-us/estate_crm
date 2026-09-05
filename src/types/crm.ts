@@ -90,6 +90,7 @@ export interface CrmTask {
   title: string;
   kind: TaskKind;
   period: TaskPeriod;
+  dueDate?: string;
   dueLabel: string;
   dueTime?: string;
   assignee: string;
