@@ -1,0 +1,69 @@
+.layer { position: fixed; inset: 0; z-index: 70; display: grid; place-items: center; padding: 20px; }
+.backdrop { position: absolute; inset: 0; width: 100%; border: 0; background: rgba(28, 28, 26, 0.28); }
+
+.modal {
+  position: relative;
+  display: flex;
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100vh - 40px);
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 18px 60px rgba(28, 28, 26, 0.18);
+  animation: appear 150ms ease-out;
+}
+
+@keyframes appear {
+  from { transform: translateY(8px); opacity: 0.6; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.modal > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 22px 24px 18px; border-bottom: 1px solid var(--border); }
+.modal > header div { display: grid; gap: 5px; }
+.modal > header span { color: var(--text-subtle); font-size: 10px; font-weight: 650; letter-spacing: 0.07em; text-transform: uppercase; }
+.modal > header h2 { margin: 0; font-size: 19px; font-weight: 650; letter-spacing: -0.015em; }
+.modal > header button { width: 30px; height: 30px; border: 0; border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer; font-size: 21px; }
+.modal > header button:hover { background: var(--surface-muted); }
+
+.body { display: grid; gap: 18px; overflow-y: auto; padding: 22px 24px 26px; }
+.body label { display: grid; gap: 7px; }
+.body label > span { color: var(--text-muted); font-size: 11px; }
+.body label b { margin-left: 5px; color: #a16262; font-size: 9px; font-weight: 550; }
+.body label small { color: var(--text-subtle); font-size: 9px; }
+.body input,
+.body select,
+.body textarea { width: 100%; border: 1px solid var(--border); border-radius: 6px; outline: 0; background: #fbfbfa; color: var(--text); font-size: 12px; }
+.body input,
+.body select { height: 38px; padding: 0 10px; }
+.body textarea { min-height: 76px; padding: 9px 10px; resize: vertical; line-height: 1.5; }
+.body input:focus,
+.body select:focus,
+.body textarea:focus { border-color: #a9bee7; background: #fff; box-shadow: 0 0 0 3px #edf3ff; }
+.primaryField input { height: 44px; background: #fff; font-size: 14px; }
+.twoColumns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+.additional { border-top: 1px solid var(--border); }
+.additional summary { padding-top: 17px; color: var(--text-muted); cursor: pointer; font-size: 11px; user-select: none; }
+.additionalFields { display: grid; gap: 16px; padding-top: 18px; }
+
+.modal > footer { display: flex; min-height: 66px; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 24px; border-top: 1px solid var(--border); background: #fbfbfa; }
+.modal > footer > span { color: var(--text-subtle); font-size: 9px; }
+.modal > footer div { display: flex; gap: 8px; }
+.modal > footer button { height: 34px; padding: 0 12px; border: 1px solid var(--border-strong); border-radius: 6px; background: #fff; cursor: pointer; font-size: 11px; }
+.modal > footer .createButton { border-color: var(--primary); background: var(--primary); color: #fff; font-weight: 600; }
+.modal > footer .createButton:disabled { border-color: #d6d9df; background: #d6d9df; cursor: default; }
+
+@media (max-width: 560px) {
+  .layer { padding: 0; align-items: end; }
+  .modal { width: 100vw; max-height: 94vh; border-radius: 10px 10px 0 0; }
+  .modal > header,
+  .body,
+  .modal > footer { padding-right: 18px; padding-left: 18px; }
+  .twoColumns { grid-template-columns: 1fr; }
+  .modal > footer > span { display: none; }
+  .modal > footer div { width: 100%; justify-content: flex-end; }
+}
+
+@media (prefers-reduced-motion: reduce) { .modal { animation: none; } }

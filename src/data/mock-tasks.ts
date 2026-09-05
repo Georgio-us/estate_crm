@@ -1,0 +1,11 @@
+import type { CrmTask } from "@/types/crm";
+
+export const mockTasks: CrmTask[] = [
+  { id: "task-1", title: "Позвонить до 14:00", kind: "Звонок", period: "overdue", dueLabel: "Сегодня", dueTime: "14:00", assignee: "Елена", contactId: "contact-3", contactName: "Ольга Мельник", dealId: "deal-3", dealNumber: 1003, dealTitle: "Консультация по покупке новостройки" },
+  { id: "task-2", title: "Связаться с новым лидом", kind: "Звонок", period: "today", dueLabel: "Сегодня", dueTime: "17:30", assignee: "Георгий", contactId: "contact-1", contactName: "Анна Коваленко", dealId: "deal-1", dealNumber: 1001, dealTitle: "Ищет 2-комнатную квартиру в центре" },
+  { id: "task-3", title: "Подготовить подборку объектов", kind: "Другое", period: "today", dueLabel: "Сегодня", dueTime: "18:00", assignee: "Георгий", contactId: "contact-6", contactName: "Сергей Литвин", dealId: "deal-6", dealNumber: 1006, dealTitle: "Квартира с ремонтом в Аркадии" },
+  { id: "task-4", title: "Отправить 3 объекта", kind: "Сообщение", period: "today", dueLabel: "Сегодня", dueTime: "18:30", assignee: "Андрей", contactId: "contact-7", contactName: "Виктория Гринь", dealId: "deal-7", dealNumber: 1007, dealTitle: "3-комнатная квартира, Приморский район" },
+  { id: "task-5", title: "Повторный звонок", kind: "Звонок", period: "upcoming", dueLabel: "Завтра", dueTime: "10:00", assignee: "Георгий", contactId: "contact-4", contactName: "Алексей Романенко", dealId: "deal-4", dealNumber: 1004, dealTitle: "Дом у моря для семьи" },
+  { id: "task-6", title: "Встреча в офисе", kind: "Встреча", period: "upcoming", dueLabel: "8 сентября", dueTime: "12:30", assignee: "Елена", contactId: "contact-5", contactName: "Ирина Савчук", dealId: "deal-5", dealNumber: 1005, dealTitle: "1-комнатная квартира под аренду" },
+  { id: "task-7", title: "Уточнить бюджет", kind: "Звонок", period: "completed", dueLabel: "Сегодня", dueTime: "10:20", assignee: "Георгий", contactId: "contact-6", contactName: "Сергей Литвин", dealId: "deal-6", dealNumber: 1006, dealTitle: "Квартира с ремонтом в Аркадии", result: "Бюджет подтверждён до $140 000", completedAt: "Сегодня, 10:24" },
+];
