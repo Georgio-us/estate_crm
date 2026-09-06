@@ -1,16 +1,15 @@
 # Estate CRM
 
-CRM для агентств недвижимости. Текущий frontend-прототип включает рабочую главную, воронку, контакты, каталог объектов, центр задач и календарь. Backend, импорт, Meta Lead Ads и Telegram-уведомления будут подключаться следующими этапами.
+CRM для агентств недвижимости. Репозиторий организован как monorepo: рабочий frontend находится в `apps/web`, а минимальный Fastify API — в `apps/api`. Бизнес-данные всё ещё являются mock-данными; PostgreSQL, авторизация и интеграции подключаются следующими этапами.
 
 ## Стек
 
-- Next.js App Router
-- React
-- TypeScript
-- обычный CSS и CSS Modules
-- PostgreSQL и Prisma на backend-этапе
-- Zod для валидации
-- dnd-kit для drag-and-drop воронки
+- Next.js App Router и React;
+- Fastify API;
+- TypeScript и pnpm workspaces;
+- обычный CSS и CSS Modules;
+- dnd-kit для drag-and-drop воронки;
+- PostgreSQL и ORM — следующий backend-этап.
 
 Tailwind в проекте не используется.
 
@@ -21,28 +20,63 @@ pnpm install
 pnpm dev
 ```
 
-После запуска приложение доступно по адресу `http://localhost:3000`.
+Frontend доступен по адресу `http://localhost:3000`.
+
+API запускается отдельно:
+
+```bash
+pnpm dev:api
+```
+
+По умолчанию healthcheck доступен по адресу `http://localhost:3001/health`.
+
+Полная проверка workspace:
+
+```bash
+pnpm check
+```
 
 ## Структура
 
 ```text
-src/
-  app/                  Next.js App Router и глобальные стили
-  components/
-    layout/             каркас, меню и общая навигация
-    dashboard/          главная и оперативная сводка
-    pipeline/           воронка, колонки и карточки сделок
-    contacts/           база контактов и карточка клиента
-    properties/         каталог и карточки недвижимости
-    tasks/              единый центр задач
-    calendar/           календарь и расписание задач
-    team/               команда, роли, доступы и приглашения
-  data/                 временные mock-данные
-  types/                общие типы предметной области
-docs/                   рабочая проектная документация
+apps/
+  web/                  Next.js frontend
+  api/                  Fastify API и healthcheck
+packages/
+  contracts/            общие API-контракты
+  database/             будущая точка входа ORM и миграций
+  config/               общая TypeScript-конфигурация
+docs/                    рабочая проектная документация
 ```
 
 Документация:
 
 - спецификация MVP: [`docs/CRM_MVP_SPEC.md`](docs/CRM_MVP_SPEC.md);
-- дизайн-система и токены: [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md).
+- дизайн-система и токены: [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md);
+- текущее состояние исполнения: [`docs/CURRENT_EXECUTION_STATE.md`](docs/CURRENT_EXECUTION_STATE.md).
+
+## Railway
+
+Существующий frontend-сервис продолжает работать из корня репозитория:
+
+```text
+Build command: pnpm build
+Start command: pnpm start
+```
+
+Для отдельного API-сервиса из того же репозитория:
+
+```text
+Root directory: /
+Build command: pnpm --filter @estate-crm/api build
+Start command: pnpm --filter @estate-crm/api start
+Healthcheck path: /health
+```
+
+Начальная переменная API:
+
+```text
+WEB_APP_ORIGIN=https://estatecrm-crmdelmar.up.railway.app
+```
+
+`PORT` устанавливается Railway автоматически. `HOST` по умолчанию уже равен `0.0.0.0`.
