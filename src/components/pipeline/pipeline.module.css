@@ -74,6 +74,23 @@
   color: var(--text-muted);
 }
 
+.iconButton svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.notificationWrap {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+}
+
 .iconButton:hover,
 .titleMenu:hover {
   background: var(--surface-muted);
@@ -89,6 +106,65 @@
   border-radius: 50%;
   background: #e85252;
 }
+
+.notificationPanel {
+  position: fixed;
+  z-index: 60;
+  top: calc(var(--topbar-height) - 6px);
+  right: 150px;
+  width: 390px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - var(--topbar-height) - 16px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 18px 46px rgba(28, 28, 26, .16);
+}
+
+.notificationPanel header {
+  display: flex;
+  height: 54px;
+  flex: 0 0 54px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.notificationPanel header span {
+  color: #bd474b;
+  font-size: 11px;
+}
+
+.notificationPanel > button {
+  display: grid;
+  width: 100%;
+  height: auto;
+  min-height: 74px;
+  flex: none;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.notificationPanel > button:hover { background: #fafaf8; }
+.notificationPanel > button > i { display: grid; width: 30px; height: 30px; place-items: center; border-radius: 50%; font-size: 11px; font-style: normal; font-weight: 700; }
+.notificationPanel > button > span { display: grid; min-width: 0; gap: 2px; }
+.notificationPanel small { overflow: hidden; color: var(--text-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.notificationPanel time { color: var(--text-subtle); font-size: 10px; }
+.alertRed { background: #f8e9e9; color: #bc474b; }
+.alertBlue { background: #e9eff9; color: #486dad; }
+.alertAmber { background: #f7efdf; color: #9b6c23; }
+.notificationPanel footer { padding: 12px 16px; color: var(--primary); font-size: 11px; text-align: center; }
 
 .primaryButton {
   display: inline-flex;
@@ -118,10 +194,42 @@
 }
 
 .titleRow {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
 }
+
+.pipelineMenu {
+  position: absolute;
+  z-index: 30;
+  top: 35px;
+  left: calc(100% - 30px);
+  width: 220px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: #fff;
+  box-shadow: 0 14px 34px rgba(28, 28, 26, .13);
+}
+
+.pipelineMenu button {
+  display: flex;
+  width: 100%;
+  height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 13px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pipelineMenu button:last-child { border-bottom: 0; }
+.pipelineMenu button:hover { background: #fafaf8; }
+.pipelineMenu span { color: var(--text-subtle); }
 
 .titleRow h2 {
   margin: 0;
@@ -185,6 +293,68 @@
 .secondaryButton:hover {
   background: var(--surface-muted);
 }
+
+.secondaryButton span {
+  display: inline-grid;
+  min-width: 18px;
+  height: 18px;
+  margin-left: 6px;
+  place-items: center;
+  border-radius: 50%;
+  background: #3f68b7;
+  color: #fff;
+  font-size: 10px;
+}
+
+.filtersActive {
+  border-color: #9db1d9;
+  color: #315da8;
+}
+
+.filterPanel {
+  display: grid;
+  min-height: 82px;
+  grid-template-columns: repeat(3, minmax(170px, 240px)) 1fr auto;
+  align-items: end;
+  gap: 12px;
+  padding: 14px 24px 16px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background: #f8f8f6;
+}
+
+.filterPanel label {
+  display: grid;
+  gap: 5px;
+}
+
+.filterPanel label span {
+  color: var(--text-subtle);
+  font-size: 10px;
+}
+
+.filterPanel select {
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: #fff;
+  color: var(--text);
+}
+
+.filterPanel > div {
+  display: flex;
+  height: 36px;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.filterPanel > div strong { font-size: var(--font-size-heading-sm); }
+.filterPanel > div span { color: var(--text-muted); font-size: var(--font-size-caption); }
+.filterPanel > button { height: 36px; padding: 0 10px; border: 0; background: transparent; color: var(--primary); cursor: pointer; }
+.filterPanel > button:disabled { color: var(--text-subtle); cursor: default; }
 
 .board {
   display: flex;
@@ -338,7 +508,7 @@
   overflow: hidden;
   margin: 12px 0 0;
   font-size: var(--font-size-body-sm);
-  line-height: var(--line-height-normal)2;
+  line-height: var(--line-height-normal);
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
@@ -428,6 +598,55 @@
   color: var(--text);
 }
 
+.listView {
+  min-height: calc(100vh - var(--topbar-height) - 90px);
+  padding: 0 24px 50px;
+  background: #f8f8f6;
+}
+
+.listView > header,
+.listView > button {
+  display: grid;
+  grid-template-columns: minmax(230px, 1.05fr) minmax(260px, 1.35fr) minmax(150px, .7fr) minmax(120px, .6fr) minmax(180px, .8fr) 14px;
+  align-items: center;
+  gap: 18px;
+}
+
+.listView > header {
+  min-height: 50px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-subtle);
+  font-size: 10px;
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.listView > button {
+  width: 100%;
+  min-height: 82px;
+  padding: 12px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.listView > button:hover { background: #fff; }
+.listView > button > b { color: var(--text-subtle); font-size: 18px; }
+.listContact { display: flex; min-width: 0; align-items: center; gap: 11px; }
+.listContact > i { display: grid; width: 36px; height: 36px; flex: 0 0 auto; place-items: center; border-radius: 50%; background: #e9e5dd; color: #675f51; font-style: normal; font-weight: 700; }
+.listContact > span, .listRequest { display: grid; min-width: 0; gap: 3px; }
+.listContact strong, .listRequest strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.listContact small, .listRequest small { color: var(--text-muted); font-size: 11px; }
+.listStage { display: flex; align-items: center; gap: 7px; }
+.listStage i { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; }
+.listTask { overflow: hidden; color: var(--text-muted); text-overflow: ellipsis; white-space: nowrap; }
+.emptyDeals { display: grid; min-height: 420px; place-content: center; justify-items: center; gap: 5px; background: #f8f8f6; }
+.emptyDeals span { color: var(--text-muted); }
+
 @media (max-width: 760px) {
   .topbar {
     gap: 10px;
@@ -460,7 +679,9 @@
   .primaryButton .actionLabel { display: none; }
 
   .toolbar {
-    min-height: 84px;
+    min-height: 116px;
+    align-items: flex-start;
+    flex-wrap: wrap;
     padding: 14px;
   }
 
@@ -468,12 +689,27 @@
     font-size: var(--font-size-body-lg);
   }
 
-  .viewSwitch {
-    display: none;
-  }
+  .toolbar > div:first-child { width: 100%; }
+  .toolbarActions { width: 100%; justify-content: space-between; }
+  .viewSwitch { display: flex; }
 
   .board {
-    min-height: calc(100vh - var(--topbar-height) - 84px);
+    min-height: calc(100vh - var(--topbar-height) - 116px);
     padding-right: calc(100vw - 308px);
   }
+
+  .notificationPanel { top: 58px; right: 10px; left: 10px; width: auto; max-width: none; }
+  .pipelineMenu { right: auto; left: 0; }
+  .filterPanel { grid-template-columns: 1fr; padding: 14px; }
+  .filterPanel > div { justify-content: flex-start; }
+  .filterPanel > button { justify-self: start; padding-left: 0; }
+  .listView { min-height: calc(100vh - var(--topbar-height) - 116px); padding: 0 14px 40px; }
+  .listView > header { display: none; }
+  .listView > button { grid-template-columns: 1fr auto; gap: 10px; min-height: 132px; padding: 17px 0; }
+  .listContact { grid-column: 1; }
+  .listRequest { grid-column: 1 / -1; }
+  .listStage { grid-column: 1; font-size: var(--font-size-caption); }
+  .listView > button > span:nth-child(4) { display: none; }
+  .listTask { grid-column: 1; }
+  .listView > button > b { grid-column: 2; grid-row: 1; }
 }

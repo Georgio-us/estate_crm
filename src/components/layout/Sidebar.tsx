@@ -17,7 +17,7 @@ const secondaryItems = [
   ["↗", "Интеграции", "/integrations"],
   ["♙", "Команда", "/team"],
   ["◫", "Подписка", "/subscription"],
-  ["⚙", "Настройки", "#"],
+  ["⚙", "Настройки", "/settings"],
 ];
 
 interface SidebarProps {

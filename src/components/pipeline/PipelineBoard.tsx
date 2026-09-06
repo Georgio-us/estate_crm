@@ -14,6 +14,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
+import { useRouter } from "next/navigation";
 import { mockActivities } from "@/data/mock-activities";
 import { pipelineStages } from "@/data/mock-pipeline";
 import type { ActivityEvent, Deal } from "@/types/crm";
@@ -24,11 +25,20 @@ import { PipelineColumn } from "./PipelineColumn";
 import styles from "./pipeline.module.css";
 
 export function PipelineBoard() {
+  const router = useRouter();
   const [stages, setStages] = useState(pipelineStages);
   const [activities, setActivities] = useState(mockActivities);
   const [selected, setSelected] = useState<{ dealId: string; stageId: string } | null>(null);
   const [newDealStageId, setNewDealStageId] = useState<string | null>(null);
   const [activeDealId, setActiveDealId] = useState<string | null>(null);
+  const [view, setView] = useState<"board" | "list">("board");
+  const [query, setQuery] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [assigneeFilter, setAssigneeFilter] = useState("Все");
+  const [sourceFilter, setSourceFilter] = useState("Все");
+  const [taskFilter, setTaskFilter] = useState("Все");
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [pipelineMenuOpen, setPipelineMenuOpen] = useState(false);
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
@@ -37,6 +47,22 @@ export function PipelineBoard() {
   );
 
   const dealsCount = stages.reduce((total, stage) => total + stage.deals.length, 0);
+  const assignees = useMemo(() => ["Все", ...new Set(stages.flatMap((stage) => stage.deals.map((deal) => deal.assignee)))], [stages]);
+  const activeFilters = [assigneeFilter, sourceFilter, taskFilter].filter((value) => value !== "Все").length;
+  const filteredStages = useMemo(() => {
+    const normalized = query.trim().toLocaleLowerCase("ru");
+    return stages.map((stage) => ({
+      ...stage,
+      deals: stage.deals.filter((deal) => {
+        const matchesQuery = !normalized || `${deal.contactName} ${deal.phone} ${deal.request} ${deal.number}`.toLocaleLowerCase("ru").includes(normalized);
+        const matchesAssignee = assigneeFilter === "Все" || deal.assignee === assigneeFilter;
+        const matchesSource = sourceFilter === "Все" || deal.source === sourceFilter;
+        const matchesTask = taskFilter === "Все" || (taskFilter === "Без задачи" ? !deal.task : deal.taskState === taskFilter);
+        return matchesQuery && matchesAssignee && matchesSource && matchesTask;
+      }),
+    }));
+  }, [assigneeFilter, query, sourceFilter, stages, taskFilter]);
+  const visibleDealsCount = filteredStages.reduce((total, stage) => total + stage.deals.length, 0);
   const selectedStage = selected ? stages.find((stage) => stage.id === selected.stageId) : undefined;
   const selectedDeal = selectedStage?.deals.find((deal) => deal.id === selected?.dealId);
 
@@ -258,6 +284,23 @@ export function PipelineBoard() {
     });
   }
 
+  function resetFilters() {
+    setAssigneeFilter("Все");
+    setSourceFilter("Все");
+    setTaskFilter("Все");
+  }
+
+  function exportDeals() {
+    const rows = [["Номер", "Контакт", "Телефон", "Запрос", "Этап", "Ответственный", "Источник"], ...stages.flatMap((stage) => stage.deals.map((deal) => [String(deal.number), deal.contactName, deal.phone, deal.request, stage.title, deal.assignee, deal.source]))];
+    const csv = rows.map((row) => row.map((cell) => `"${cell.replaceAll('"', '""')}"`).join(",")).join("\n");
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8" }));
+    link.download = "deals.csv";
+    link.click();
+    URL.revokeObjectURL(link.href);
+    setPipelineMenuOpen(false);
+  }
+
   return (
     <section className={styles.page}>
       <header className={styles.topbar}>
@@ -266,13 +309,16 @@ export function PipelineBoard() {
 
         <label className={styles.search}>
           <span aria-hidden="true">⌕</span>
-          <input type="search" placeholder="Поиск по сделкам" />
+          <input type="search" placeholder="Поиск по сделкам" value={query} onChange={(event) => setQuery(event.target.value)} />
         </label>
 
-        <button className={styles.iconButton} type="button" aria-label="Уведомления">
-          ♢
+        <div className={styles.notificationWrap}>
+        <button className={styles.iconButton} type="button" aria-label="Уведомления" aria-expanded={notificationsOpen} onClick={() => { setNotificationsOpen((value) => !value); setPipelineMenuOpen(false); }}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg>
           <span className={styles.notificationDot} />
         </button>
+        {notificationsOpen && <div className={styles.notificationPanel}><header><strong>Уведомления</strong><span>3 новых</span></header><button type="button" onClick={() => setNotificationsOpen(false)}><i className={styles.alertRed}>!</i><span><strong>Просрочена задача</strong><small>Ольга Мельник · Позвонить до 14:00</small></span><time>12 мин</time></button><button type="button" onClick={() => setNotificationsOpen(false)}><i className={styles.alertBlue}>↗</i><span><strong>Новая сделка из Meta</strong><small>Анна Коваленко · квартира в центре</small></span><time>34 мин</time></button><button type="button" onClick={() => setNotificationsOpen(false)}><i className={styles.alertAmber}>○</i><span><strong>Сделка без ответственного</strong><small>Максим Бондарь ожидает назначения</small></span><time>1 ч</time></button><footer>Показать все уведомления</footer></div>}
+        </div>
         <button className={styles.primaryButton} type="button" onClick={() => setNewDealStageId(stages[0]?.id || "unassigned")}>
           <span aria-hidden="true">＋</span><span className={styles.actionLabel}>Новая сделка</span>
         </button>
@@ -282,23 +328,26 @@ export function PipelineBoard() {
         <div>
           <div className={styles.titleRow}>
             <h2>Продажа недвижимости</h2>
-            <button className={styles.titleMenu} type="button" aria-label="Настройки воронки">
+            <button className={styles.titleMenu} type="button" aria-label="Настройки воронки" aria-expanded={pipelineMenuOpen} onClick={() => { setPipelineMenuOpen((value) => !value); setNotificationsOpen(false); }}>
               •••
             </button>
+            {pipelineMenuOpen && <div className={styles.pipelineMenu}><button type="button" onClick={() => router.push("/settings")}>Настроить этапы <span>→</span></button><button type="button" onClick={exportDeals}>Экспортировать CSV <span>↓</span></button></div>}
           </div>
-          <p>{dealsCount} активных сделок</p>
+          <p>{visibleDealsCount === dealsCount ? `${dealsCount} активных сделок` : `${visibleDealsCount} из ${dealsCount} сделок`}</p>
         </div>
 
         <div className={styles.toolbarActions}>
           <div className={styles.viewSwitch}>
-            <button className={styles.viewActive} type="button">Доска</button>
-            <button type="button">Список</button>
+            <button className={view === "board" ? styles.viewActive : ""} type="button" onClick={() => setView("board")}>Доска</button>
+            <button className={view === "list" ? styles.viewActive : ""} type="button" onClick={() => setView("list")}>Список</button>
           </div>
-          <button className={styles.secondaryButton} type="button">Фильтры</button>
+          <button className={`${styles.secondaryButton} ${filtersOpen || activeFilters ? styles.filtersActive : ""}`} type="button" onClick={() => setFiltersOpen((value) => !value)}>Фильтры{activeFilters > 0 && <span>{activeFilters}</span>}</button>
         </div>
       </div>
 
-      <DndContext
+      {filtersOpen && <section className={styles.filterPanel}><label><span>Ответственный</span><select value={assigneeFilter} onChange={(event) => setAssigneeFilter(event.target.value)}>{assignees.map((assignee) => <option key={assignee}>{assignee}</option>)}</select></label><label><span>Источник</span><select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value)}><option>Все</option><option value="Meta">Meta</option><option value="Website">Сайт</option><option value="Manual">Вручную</option></select></label><label><span>Задача</span><select value={taskFilter} onChange={(event) => setTaskFilter(event.target.value)}><option>Все</option><option value="overdue">Просрочена</option><option value="due">На сегодня</option><option value="normal">Запланирована</option><option>Без задачи</option></select></label><div><strong>{visibleDealsCount}</strong><span>найдено</span></div><button type="button" disabled={!activeFilters} onClick={resetFilters}>Сбросить</button></section>}
+
+      {view === "board" ? <DndContext
         id="pipeline-dnd"
         sensors={sensors}
         collisionDetection={closestCorners}
@@ -307,7 +356,7 @@ export function PipelineBoard() {
         onDragEnd={handleDragEnd}
       >
         <div className={styles.board}>
-          {stages.map((stage) => (
+          {filteredStages.map((stage) => (
             <PipelineColumn
               stage={stage}
               key={stage.id}
@@ -319,7 +368,7 @@ export function PipelineBoard() {
         <DragOverlay dropAnimation={{ duration: 150, easing: "ease-out" }}>
           {activeDeal ? <DealCardPreview deal={activeDeal} /> : null}
         </DragOverlay>
-      </DndContext>
+      </DndContext> : <DealList stages={filteredStages} onOpenDeal={(dealId, stageId) => setSelected({ dealId, stageId })} />}
 
       {selectedDeal && selectedStage && (
         <DealDrawer
@@ -346,4 +395,12 @@ export function PipelineBoard() {
       )}
     </section>
   );
+}
+
+function DealList({ stages, onOpenDeal }: { stages: typeof pipelineStages; onOpenDeal: (dealId: string, stageId: string) => void }) {
+  const rows = stages.flatMap((stage) => stage.deals.map((deal) => ({ deal, stage })));
+
+  if (!rows.length) return <div className={styles.emptyDeals}><strong>Сделки не найдены</strong><span>Измените запрос или сбросьте фильтры.</span></div>;
+
+  return <div className={styles.listView}><header><span>Контакт</span><span>Запрос</span><span>Этап</span><span>Ответственный</span><span>Следующая задача</span></header>{rows.map(({ deal, stage }) => <button type="button" onClick={() => onOpenDeal(deal.id, stage.id)} key={deal.id}><span className={styles.listContact}><i>{deal.contactName.slice(0, 1)}</i><span><strong>{deal.contactName}</strong><small>Сделка #{deal.number} · {deal.phone}</small></span></span><span className={styles.listRequest}><strong>{deal.request}</strong><small>{deal.budget || "Бюджет не указан"}</small></span><span className={styles.listStage}><i style={{ backgroundColor: stage.color }} />{stage.title}</span><span>{deal.assignee}</span><span className={`${styles.listTask} ${deal.taskState ? styles[deal.taskState] : ""}`}>{deal.task || "Нет задачи"}</span><b>›</b></button>)}</div>;
 }

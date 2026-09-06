@@ -37,8 +37,8 @@ const usage = [
   { label: "Хранилище файлов", value: "1,8 из 10 ГБ", percent: 18, detail: "Записи и вложения" },
 ];
 
-export function SubscriptionCenter() {
-  const [tab, setTab] = useState<Tab>("overview");
+export function SubscriptionCenter({ initialTab = "overview" }: { initialTab?: Tab }) {
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [annual, setAnnual] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<PlanId>("base");
   const [notice, setNotice] = useState("");
