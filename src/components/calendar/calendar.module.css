@@ -60,7 +60,10 @@
 .dayAgenda { display: grid; gap: 10px; padding: 14px; }
 .agendaItem { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 10px; padding: 13px; border: 1px solid var(--border); border-radius: var(--radius-md); background: #fff; }
 .checkButton { display: grid; width: 22px; height: 22px; place-items: center; border: 1px solid #bcbeb9; border-radius: 50%; background: #fff; color: #4f7658; cursor: pointer; font-size: var(--font-size-caption); }
-.agendaMain { display: grid; min-width: 0; gap: 5px; }
+.checkButton:hover { border-color: #5f8b69; background: #eff5ef; }
+.checkButton:disabled { border-color: #a7c0ac; background: #edf4ee; cursor: default; }
+.agendaMain { display: grid; min-width: 0; gap: 5px; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; text-align: left; }
+.agendaMain:hover strong { color: #315f9c; }
 .agendaMain > span { display: flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: var(--font-size-caption); }
 .agendaMain i { font-style: normal; }
 .agendaMain time { margin-left: auto; color: var(--text); font-weight: var(--font-weight-semibold); }

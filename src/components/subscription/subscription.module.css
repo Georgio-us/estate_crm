@@ -1,0 +1,195 @@
+.page { min-width: 0; min-height: 100vh; background: #fff; }
+.topbar { display: flex; min-height: 116px; align-items: center; justify-content: space-between; gap: 24px; padding: 24px clamp(24px,4vw,64px); border-bottom: 1px solid var(--border); background: #fff; }
+.topbar div { display: grid; gap: 4px; }
+.topbar span, .kicker { color: var(--text-subtle); font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); letter-spacing: .1em; text-transform: uppercase; }
+.topbar h1 { margin: 0; font-size: var(--font-size-heading-lg); letter-spacing: -.035em; }
+.topbar button, .secondaryButton { height: var(--control-height); padding: 0 14px; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: #fff; cursor: pointer; }
+.tabs { display: flex; gap: 28px; min-height: 58px; align-items: flex-end; padding: 0 clamp(24px,4vw,64px); border-bottom: 1px solid var(--border); background: #fff; overflow-x: auto; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tabs button { position: relative; height: 58px; padding: 0; border: 0; background: transparent; color: var(--text-muted); white-space: nowrap; cursor: pointer; }
+.tabs button::after { position: absolute; right: 0; bottom: -1px; left: 0; height: 2px; background: transparent; content: ""; }
+.tabs .activeTab { color: var(--text); font-weight: var(--font-weight-semibold); }
+.tabs .activeTab::after { background: var(--text); }
+.page main { width: min(1440px, calc(100% - 64px)); margin: 0 auto; padding-bottom: 80px; }
+.overviewHero { display: grid; grid-template-columns: 1fr 320px; gap: 48px; min-height: 300px; align-items: center; padding: 48px 0; background: #fff; }
+.planIdentity { max-width: 660px; }
+.planName { display: flex; align-items: center; gap: 13px; margin: 8px 0 10px; }
+.planName h2 { margin: 0; font-size: clamp(44px,6vw,72px); line-height: 1; letter-spacing: -.055em; }
+.planName span { padding: 5px 9px; border-radius: var(--radius-pill); background: #e9f3ec; color: #447256; font-size: 11px; font-weight: var(--font-weight-semibold); }
+.planIdentity p { margin: 0 0 24px; color: var(--text-muted); font-size: var(--font-size-body-lg); }
+.primaryButton { min-height: var(--control-height-lg); padding: 0 17px; border: 0; border-radius: var(--radius-md); background: var(--text); color: #fff; cursor: pointer; font-weight: var(--font-weight-semibold); }
+.primaryButton:hover { background: #3c3c3a; }
+.priceBlock { display: grid; align-content: center; min-height: 168px; padding: 28px 30px; border-left: 1px solid var(--border); }
+.priceBlock span, .accountFacts span, .paymentSummary span { color: var(--text-subtle); font-size: var(--font-size-caption); }
+.priceBlock strong { margin: 5px 0 2px; font-size: 48px; line-height: 1; letter-spacing: -.04em; }
+.priceBlock small, .accountFacts small { color: var(--text-muted); }
+.accountFacts { display: grid; grid-template-columns: repeat(4,1fr); background: #f8f8f6; box-shadow: 0 0 0 100vmax #f8f8f6; clip-path: inset(0 -100vmax); }
+.accountFacts > div { display: grid; min-height: 138px; align-content: center; gap: 6px; padding: 24px 28px; border-right: 1px solid var(--border); }
+.accountFacts > div:first-child { padding-left: 0; }
+.accountFacts > div:last-child { border-right: 0; }
+.accountFacts strong { font-size: var(--font-size-body-lg); }
+.accountFacts button { justify-self: start; padding: 0; border: 0; background: transparent; color: var(--primary); cursor: pointer; font-size: var(--font-size-caption); }
+.overviewGrid { display: grid; grid-template-columns: 1.4fr .6fr; gap: 0; padding: 62px 0; background: #fff; }
+.planIncludes { padding-right: 46px; }
+.planIncludes header, .quickExtensions header, .paymentTable > header { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; padding-bottom: 18px; border-bottom: 1px solid var(--border); }
+.planIncludes h3, .quickExtensions h3, .comparison h3, .customBanner h3 { margin: 5px 0 0; font-size: var(--font-size-heading-sm); }
+.planIncludes header button, .quickExtensions header button { border: 0; background: transparent; color: var(--primary); cursor: pointer; }
+.includeGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; }
+.includeGrid span { padding: 17px 0; border-bottom: 1px solid var(--border); color: #494946; }
+.includeGrid span::first-letter { color: #528464; }
+.upgradeCard { display: flex; min-height: 315px; flex-direction: column; padding: 30px; border-radius: 16px; background: #252933; color: #fff; }
+.upgradeCard .kicker { color: #9da6b5; }
+.upgradeCard h3 { max-width: 360px; margin: 9px 0; font-size: var(--font-size-heading-md); line-height: 1.15; letter-spacing: -.025em; }
+.upgradeCard p { margin: 0; color: #b9c0cb; line-height: 1.55; }
+.upgradeCard > strong { margin-top: auto; font-size: 30px; }
+.upgradeCard > strong small { color: #aeb5c0; font-size: var(--font-size-caption); font-weight: 400; }
+.upgradeCard button { align-self: flex-start; margin-top: 10px; padding: 0; border: 0; background: transparent; color: #9bb8fb; cursor: pointer; }
+.quickExtensions { padding: 56px 0 74px; background: #f8f8f6; box-shadow: 0 0 0 100vmax #f8f8f6; clip-path: inset(0 -100vmax); }
+.quickExtensions > div { display: grid; grid-template-columns: repeat(3,1fr); }
+.quickExtensions > div button { display: grid; min-height: 96px; grid-template-columns: 48px 1fr 16px; align-items: center; gap: 13px; padding: 17px 22px; border: 0; border-right: 1px solid var(--border); background: transparent; text-align: left; cursor: pointer; }
+.quickExtensions > div button:first-child { padding-left: 0; }
+.quickExtensions > div button:last-child { border-right: 0; }
+.quickExtensions i, .extensionIcon { display: grid; place-items: center; border-radius: 12px; color: #fff; font-style: normal; font-weight: 750; }
+.quickExtensions i { width: 48px; height: 48px; }
+.quickExtensions button > span { display: grid; gap: 3px; }
+.quickExtensions small { color: var(--text-muted); }
+.quickExtensions b { color: var(--text-subtle); font-size: 22px; }
+.violet { background: linear-gradient(135deg,#7047d6,#417ed8); }
+.orange { background: #d77d40; }
+.green { background: #247b58; }
+.blue { background: #347ac0; }
+.graphite { background: #3f4651; }
+.indigo { background: #5269a3; }
+.sectionIntro { display: flex; min-height: 230px; align-items: center; justify-content: space-between; gap: 30px; padding: 40px 0; }
+.sectionIntro > div:first-child { max-width: 720px; }
+.sectionIntro h2 { margin: 8px 0 9px; font-size: clamp(32px,4vw,48px); line-height: 1.05; letter-spacing: -.045em; }
+.sectionIntro p { margin: 0; color: var(--text-muted); font-size: var(--font-size-body-lg); line-height: 1.55; }
+.periodToggle { display: flex; flex: 0 0 auto; padding: 4px; border-radius: var(--radius-lg); background: #f1f1ef; }
+.periodToggle button { height: 36px; padding: 0 13px; border: 0; border-radius: var(--radius-md); background: transparent; color: var(--text-muted); cursor: pointer; }
+.periodToggle .periodActive { background: #fff; color: var(--text); box-shadow: 0 1px 3px rgba(25,25,23,.08); }
+.periodToggle span { margin-left: 4px; color: #4b7b5b; font-size: 10px; }
+.planGrid { display: grid; grid-template-columns: repeat(4,1fr); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.planCard { position: relative; display: flex; min-height: 440px; flex-direction: column; padding: 29px 24px 25px; border: 0; border-right: 1px solid var(--border); background: #fff; text-align: left; cursor: pointer; }
+.planCard:last-child { border-right: 0; }
+.planCard:hover { background: #fbfbfa; }
+.planCard.selectedPlan { background: #f6f8fc; box-shadow: inset 0 3px #5478c7; }
+.planCard.featuredPlan { background: #f8f7fc; }
+.popular { position: absolute; top: 0; right: 18px; padding: 5px 9px; border-radius: 0 0 7px 7px; background: #6757a5; color: #fff; font-size: 10px; }
+.planCard header { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: var(--font-size-heading-sm); font-weight: var(--font-weight-semibold); }
+.planCard header i { padding: 4px 7px; border-radius: var(--radius-pill); background: #e8f2eb; color: #427354; font-size: 10px; font-style: normal; }
+.planCard > p { min-height: 64px; margin: 12px 0 20px; color: var(--text-muted); line-height: 1.45; }
+.planPrice { display: flex; min-height: 54px; align-items: baseline; gap: 6px; }
+.planPrice strong { font-size: 30px; letter-spacing: -.03em; }
+.planPrice small { color: var(--text-muted); font-size: 11px; }
+.planCard ul { display: grid; gap: 11px; margin: 16px 0 28px; padding: 17px 0 0; border-top: 1px solid var(--border); list-style: none; color: #565653; font-size: var(--font-size-body-sm); }
+.planCard li::first-letter { color: #508360; }
+.choosePlan { display: grid; height: 38px; margin-top: auto; place-items: center; border: 1px solid var(--border-strong); border-radius: var(--radius-md); font-weight: var(--font-weight-semibold); }
+.selectedPlan .choosePlan { border-color: #8da8df; color: #365ca9; }
+.planAction { position: sticky; z-index: 5; bottom: 16px; display: flex; width: min(680px,calc(100% - 24px)); min-height: 72px; align-items: center; gap: 18px; margin: 22px auto 70px; padding: 12px 14px 12px 20px; border: 1px solid var(--border); border-radius: 14px; background: rgba(255,255,255,.95); box-shadow: 0 12px 36px rgba(30,30,28,.13); backdrop-filter: blur(10px); }
+.planAction > span { display: grid; gap: 2px; min-width: 0; }
+.planAction small { overflow: hidden; color: var(--text-muted); text-overflow: ellipsis; white-space: nowrap; }
+.planAction button { min-height: var(--control-height-lg); margin-left: auto; padding: 0 17px; border: 0; border-radius: var(--radius-md); background: var(--text); color: #fff; cursor: pointer; font-weight: var(--font-weight-semibold); white-space: nowrap; }
+.planAction button:disabled { background: #ecece9; color: var(--text-subtle); cursor: default; }
+.comparison { padding: 52px 0 70px; background: #f8f8f6; box-shadow: 0 0 0 100vmax #f8f8f6; clip-path: inset(0 -100vmax); }
+.comparison header { margin-bottom: 19px; }
+.tableWrap { overflow-x: auto; }
+.comparison table, .paymentTable table { width: 100%; border-collapse: collapse; background: #fff; }
+.comparison th, .comparison td, .paymentTable th, .paymentTable td { height: 58px; padding: 0 18px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
+.comparison th, .paymentTable th { color: var(--text-subtle); font-size: 11px; font-weight: var(--font-weight-semibold); letter-spacing: .06em; text-transform: uppercase; }
+.comparison td { color: var(--text-muted); }
+.comparison td:first-child { color: var(--text); }
+.filters { display: flex; gap: 5px; padding: 19px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); overflow-x: auto; }
+.filters button { height: 34px; padding: 0 13px; border: 1px solid transparent; border-radius: var(--radius-pill); background: transparent; color: var(--text-muted); white-space: nowrap; cursor: pointer; }
+.filters .filterActive { border-color: var(--border-strong); background: #fff; color: var(--text); }
+.extensionGrid { display: grid; grid-template-columns: repeat(3,1fr); background: #f8f8f6; box-shadow: 0 0 0 100vmax #f8f8f6; clip-path: inset(0 -100vmax); }
+.extensionGrid article { display: flex; min-height: 330px; flex-direction: column; padding: 34px 28px; border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.extensionGrid article:nth-child(3n) { border-right: 0; }
+.extensionIcon { width: 54px; height: 54px; margin-bottom: 22px; font-size: 20px; }
+.extensionKind { color: var(--text-subtle); font-size: 10px; font-weight: var(--font-weight-semibold); letter-spacing: .08em; text-transform: uppercase; }
+.extensionGrid h3 { margin: 5px 0 7px; font-size: var(--font-size-heading-sm); }
+.extensionGrid p { margin: 0; color: var(--text-muted); line-height: 1.5; }
+.extensionGrid footer { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-top: auto; padding-top: 22px; }
+.extensionGrid footer > span { display: grid; gap: 3px; }
+.extensionGrid footer small { color: var(--text-subtle); font-size: 10px; }
+.extensionGrid footer button { padding: 0; border: 0; background: transparent; color: var(--primary); cursor: pointer; white-space: nowrap; }
+.customBanner { display: flex; align-items: center; justify-content: space-between; gap: 36px; padding: 58px 0; }
+.customBanner > div { max-width: 760px; }
+.customBanner p { margin: 8px 0 0; color: var(--text-muted); line-height: 1.55; }
+.customBanner button { min-height: var(--control-height-lg); flex: 0 0 auto; padding: 0 17px; border: 0; border-radius: var(--radius-md); background: var(--text); color: #fff; cursor: pointer; }
+.usagePage .sectionIntro > strong { color: #4e7b5d; font-weight: var(--font-weight-medium); }
+.usageGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border); box-shadow: 0 0 0 100vmax #f8f8f6; clip-path: inset(0 -100vmax); }
+.usageGrid article { min-height: 190px; padding: 34px; background: #f8f8f6; }
+.usageGrid header { display: flex; justify-content: space-between; gap: 18px; }
+.usageGrid header span { font-weight: var(--font-weight-semibold); }
+.progress { overflow: hidden; height: 7px; margin: 29px 0 13px; border-radius: var(--radius-pill); background: #e6e6e2; }
+.progress i { display: block; height: 100%; border-radius: inherit; background: #6688cd; }
+.usageGrid small { color: var(--text-muted); }
+.usageNote { display: flex; gap: 15px; max-width: 760px; margin: 48px 0; padding: 22px; border: 1px solid #d9e3f3; border-radius: var(--radius-lg); background: #f7f9fc; }
+.usageNote > span { display: grid; width: 26px; height: 26px; flex: 0 0 auto; place-items: center; border-radius: 50%; background: #dfe8f8; color: #47679f; font-weight: 700; }
+.usageNote p { margin: 4px 0 0; color: var(--text-muted); }
+.paymentSummary { display: grid; grid-template-columns: repeat(3,1fr); background: #f8f8f6; box-shadow: 0 0 0 100vmax #f8f8f6; clip-path: inset(0 -100vmax); }
+.paymentSummary div { display: grid; min-height: 120px; align-content: center; gap: 5px; padding: 24px 30px; border-right: 1px solid var(--border); }
+.paymentSummary div:first-child { padding-left: 0; }
+.paymentSummary div:last-child { border-right: 0; }
+.paymentSummary strong { font-size: var(--font-size-body-lg); }
+.paymentTable { padding: 58px 0; }
+.paymentTable > header h3 { margin: 0; font-size: var(--font-size-heading-sm); }
+.paymentTable > header span { color: var(--text-subtle); }
+.paymentTable td button { border: 0; background: transparent; color: var(--primary); cursor: pointer; }
+.paid { padding: 4px 8px; border-radius: var(--radius-pill); background: #e8f3eb; color: #417354; font-size: 11px; }
+.notice { position: fixed; z-index: 60; right: 24px; bottom: 24px; padding: 12px 16px; border-radius: var(--radius-md); background: #252724; color: #fff; box-shadow: var(--shadow-modal); font-size: var(--font-size-body-sm); }
+
+@media (max-width: 1100px) {
+  .accountFacts { grid-template-columns: 1fr 1fr; }
+  .accountFacts > div:nth-child(2) { border-right: 0; }
+  .accountFacts > div:nth-child(3) { padding-left: 0; }
+  .planGrid { grid-template-columns: 1fr 1fr; }
+  .planCard:nth-child(2) { border-right: 0; }
+  .planCard:nth-child(-n+2) { border-bottom: 1px solid var(--border); }
+  .extensionGrid { grid-template-columns: 1fr 1fr; }
+  .extensionGrid article:nth-child(3n) { border-right: 1px solid var(--border); }
+  .extensionGrid article:nth-child(2n) { border-right: 0; }
+}
+
+@media (max-width: 760px) {
+  .topbar { min-height: 76px; padding: 12px 14px 12px 66px; }
+  .topbar span, .topbar > button { display: none; }
+  .topbar h1 { font-size: var(--font-size-heading-sm); }
+  .tabs { gap: 23px; min-height: 52px; padding: 0 14px; }
+  .tabs button { height: 52px; }
+  .page main { width: 100%; padding: 0 14px 52px; }
+  .overviewHero { grid-template-columns: 1fr; gap: 0; min-height: 0; padding: 36px 0 29px; }
+  .planName h2 { font-size: 48px; }
+  .planIdentity p { font-size: var(--font-size-body); }
+  .priceBlock { min-height: 104px; margin-top: 28px; padding: 21px 0 0; border-top: 1px solid var(--border); border-left: 0; }
+  .priceBlock strong { font-size: 38px; }
+  .accountFacts { grid-template-columns: 1fr; }
+  .accountFacts > div, .accountFacts > div:first-child, .accountFacts > div:nth-child(3) { min-height: 112px; padding: 20px 0; border-right: 0; border-bottom: 1px solid var(--border); }
+  .overviewGrid { grid-template-columns: 1fr; padding: 42px 0; }
+  .planIncludes { padding: 0; }
+  .planIncludes header button, .quickExtensions header button { display: none; }
+  .includeGrid { grid-template-columns: 1fr; }
+  .upgradeCard { min-height: 330px; margin-top: 38px; }
+  .quickExtensions { padding: 40px 0; }
+  .quickExtensions > div { grid-template-columns: 1fr; }
+  .quickExtensions > div button, .quickExtensions > div button:first-child { padding: 14px 0; border-right: 0; border-bottom: 1px solid var(--border); }
+  .sectionIntro { min-height: 0; align-items: flex-start; flex-direction: column; padding: 36px 0; }
+  .sectionIntro h2 { font-size: 34px; }
+  .sectionIntro p { font-size: var(--font-size-body); }
+  .periodToggle { width: 100%; }
+  .periodToggle button { flex: 1; }
+  .planGrid, .extensionGrid, .usageGrid, .paymentSummary { grid-template-columns: 1fr; }
+  .planCard, .planCard:nth-child(2), .planCard:last-child { min-height: 390px; border-right: 0; border-bottom: 1px solid var(--border); }
+  .planAction { position: static; width: 100%; margin-bottom: 48px; }
+  .planAction small { display: none; }
+  .comparison { padding: 40px 0; }
+  .filters { margin: 0 -14px; padding: 14px; }
+  .extensionGrid article, .extensionGrid article:nth-child(3n), .extensionGrid article:nth-child(2n) { min-height: 295px; padding: 28px 0; border-right: 0; }
+  .customBanner { align-items: flex-start; flex-direction: column; padding: 42px 0; }
+  .usageGrid article { min-height: 160px; padding: 28px 0; }
+  .usageNote { margin: 36px 0; }
+  .paymentSummary div, .paymentSummary div:first-child { min-height: 100px; padding: 20px 0; border-right: 0; border-bottom: 1px solid var(--border); }
+  .paymentTable { padding: 42px 0; }
+  .paymentTable > header span { display: none; }
+  .notice { right: 14px; bottom: 14px; left: 14px; text-align: center; }
+}

@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import type { CrmTask, TaskKind, TaskPeriod } from "@/types/crm";
 import { CompleteTaskModal } from "./CompleteTaskModal";
 import { NewTaskModal, type NewTaskDraft } from "./NewTaskModal";
+import { TaskDetailsModal } from "./TaskDetailsModal";
 import { useTasks } from "./TasksContext";
 import styles from "./tasks.module.css";
 
@@ -26,9 +27,11 @@ export function TasksCenter() {
   const [kind, setKind] = useState<"all" | TaskKind>("all");
   const [search, setSearch] = useState("");
   const [completingId, setCompletingId] = useState<string | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
 
   const completingTask = tasks.find((task) => task.id === completingId);
+  const selectedTask = tasks.find((task) => task.id === selectedTaskId);
   const counts = useMemo(() => ({
     active: tasks.filter((task) => task.period !== "completed").length,
     overdue: tasks.filter((task) => task.period === "overdue").length,
@@ -104,11 +107,12 @@ export function TasksCenter() {
         </div>
 
         <div className={styles.taskList}>
-          {groupedTasks.length ? groupedTasks.map((group) => <section className={styles.group} key={group.period}><div className={styles.groupHeader}><span className={`${styles.groupDot} ${styles[`dot_${group.period}`]}`} /><h3>{periodLabels[group.period]}</h3><span>{group.tasks.length}</span></div>{group.tasks.map((task) => <TaskRow task={task} onComplete={() => setCompletingId(task.id)} key={task.id} />)}</section>) : <div className={styles.empty}><span>✓</span><h3>Задач не найдено</h3><p>Для выбранных параметров список пуст.</p></div>}
+          {groupedTasks.length ? groupedTasks.map((group) => <section className={`${styles.group} ${styles[`group_${group.period}`]}`} key={group.period}><div className={styles.groupHeader}><span className={`${styles.groupDot} ${styles[`dot_${group.period}`]}`} /><h3>{periodLabels[group.period]}</h3><span>{group.tasks.length}</span></div>{group.tasks.map((task) => <TaskRow task={task} onOpen={() => setSelectedTaskId(task.id)} onComplete={() => setCompletingId(task.id)} key={task.id} />)}</section>) : <div className={styles.empty}><span>✓</span><h3>Задач не найдено</h3><p>Для выбранных параметров список пуст.</p></div>}
         </div>
       </div>
 
       {completingTask && <CompleteTaskModal task={completingTask} onComplete={completeTask} onClose={() => setCompletingId(null)} />}
+      {selectedTask && <TaskDetailsModal task={selectedTask} onSave={(updatedTask) => { setTasks((current) => current.map((task) => task.id === updatedTask.id ? updatedTask : task)); setSelectedTaskId(null); }} onClose={() => setSelectedTaskId(null)} />}
       {isCreating && <NewTaskModal onCreate={createTask} onClose={() => setIsCreating(false)} />}
     </section>
   );
@@ -118,13 +122,13 @@ function SummaryButton({ label, count, active, tone = "", onClick }: { label: st
   return <button className={`${styles.summaryCard} ${active ? styles.summaryActive : ""} ${tone ? styles[`summary_${tone}`] : ""}`} type="button" onClick={onClick}><span>{label}</span><strong>{count}</strong></button>;
 }
 
-function TaskRow({ task, onComplete }: { task: CrmTask; onComplete: () => void }) {
+function TaskRow({ task, onOpen, onComplete }: { task: CrmTask; onOpen: () => void; onComplete: () => void }) {
   const isCompleted = task.period === "completed";
   return (
     <article className={`${styles.taskRow} ${isCompleted ? styles.taskCompleted : ""}`}>
       <button className={styles.checkButton} type="button" aria-label={isCompleted ? "Задача выполнена" : `Выполнить: ${task.title}`} disabled={isCompleted} onClick={onComplete}>{isCompleted ? "✓" : ""}</button>
       <span className={styles.kindIcon}>{kindIcons[task.kind]}</span>
-      <div className={styles.taskMain}><strong>{task.title}</strong><span>{task.kind}{task.result && ` · ${task.result}`}</span></div>
+      <button className={styles.taskMain} type="button" onClick={onOpen}><strong>{task.title}</strong><span>{task.kind}{task.result && ` · ${task.result}`}</span></button>
       <div className={styles.relation}>{task.contactName ? <Link href="/contacts">{task.contactName}</Link> : <span>Без контакта</span>}{task.dealNumber && <Link href="/">Сделка #{task.dealNumber}</Link>}</div>
       <span className={styles.taskAssignee}><i>{task.assignee.slice(0, 1)}</i>{task.assignee}</span>
       <time className={task.period === "overdue" ? styles.overdueTime : ""}>{task.completedAt || <>{task.dueLabel}{task.dueTime && <b>{task.dueTime}</b>}</>}</time>

@@ -102,3 +102,25 @@ export interface CrmTask {
   result?: string;
   completedAt?: string;
 }
+
+export type TeamRole = "Администратор" | "Руководитель" | "Менеджер";
+export type TeamStatus = "Активен" | "Приглашён" | "Доступ отключён";
+
+export interface TeamMember {
+  id: string;
+  name: string;
+  initials: string;
+  email: string;
+  phone?: string;
+  role: TeamRole;
+  status: TeamStatus;
+  lastActive: string;
+  access: {
+    deals: boolean;
+    contacts: boolean;
+    properties: boolean;
+    tasks: boolean;
+    team: boolean;
+    settings: boolean;
+  };
+}

@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import styles from "./layout.module.css";
 
 const primaryItems = [
-  ["⌂", "Главная", "#"],
+  ["⌂", "Главная", "/home"],
   ["▥", "Воронка", "/"],
   ["◎", "Контакты", "/contacts"],
   ["◇", "Объекты", "/objects"],
@@ -14,9 +14,9 @@ const primaryItems = [
 ];
 
 const secondaryItems = [
-  ["↗", "Интеграции", "#"],
-  ["♙", "Команда", "#"],
-  ["◫", "Подписка", "#"],
+  ["↗", "Интеграции", "/integrations"],
+  ["♙", "Команда", "/team"],
+  ["◫", "Подписка", "/subscription"],
   ["⚙", "Настройки", "#"],
 ];
 
@@ -61,7 +61,7 @@ export function Sidebar({ collapsed, mobileOpen, onMobileClose, onToggle }: Side
 
         <div className={styles.navGroup}>
           {secondaryItems.map(([icon, label, href]) => (
-            <Link className={styles.navItem} href={href} key={label} onClick={onMobileClose}>
+            <Link className={`${styles.navItem} ${href !== "#" && pathname.startsWith(href) ? styles.navItemActive : ""}`} href={href} key={label} onClick={onMobileClose}>
               <span className={styles.navIcon}>{icon}</span>
               <span>{label}</span>
             </Link>

@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
 import { useTasks } from "@/components/tasks/TasksContext";
+import { TaskDetailsModal } from "@/components/tasks/TaskDetailsModal";
+import { CompleteTaskModal } from "@/components/tasks/CompleteTaskModal";
 import type { CrmTask, TaskKind, TaskPeriod } from "@/types/crm";
 import styles from "./calendar.module.css";
 
@@ -79,6 +81,8 @@ export function CalendarView() {
   const [selectedDate, setSelectedDate] = useState(TODAY_KEY);
   const [search, setSearch] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
 
   const visibleDays = useMemo(() => mode === "month" ? monthGrid(cursor) : weekGrid(dateFromKey(selectedDate)), [cursor, mode, selectedDate]);
   const filteredTasks = useMemo(() => {
@@ -86,6 +90,8 @@ export function CalendarView() {
     return tasks.filter((task) => !query || [task.title, task.contactName, task.dealTitle, task.assignee].some((value) => value?.toLocaleLowerCase("ru").includes(query)));
   }, [search, tasks]);
   const selectedTasks = filteredTasks.filter((task) => task.dueDate === selectedDate).sort((first, second) => (first.dueTime || "99:99").localeCompare(second.dueTime || "99:99"));
+  const selectedTask = tasks.find((task) => task.id === selectedTaskId);
+  const completingTask = tasks.find((task) => task.id === completingTaskId);
 
   const title = mode === "month"
     ? `${monthNames[cursor.getMonth()]} ${cursor.getFullYear()}`
@@ -128,10 +134,21 @@ export function CalendarView() {
     setIsCreating(false);
   }
 
-  function toggleTask(taskId: string) {
-    setTasks((current) => current.map((task) => task.id === taskId
-      ? { ...task, period: task.period === "completed" ? periodForDate(task.dueDate || TODAY_KEY) : "completed", completedAt: task.period === "completed" ? undefined : "Только что" }
+  function completeTask(result: string) {
+    if (!completingTask) return;
+    setTasks((current) => current.map((task) => task.id === completingTask.id
+      ? { ...task, period: "completed", result: result || "Выполнено", completedAt: "Только что" }
       : task));
+    setCompletingTaskId(null);
+  }
+
+  function saveTask(updatedTask: CrmTask) {
+    setTasks((current) => current.map((task) => task.id === updatedTask.id ? updatedTask : task));
+    const nextDateKey = updatedTask.dueDate || selectedDate;
+    const nextDate = dateFromKey(nextDateKey);
+    setSelectedDate(nextDateKey);
+    setCursor(new Date(nextDate.getFullYear(), nextDate.getMonth(), 1));
+    setSelectedTaskId(null);
   }
 
   return (
@@ -181,8 +198,8 @@ export function CalendarView() {
             <div className={styles.dayAgenda}>
               {selectedTasks.length ? selectedTasks.map((task) => (
                 <article className={`${styles.agendaItem} ${task.period === "completed" ? styles.completedAgenda : ""}`} key={task.id}>
-                  <button className={styles.checkButton} type="button" aria-label={task.period === "completed" ? `Вернуть задачу: ${task.title}` : `Выполнить задачу: ${task.title}`} onClick={() => toggleTask(task.id)}>{task.period === "completed" ? "✓" : ""}</button>
-                  <div className={styles.agendaMain}><span><i>{kindIcons[task.kind]}</i>{task.kind}<time>{task.dueTime || "Без времени"}</time></span><strong>{task.title}</strong><small>{task.assignee}</small></div>
+                  <button className={styles.checkButton} type="button" aria-label={task.period === "completed" ? `Задача выполнена: ${task.title}` : `Выполнить задачу: ${task.title}`} disabled={task.period === "completed"} onClick={() => setCompletingTaskId(task.id)}>{task.period === "completed" ? "✓" : ""}</button>
+                  <button className={styles.agendaMain} type="button" onClick={() => setSelectedTaskId(task.id)}><span><i>{kindIcons[task.kind]}</i>{task.kind}<time>{task.dueTime || "Без времени"}</time></span><strong>{task.title}</strong><small>{task.assignee}</small></button>
                   {(task.contactName || task.dealTitle) && <div className={styles.relations}>{task.contactName && <Link href="/contacts">{task.contactName}</Link>}{task.dealTitle && <Link href="/">{task.dealTitle}</Link>}</div>}
                 </article>
               )) : <div className={styles.emptyDay}><span>○</span><h4>На этот день задач нет</h4><p>Можно оставить день свободным или запланировать действие.</p><button type="button" onClick={() => setIsCreating(true)}>＋ Добавить задачу</button></div>}
@@ -192,6 +209,8 @@ export function CalendarView() {
       </div>
 
       {isCreating && <CalendarTaskModal initialDate={selectedDate} onCreate={createTask} onClose={() => setIsCreating(false)} />}
+      {selectedTask && <TaskDetailsModal task={selectedTask} onSave={saveTask} onClose={() => setSelectedTaskId(null)} />}
+      {completingTask && <CompleteTaskModal task={completingTask} onComplete={completeTask} onClose={() => setCompletingTaskId(null)} />}
     </section>
   );
 }

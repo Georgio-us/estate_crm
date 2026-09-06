@@ -89,35 +89,39 @@ export function ContactsDirectory() {
           <span>{contacts.length} контактов</span>
         </div>
 
-        <div className={styles.filters}>
-          <Filter label="Ответственный" value={assignee} onChange={setAssignee} options={["Не назначен", "Георгий", "Елена", "Андрей"]} />
-          <Filter label="Источник" value={source} onChange={setSource} options={["Meta", "Website", "Manual"]} optionLabels={{ Website: "Сайт", Manual: "Вручную" }} />
-          <Filter label="Сделки" value={dealFilter} onChange={setDealFilter} options={["with", "without"]} optionLabels={{ with: "Есть активные", without: "Без сделок" }} />
-          <span className={styles.resultCount}>{visibleContacts.length} из {contacts.length}</span>
-          {hasFilters && <button className={styles.resetButton} type="button" onClick={resetFilters}>Сбросить</button>}
-        </div>
-
-        {visibleContacts.length ? (
-          <div className={styles.tableWrap}>
-            <table>
-              <thead><tr><th>Контакт</th><th>Телефон и каналы</th><th>Ответственный</th><th>Источник</th><th>Активные сделки</th><th>Последний контакт</th><th>Ближайшая задача</th></tr></thead>
-              <tbody>{visibleContacts.map((contact) => {
-                const relatedDeals = contact.dealIds.map((id) => dealsById.get(id)).filter(Boolean);
-                return (
-                  <tr key={contact.id} onClick={() => setSelectedId(contact.id)}>
-                    <td><span className={styles.avatar}>{initials(contact.name)}</span><span><strong>{contact.name}</strong><small>Добавлен {contact.createdAt}</small></span></td>
-                    <td><a href={`tel:${contact.phone.replaceAll(" ", "")}`} onClick={(event) => event.stopPropagation()}>{contact.phone}</a><small>{contact.telegram || contact.email || "Дополнительных каналов нет"}</small></td>
-                    <td><span className={styles.assigneeDot}>{contact.assignee === "Не назначен" ? "—" : contact.assignee.slice(0, 1)}</span>{contact.assignee}</td>
-                    <td><span className={styles.sourceTag}>{sourceLabels[contact.source]}</span></td>
-                    <td>{relatedDeals.length ? <><strong>{relatedDeals.length}</strong><small>{relatedDeals.map((item) => item?.stageTitle).join(", ")}</small></> : <span className={styles.muted}>Нет сделок</span>}</td>
-                    <td>{contact.lastContact}</td>
-                    <td>{contact.nextTask ? <span className={styles.task}>○ {contact.nextTask}</span> : <span className={styles.muted}>Нет задачи</span>}</td>
-                  </tr>
-                );
-              })}</tbody>
-            </table>
+        <section className={styles.workspace}>
+          <div className={styles.filters}>
+            <Filter label="Ответственный" value={assignee} onChange={setAssignee} options={["Не назначен", "Георгий", "Елена", "Андрей"]} />
+            <Filter label="Источник" value={source} onChange={setSource} options={["Meta", "Website", "Manual"]} optionLabels={{ Website: "Сайт", Manual: "Вручную" }} />
+            <Filter label="Сделки" value={dealFilter} onChange={setDealFilter} options={["with", "without"]} optionLabels={{ with: "Есть активные", without: "Без сделок" }} />
+            <span className={styles.resultCount}>{visibleContacts.length} из {contacts.length}</span>
+            {hasFilters && <button className={styles.resetButton} type="button" onClick={resetFilters}>Сбросить</button>}
           </div>
-        ) : <div className={styles.empty}><span>⌕</span><h3>Контакты не найдены</h3><p>Измените запрос или сбросьте фильтры.</p><button type="button" onClick={resetFilters}>Сбросить фильтры</button></div>}
+
+          {visibleContacts.length ? (
+            <div className={styles.tableRegion}>
+              <div className={styles.tableWrap}>
+                <table>
+                  <thead><tr><th>Контакт</th><th>Телефон и каналы</th><th>Ответственный</th><th>Источник</th><th>Активные сделки</th><th>Последний контакт</th><th>Ближайшая задача</th></tr></thead>
+                  <tbody>{visibleContacts.map((contact) => {
+                    const relatedDeals = contact.dealIds.map((id) => dealsById.get(id)).filter(Boolean);
+                    return (
+                      <tr key={contact.id} onClick={() => setSelectedId(contact.id)}>
+                        <td><div className={styles.contactCell}><span className={styles.avatar}>{initials(contact.name)}</span><span><strong>{contact.name}</strong><small>Добавлен {contact.createdAt}</small></span></div></td>
+                        <td><a href={`tel:${contact.phone.replaceAll(" ", "")}`} onClick={(event) => event.stopPropagation()}>{contact.phone}</a><small>{contact.telegram || contact.email || "Дополнительных каналов нет"}</small></td>
+                        <td><span className={styles.assigneeDot}>{contact.assignee === "Не назначен" ? "—" : contact.assignee.slice(0, 1)}</span>{contact.assignee}</td>
+                        <td><span className={styles.sourceTag}>{sourceLabels[contact.source]}</span></td>
+                        <td>{relatedDeals.length ? <><strong>{relatedDeals.length}</strong><small>{relatedDeals.map((item) => item?.stageTitle).join(", ")}</small></> : <span className={styles.muted}>Нет сделок</span>}</td>
+                        <td>{contact.lastContact}</td>
+                        <td>{contact.nextTask ? <span className={styles.task}>○ {contact.nextTask}</span> : <span className={styles.muted}>Нет задачи</span>}</td>
+                      </tr>
+                    );
+                  })}</tbody>
+                </table>
+              </div>
+            </div>
+          ) : <div className={styles.empty}><span>⌕</span><h3>Контакты не найдены</h3><p>Измените запрос или сбросьте фильтры.</p><button type="button" onClick={resetFilters}>Сбросить фильтры</button></div>}
+        </section>
       </div>
 
       {selectedContact && <ContactDrawer contact={selectedContact} deals={selectedDeals} activities={selectedActivities} onAddNote={addContactNote} onClose={() => setSelectedId(null)} />}

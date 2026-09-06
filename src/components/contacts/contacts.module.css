@@ -1,4 +1,11 @@
-.page { min-height: 100vh; min-width: 0; background: #fff; }
+.page {
+  --contacts-surface-context: #fff;
+  --contacts-surface-workspace: #f8f8f6;
+  --contacts-surface-hover: #e9ebe7;
+  min-height: 100vh;
+  min-width: 0;
+  background: var(--contacts-surface-context);
+}
 .topbar { position: sticky; z-index: 10; top: 0; display: flex; height: var(--topbar-height); align-items: center; gap: 14px; padding: 0 24px; border-bottom: 1px solid var(--border); background: rgba(255,255,255,.96); }
 .topbar h1 { margin: 0; font-size: var(--font-size-body-lg); font-weight: var(--font-weight-semibold); }
 .search { display: flex; width: min(430px, 42vw); height: var(--control-height); align-items: center; gap: 8px; margin-left: auto; padding: 0 11px; border: 1px solid var(--border); border-radius: var(--radius-md); background: #fafafa; color: var(--text-subtle); }
@@ -8,26 +15,45 @@
 .primaryButton:hover { background: var(--primary-hover); }
 .primaryButton:disabled { background: #d6d9df; cursor: default; }
 
-.content { width: min(1480px, 100%); margin: 0 auto; padding: 45px 38px 64px; }
+.content { width: min(1480px, 100%); margin: 0 auto; padding: 45px 38px 0; }
 .heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; }
 .eyebrow { color: var(--text-subtle); font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); letter-spacing: .08em; text-transform: uppercase; }
 .heading h2 { margin: 8px 0 5px; font-size: var(--font-size-heading-lg); font-weight: var(--font-weight-bold); letter-spacing: -.03em; }
 .heading p { margin: 0; color: var(--text-muted); font-size: var(--font-size-body-sm); }
 .heading > span { color: var(--text-subtle); font-size: var(--font-size-caption); }
-.filters { display: flex; min-height: 72px; align-items: center; gap: 9px; margin-top: 28px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.workspace {
+  margin-top: 28px;
+  padding-bottom: 64px;
+  background: var(--contacts-surface-context);
+}
+.filters { display: flex; min-height: 72px; align-items: center; gap: 9px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 .filter { display: flex; height: var(--control-height); align-items: center; gap: 7px; padding: 0 11px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
 .filter > span { color: var(--text-subtle); font-size: var(--font-size-caption); }
 .filter select { border: 0; outline: 0; background: transparent; color: var(--text); cursor: pointer; font-size: var(--font-size-body-sm); }
 .resultCount { margin-left: auto; color: var(--text-subtle); font-size: var(--font-size-caption); }
 .resetButton { padding: 7px; border: 0; background: transparent; color: #376bbf; cursor: pointer; font-size: var(--font-size-caption); }
 
+.tableRegion { position: relative; isolation: isolate; }
+.tableRegion::before {
+  position: absolute;
+  z-index: -1;
+  top: 48px;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  background: var(--contacts-surface-workspace);
+  box-shadow: 0 0 0 100vmax var(--contacts-surface-workspace);
+  clip-path: inset(0 -100vmax);
+  content: "";
+}
 .tableWrap { overflow-x: auto; }
 .tableWrap table { width: 100%; min-width: 1100px; border-collapse: collapse; font-size: var(--font-size-body); }
 .tableWrap th { height: 48px; padding: 0 12px; border-bottom: 1px solid var(--border); color: var(--text-subtle); font-size: var(--font-size-caption); font-weight: var(--font-weight-medium); text-align: left; }
-.tableWrap td { height: 76px; padding: 11px 12px; border-bottom: 1px solid var(--border); color: #595955; vertical-align: middle; }
-.tableWrap tbody tr { cursor: pointer; }
-.tableWrap tbody tr:hover { background: #fafafa; }
-.tableWrap td:first-child { display: flex; align-items: center; gap: 10px; }
+.tableWrap td { height: 76px; padding: 11px 12px; color: #595955; vertical-align: middle; }
+.tableWrap tbody tr { border-bottom: 1px solid var(--border); cursor: pointer; }
+.tableWrap tbody tr:hover { background: var(--contacts-surface-hover); }
+.contactCell { display: flex; align-items: center; gap: 10px; }
+.contactCell > span:last-child { display: grid; gap: 4px; }
 .tableWrap td > span:not(.avatar):not(.sourceTag):not(.assigneeDot):not(.task):not(.muted) { display: grid; gap: 4px; }
 .tableWrap td:nth-child(2), .tableWrap td:nth-child(5) { display: table-cell; }
 .tableWrap td:nth-child(2) > small, .tableWrap td:nth-child(5) > small { display: block; margin-top: 5px; }
@@ -40,7 +66,7 @@
 .sourceTag { display: inline-flex; padding: 4px 7px; border-radius: var(--radius-xs); background: #edf1f7; color: #59677a; font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); }
 .task { color: #8a6720; }
 .muted { color: var(--text-subtle); }
-.empty { display: grid; min-height: 370px; place-items: center; align-content: center; text-align: center; }
+.empty { display: grid; min-height: 370px; place-items: center; align-content: center; background: var(--contacts-surface-workspace); box-shadow: 0 0 0 100vmax var(--contacts-surface-workspace); clip-path: inset(0 -100vmax); text-align: center; }
 .empty > span { color: var(--text-subtle); font-size: var(--font-size-heading-md); }
 .empty h3 { margin: 12px 0 4px; font-size: var(--font-size-body); }
 .empty p { margin: 0; color: var(--text-muted); font-size: var(--font-size-caption); }
@@ -136,12 +162,14 @@
   .search { width: auto; flex: 1; margin-left: 0; }
   .topbar .primaryButton { width: var(--control-height); flex: 0 0 var(--control-height); justify-content: center; overflow: visible; padding: 0; }
   .topbar .actionLabel { display: none; }
-  .content { padding: 30px 16px 50px; }
+  .content { padding: 30px 16px 0; }
   .heading h2 { font-size: var(--font-size-heading-md); }
+  .workspace { margin-top: 22px; padding-bottom: 50px; }
   .filters { align-items: flex-start; flex-wrap: wrap; padding: 12px 0; }
   .filter { flex: 1 1 145px; }
   .resultCount { width: 100%; margin-left: 0; }
   .tableWrap { overflow: visible; }
+  .tableRegion::before { top: 0; }
   .tableWrap table, .tableWrap tbody { display: block; width: 100%; min-width: 0; }
   .tableWrap thead { display: none; }
   .tableWrap tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px 18px; padding: 18px 0; border-bottom: 1px solid var(--border); }
