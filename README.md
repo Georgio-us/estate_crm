@@ -46,6 +46,8 @@ Frontend требует адрес API во время сборки:
 NEXT_PUBLIC_API_URL=https://estatecrmapi-crmdelmar.up.railway.app
 ```
 
+Браузер обращается к same-origin маршрутам `/api/auth/*`; Next.js проксирует их в отдельный API-сервис. Поэтому session cookie принадлежит frontend-домену и работает при включённой блокировке сторонних cookies.
+
 Полная проверка workspace:
 
 ```bash

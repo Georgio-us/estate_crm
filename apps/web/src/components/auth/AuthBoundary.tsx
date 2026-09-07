@@ -3,8 +3,6 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
-import { getApiUrl } from "@/lib/api";
-
 import { AuthProvider, type SessionUser } from "./AuthContext";
 import styles from "./auth.module.css";
 
@@ -15,7 +13,7 @@ type AuthState =
 
 async function fetchSessionState(): Promise<AuthState | { status: "unauthorized" }> {
   try {
-    const response = await fetch(`${getApiUrl()}/auth/session`, {
+    const response = await fetch("/api/auth/session", {
       credentials: "include",
       cache: "no-store",
     });

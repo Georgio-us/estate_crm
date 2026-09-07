@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { useCurrentUser } from "@/components/auth/AuthContext";
-import { getApiUrl } from "@/lib/api";
 import styles from "./layout.module.css";
 
 const primaryItems = [
@@ -51,7 +50,7 @@ export function Sidebar({ collapsed, mobileOpen, onMobileClose, onToggle }: Side
     setLoggingOut(true);
 
     try {
-      await fetch(`${getApiUrl()}/auth/logout`, {
+      await fetch("/api/auth/logout", {
         method: "POST",
         credentials: "include",
       });

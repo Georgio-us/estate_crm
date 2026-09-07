@@ -3,8 +3,6 @@
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 
-import { getApiUrl } from "@/lib/api";
-
 import styles from "@/components/auth/auth.module.css";
 
 export default function LoginPage() {
@@ -20,7 +18,7 @@ export default function LoginPage() {
     setSubmitting(true);
 
     try {
-      const response = await fetch(`${getApiUrl()}/auth/login`, {
+      const response = await fetch("/api/auth/login", {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },

@@ -509,6 +509,8 @@ Frontend-auth также реализован:
 - реальные имя и роль пользователя в sidebar;
 - выход с отзывом серверной сессии.
 
+Auth-запросы браузера проходят через same-origin route handler frontend (`/api/auth/*`), который серверно проксирует их в `estate_crm_api`. Это позволяет хранить session cookie на домене CRM и не зависеть от блокировки сторонних cookies между отдельными Railway-доменами frontend и API.
+
 ### 7.5 Сервис `estate_crm_worker` (`apps/worker`, позднее)
 
 Непубличный сервис из того же monorepo с отдельной командой запуска.
