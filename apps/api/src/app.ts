@@ -8,6 +8,7 @@ import type { DatabaseConnection } from "@estate-crm/database";
 import type { ApiConfig } from "./config.js";
 import { registerAuthRoutes } from "./auth/routes.js";
 import { registerContactRoutes } from "./contacts/routes.js";
+import { registerPipelineRoutes } from "./pipeline/routes.js";
 
 export async function buildApp(
   config: ApiConfig,
@@ -51,6 +52,7 @@ export async function buildApp(
 
   await registerAuthRoutes(app, config, database);
   await registerContactRoutes(app, database);
+  await registerPipelineRoutes(app, database);
 
   app.setErrorHandler((error, request, reply) => {
     request.log.error({ error }, "Unhandled request error");

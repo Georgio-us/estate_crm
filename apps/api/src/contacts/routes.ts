@@ -1,34 +1,14 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyInstance } from "fastify";
 
 import type {
   ApiErrorResponse,
-  AuthenticatedUser,
   ContactListResponse,
   ContactRecord,
   CreateContactRequest,
 } from "@estate-crm/contracts";
 import type { DatabaseConnection } from "@estate-crm/database";
 
-import { readSessionUser } from "../auth/routes.js";
-import { SESSION_COOKIE_NAME } from "../auth/session.js";
-
-async function requireUser(
-  request: FastifyRequest,
-  reply: FastifyReply,
-  database: DatabaseConnection,
-): Promise<AuthenticatedUser | null> {
-  const token = request.cookies[SESSION_COOKIE_NAME];
-  const user = token ? await readSessionUser(token, database) : null;
-
-  if (!user) {
-    await reply.status(401).send({
-      error: "unauthorized",
-      message: "Требуется вход в CRM.",
-    });
-  }
-
-  return user;
-}
+import { requireUser } from "../auth/require-user.js";
 
 function optionalText(value: string | undefined): string | null {
   return value?.trim() || null;
@@ -51,9 +31,12 @@ function mapContact(contact: {
   createdAt: Date;
   updatedAt: Date;
   assignee: { id: string; name: string } | null;
+  deals?: Array<{ id: string; number: number; request: string; budget: string | null; stage: { id: string; title: string; color: string } }>;
 }): ContactRecord {
   return {
     ...contact,
+    dealIds: contact.deals?.map((deal) => deal.id) ?? [],
+    deals: contact.deals ?? [],
     createdAt: contact.createdAt.toISOString(),
     updatedAt: contact.updatedAt.toISOString(),
   };
@@ -83,7 +66,7 @@ export async function registerContactRoutes(
           ],
         } : {}),
       },
-      include: { assignee: { select: { id: true, name: true } } },
+      include: { assignee: { select: { id: true, name: true } }, deals: { select: { id: true, number: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } } },
       orderBy: { createdAt: "desc" },
       take: 200,
     });
@@ -149,7 +132,7 @@ export async function registerContactRoutes(
         assigneeId: request.body.assigneeId ?? null,
         comment: optionalText(request.body.comment),
       },
-      include: { assignee: { select: { id: true, name: true } } },
+      include: { assignee: { select: { id: true, name: true } }, deals: { select: { id: true, number: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } } },
     });
 
     return reply.status(201).send({ contact: mapContact(contact) });

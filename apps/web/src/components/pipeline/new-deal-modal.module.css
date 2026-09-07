@@ -47,6 +47,7 @@
 .additional { border-top: 1px solid var(--border); }
 .additional summary { padding-top: 17px; color: var(--text-muted); cursor: pointer; font-size: var(--font-size-caption); user-select: none; }
 .additionalFields { display: grid; gap: 16px; padding-top: 18px; }
+.error { margin: 0; color: #a33b3b; font-size: var(--font-size-caption); }
 
 .modal > footer { display: flex; min-height: 66px; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 24px; border-top: 1px solid var(--border); background: #fbfbfa; }
 .modal > footer > span { color: var(--text-subtle); font-size: var(--font-size-caption); }

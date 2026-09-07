@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   closestCorners,
   DragOverlay,
@@ -15,19 +15,82 @@ import {
 } from "@dnd-kit/core";
 import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { useRouter } from "next/navigation";
-import { mockActivities } from "@/data/mock-activities";
-import { pipelineStages } from "@/data/mock-pipeline";
-import type { ActivityEvent, Deal } from "@/types/crm";
+import { useCurrentUser } from "@/components/auth/AuthContext";
+import type { ActivityEvent, Deal, PipelineStage } from "@/types/crm";
 import { DealDrawer } from "./DealDrawer";
 import { DealCardPreview } from "./DealCard";
 import { NewDealModal, type NewDealDraft } from "./NewDealModal";
 import { PipelineColumn } from "./PipelineColumn";
 import styles from "./pipeline.module.css";
 
+const sourceFromApi = { META: "Meta", WEBSITE: "Website", MANUAL: "Manual" } as const;
+const sourceToApi = { Meta: "META", Website: "WEBSITE", Manual: "MANUAL" } as const;
+const operationFromApi = { PURCHASE: "Покупка", RENT: "Аренда", SALE: "Продажа" } as const;
+const operationToApi = { Покупка: "PURCHASE", Аренда: "RENT", Продажа: "SALE" } as const;
+
+interface ApiDeal {
+  id: string;
+  number: number;
+  contact: { id: string; name: string; phone: string | null };
+  request: string;
+  budget: string | null;
+  operation: keyof typeof operationFromApi;
+  propertyType: string | null;
+  district: string | null;
+  rooms: string | null;
+  source: keyof typeof sourceFromApi;
+  assignee: { id: string; name: string } | null;
+  createdAt: string;
+}
+
+interface ApiStage { id: string; title: string; color: string; position: number; deals: ApiDeal[] }
+interface ContactOption { id: string; name: string; phone: string | null }
+
+function mapApiDeal(deal: ApiDeal): Deal {
+  return {
+    id: deal.id,
+    number: deal.number,
+    contactId: deal.contact.id,
+    contactName: deal.contact.name,
+    phone: deal.contact.phone || "",
+    request: deal.request,
+    budget: deal.budget || undefined,
+    operation: operationFromApi[deal.operation],
+    propertyType: deal.propertyType || undefined,
+    district: deal.district || undefined,
+    rooms: deal.rooms || undefined,
+    source: sourceFromApi[deal.source],
+    assigneeId: deal.assignee?.id,
+    assignee: deal.assignee?.name || "Не назначен",
+    createdAt: new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(deal.createdAt)),
+  };
+}
+
+async function requestPipeline(): Promise<{ name: string; stages: PipelineStage[] }> {
+  const response = await fetch("/api/crm/pipeline", { cache: "no-store" });
+  if (!response.ok) throw new Error("Не удалось загрузить воронку.");
+  const payload = await response.json() as { pipeline: { name: string; stages: ApiStage[] } };
+  return {
+    name: payload.pipeline.name,
+    stages: payload.pipeline.stages.map((stage) => ({ ...stage, deals: stage.deals.map(mapApiDeal) })),
+  };
+}
+
+async function requestContactOptions(): Promise<ContactOption[]> {
+  const response = await fetch("/api/crm/contacts", { cache: "no-store" });
+  if (!response.ok) throw new Error("Не удалось загрузить контакты.");
+  const payload = await response.json() as { contacts: ContactOption[] };
+  return payload.contacts;
+}
+
 export function PipelineBoard() {
   const router = useRouter();
-  const [stages, setStages] = useState(pipelineStages);
-  const [activities, setActivities] = useState(mockActivities);
+  const user = useCurrentUser();
+  const [pipelineName, setPipelineName] = useState("Продажа недвижимости");
+  const [stages, setStages] = useState<PipelineStage[]>([]);
+  const [contacts, setContacts] = useState<ContactOption[]>([]);
+  const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
+  const [activities, setActivities] = useState<Record<string, ActivityEvent[]>>({});
   const [selected, setSelected] = useState<{ dealId: string; stageId: string } | null>(null);
   const [newDealStageId, setNewDealStageId] = useState<string | null>(null);
   const [activeDealId, setActiveDealId] = useState<string | null>(null);
@@ -39,6 +102,41 @@ export function PipelineBoard() {
   const [taskFilter, setTaskFilter] = useState("Все");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [pipelineMenuOpen, setPipelineMenuOpen] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    void Promise.all([requestPipeline(), requestContactOptions()]).then(
+      ([pipeline, contactOptions]) => {
+        if (!active) return;
+        setPipelineName(pipeline.name);
+        setStages(pipeline.stages);
+        setContacts(contactOptions);
+        setLoadState("ready");
+      },
+      () => { if (active) setLoadState("error"); },
+    );
+    return () => { active = false; };
+  }, []);
+
+  async function reloadPipeline() {
+    try {
+      const pipeline = await requestPipeline();
+      setPipelineName(pipeline.name);
+      setStages(pipeline.stages);
+      setLoadState("ready");
+    } catch {
+      setLoadState("error");
+    }
+  }
+
+  async function persistStageMove(dealId: string, stageId: string, position = 0) {
+    const response = await fetch(`/api/crm/deals/${dealId}/stage`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ stageId, position }),
+    });
+    if (!response.ok) await reloadPipeline();
+  }
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
@@ -105,7 +203,7 @@ export function PipelineBoard() {
         category: "change",
         title: "Изменён ответственный",
         description: `${selectedDeal.assignee} → ${patch.assignee}`,
-        author: "Георгий",
+        author: user.name,
       });
     }
 
@@ -143,13 +241,14 @@ export function PipelineBoard() {
       }),
     );
     setSelected({ ...selected, stageId: nextStageId });
+    void persistStageMove(selected.dealId, nextStageId);
 
     appendActivity({
       dealId: selected.dealId,
       category: "change",
       title: "Этап изменён",
       description: `${previousStageTitle} → ${nextStageTitle}`,
-      author: "Георгий",
+      author: user.name,
     });
   }
 
@@ -161,7 +260,7 @@ export function PipelineBoard() {
       category: "note",
       title: "Добавлено примечание",
       description: text,
-      author: "Георгий",
+      author: user.name,
     });
   }
 
@@ -174,7 +273,7 @@ export function PipelineBoard() {
       category: "task",
       title: "Поставлена задача",
       description: dueAt ? `${title} · ${dueAt}` : title,
-      author: "Георгий",
+      author: user.name,
     });
   }
 
@@ -188,27 +287,33 @@ export function PipelineBoard() {
       category: "task",
       title: "Задача выполнена",
       description: result ? `${completedTask} · ${result}` : completedTask,
-      author: "Георгий",
+      author: user.name,
     });
   }
 
-  function createDeal(draft: NewDealDraft) {
-    const dealId = `deal-${Date.now()}`;
-    const deal: Deal = {
-      id: dealId,
-      number: 1000 + dealsCount + 1,
-      contactName: draft.contactName,
-      phone: draft.phone,
-      request: draft.request || "Запрос ещё не уточнён",
-      budget: draft.budget,
-      operation: draft.operation,
-      propertyType: draft.propertyType,
-      district: draft.district,
-      rooms: draft.rooms,
-      source: draft.source,
-      assignee: draft.assignee,
-      createdAt: "Только что",
-    };
+  async function createDeal(draft: NewDealDraft) {
+    const response = await fetch("/api/crm/deals", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        stageId: draft.stageId,
+        contactId: draft.contactId,
+        contactName: draft.contactId ? undefined : draft.contactName,
+        phone: draft.contactId ? undefined : draft.phone,
+        assigneeId: draft.assigneeId || null,
+        request: draft.request,
+        budget: draft.budget,
+        operation: draft.operation ? operationToApi[draft.operation] : undefined,
+        propertyType: draft.propertyType,
+        district: draft.district,
+        rooms: draft.rooms,
+        source: sourceToApi[draft.source],
+      }),
+    });
+    const payload = await response.json() as { deal?: ApiDeal; stageId?: string; message?: string };
+    if (!response.ok || !payload.deal || !payload.stageId) throw new Error(payload.message || "Не удалось создать сделку.");
+    const deal = mapApiDeal(payload.deal);
+    const dealId = deal.id;
 
     setStages((current) => current.map((stage) => (
       stage.id === draft.stageId ? { ...stage, deals: [deal, ...stage.deals] } : stage
@@ -221,12 +326,15 @@ export function PipelineBoard() {
         category: "source",
         title: "Сделка создана",
         description: draft.source === "Manual" ? "Добавлена вручную" : `Источник ${draft.source}`,
-        author: "Георгий",
+        author: user.name,
         occurredAt: currentTime(),
       }],
     }));
     setNewDealStageId(null);
     setSelected({ dealId, stageId: draft.stageId });
+    if (!draft.contactId && deal.contactId) {
+      setContacts((current) => current.some((item) => item.id === deal.contactId) ? current : [{ id: deal.contactId!, name: deal.contactName, phone: deal.phone || null }, ...current]);
+    }
   }
 
   function handleDragStart({ active }: DragStartEvent) {
@@ -254,6 +362,7 @@ export function PipelineBoard() {
       setStages((current) => current.map((stage) => (
         stage.id === sourceStage.id ? { ...stage, deals: arrayMove(stage.deals, oldIndex, newIndex) } : stage
       )));
+      void persistStageMove(dealId, sourceStage.id, newIndex);
       return;
     }
 
@@ -280,8 +389,10 @@ export function PipelineBoard() {
       category: "change",
       title: "Этап изменён",
       description: `${sourceStage.title} → ${targetStage.title}`,
-      author: "Георгий",
+      author: user.name,
     });
+    const nextPosition = Math.max(0, targetStage.deals.findIndex((deal) => deal.id === overId));
+    void persistStageMove(dealId, targetStage.id, nextPosition);
   }
 
   function resetFilters() {
@@ -319,7 +430,7 @@ export function PipelineBoard() {
         </button>
         {notificationsOpen && <div className={styles.notificationPanel}><header><strong>Уведомления</strong><span>3 новых</span></header><button type="button" onClick={() => setNotificationsOpen(false)}><i className={styles.alertRed}>!</i><span><strong>Просрочена задача</strong><small>Ольга Мельник · Позвонить до 14:00</small></span><time>12 мин</time></button><button type="button" onClick={() => setNotificationsOpen(false)}><i className={styles.alertBlue}>↗</i><span><strong>Новая сделка из Meta</strong><small>Анна Коваленко · квартира в центре</small></span><time>34 мин</time></button><button type="button" onClick={() => setNotificationsOpen(false)}><i className={styles.alertAmber}>○</i><span><strong>Сделка без ответственного</strong><small>Максим Бондарь ожидает назначения</small></span><time>1 ч</time></button><footer>Показать все уведомления</footer></div>}
         </div>
-        <button className={styles.primaryButton} type="button" onClick={() => setNewDealStageId(stages[0]?.id || "unassigned")}>
+        <button className={styles.primaryButton} type="button" disabled={!stages.length} onClick={() => { if (stages[0]) setNewDealStageId(stages[0].id); }}>
           <span aria-hidden="true">＋</span><span className={styles.actionLabel}>Новая сделка</span>
         </button>
       </header>
@@ -327,7 +438,7 @@ export function PipelineBoard() {
       <div className={styles.toolbar}>
         <div>
           <div className={styles.titleRow}>
-            <h2>Продажа недвижимости</h2>
+            <h2>{pipelineName}</h2>
             <button className={styles.titleMenu} type="button" aria-label="Настройки воронки" aria-expanded={pipelineMenuOpen} onClick={() => { setPipelineMenuOpen((value) => !value); setNotificationsOpen(false); }}>
               •••
             </button>
@@ -347,7 +458,7 @@ export function PipelineBoard() {
 
       {filtersOpen && <section className={styles.filterPanel}><label><span>Ответственный</span><select value={assigneeFilter} onChange={(event) => setAssigneeFilter(event.target.value)}>{assignees.map((assignee) => <option key={assignee}>{assignee}</option>)}</select></label><label><span>Источник</span><select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value)}><option>Все</option><option value="Meta">Meta</option><option value="Website">Сайт</option><option value="Manual">Вручную</option></select></label><label><span>Задача</span><select value={taskFilter} onChange={(event) => setTaskFilter(event.target.value)}><option>Все</option><option value="overdue">Просрочена</option><option value="due">На сегодня</option><option value="normal">Запланирована</option><option>Без задачи</option></select></label><div><strong>{visibleDealsCount}</strong><span>найдено</span></div><button type="button" disabled={!activeFilters} onClick={resetFilters}>Сбросить</button></section>}
 
-      {view === "board" ? <DndContext
+      {loadState === "loading" ? <div className={styles.emptyDeals}><strong>Загружаем воронку…</strong><span>Получаем этапы и сделки из CRM.</span></div> : loadState === "error" ? <div className={styles.emptyDeals}><strong>Не удалось загрузить воронку</strong><span>Проверьте соединение и обновите страницу.</span></div> : view === "board" ? <DndContext
         id="pipeline-dnd"
         sensors={sensors}
         collisionDetection={closestCorners}
@@ -389,6 +500,8 @@ export function PipelineBoard() {
         <NewDealModal
           initialStageId={newDealStageId}
           stages={stageOptions}
+          contacts={contacts}
+          assignees={[{ id: user.id, name: user.name }]}
           onCreate={createDeal}
           onClose={() => setNewDealStageId(null)}
         />
@@ -397,7 +510,7 @@ export function PipelineBoard() {
   );
 }
 
-function DealList({ stages, onOpenDeal }: { stages: typeof pipelineStages; onOpenDeal: (dealId: string, stageId: string) => void }) {
+function DealList({ stages, onOpenDeal }: { stages: PipelineStage[]; onOpenDeal: (dealId: string, stageId: string) => void }) {
   const rows = stages.flatMap((stage) => stage.deals.map((deal) => ({ deal, stage })));
 
   if (!rows.length) return <div className={styles.emptyDeals}><strong>Сделки не найдены</strong><span>Измените запрос или сбросьте фильтры.</span></div>;

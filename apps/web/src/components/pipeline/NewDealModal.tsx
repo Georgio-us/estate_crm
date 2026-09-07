@@ -3,10 +3,11 @@ import type { Deal } from "@/types/crm";
 import styles from "./new-deal-modal.module.css";
 
 export interface NewDealDraft {
+  contactId?: string;
   contactName: string;
   phone: string;
   stageId: string;
-  assignee: string;
+  assigneeId?: string;
   source: Deal["source"];
   operation?: Deal["operation"];
   propertyType?: string;
@@ -19,23 +20,26 @@ export interface NewDealDraft {
 interface NewDealModalProps {
   initialStageId: string;
   stages: Array<{ id: string; title: string }>;
-  onCreate: (draft: NewDealDraft) => void;
+  contacts: Array<{ id: string; name: string; phone: string | null }>;
+  assignees: Array<{ id: string; name: string }>;
+  onCreate: (draft: NewDealDraft) => Promise<void>;
   onClose: () => void;
 }
 
-const assignees = ["Не назначен", "Георгий", "Елена", "Андрей"];
-
-export function NewDealModal({ initialStageId, stages, onCreate, onClose }: NewDealModalProps) {
+export function NewDealModal({ initialStageId, stages, contacts, assignees, onCreate, onClose }: NewDealModalProps) {
+  const [contactId, setContactId] = useState("");
   const [contactName, setContactName] = useState("");
   const [phone, setPhone] = useState("");
   const [stageId, setStageId] = useState(initialStageId);
-  const [assignee, setAssignee] = useState("Не назначен");
+  const [assigneeId, setAssigneeId] = useState("");
   const [operation, setOperation] = useState<Deal["operation"]>("Покупка");
   const [propertyType, setPropertyType] = useState("");
   const [budget, setBudget] = useState("");
   const [district, setDistrict] = useState("");
   const [rooms, setRooms] = useState("");
   const [request, setRequest] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -46,23 +50,37 @@ export function NewDealModal({ initialStageId, stages, onCreate, onClose }: NewD
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!contactName.trim()) return;
+    setError("");
+    setIsSubmitting(true);
+    try {
+      await onCreate({
+        contactId: contactId || undefined,
+        contactName: contactName.trim(),
+        phone: phone.trim(),
+        stageId,
+        assigneeId: assigneeId || undefined,
+        source: "Manual",
+        operation,
+        propertyType: propertyType.trim() || undefined,
+        budget: budget.trim() || undefined,
+        district: district.trim() || undefined,
+        rooms: rooms.trim() || undefined,
+        request: request.trim() || undefined,
+      });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Не удалось создать сделку.");
+      setIsSubmitting(false);
+    }
+  }
 
-    onCreate({
-      contactName: contactName.trim(),
-      phone: phone.trim(),
-      stageId,
-      assignee,
-      source: "Manual",
-      operation,
-      propertyType: propertyType.trim() || undefined,
-      budget: budget.trim() || undefined,
-      district: district.trim() || undefined,
-      rooms: rooms.trim() || undefined,
-      request: request.trim() || undefined,
-    });
+  function selectContact(id: string) {
+    setContactId(id);
+    const contact = contacts.find((item) => item.id === id);
+    setContactName(contact?.name || "");
+    setPhone(contact?.phone || "");
   }
 
   return (
@@ -87,9 +105,16 @@ export function NewDealModal({ initialStageId, stages, onCreate, onClose }: NewD
         </header>
 
         <div className={styles.body}>
+          <label>
+            <span>Контакт из базы</span>
+            <select value={contactId} onChange={(event) => selectContact(event.target.value)}>
+              <option value="">Создать новый контакт</option>
+              {contacts.map((contact) => <option value={contact.id} key={contact.id}>{contact.name}{contact.phone ? ` · ${contact.phone}` : ""}</option>)}
+            </select>
+          </label>
           <label className={styles.primaryField}>
             <span>Имя или название лида <b>обязательно</b></span>
-            <input autoFocus value={contactName} onChange={(event) => setContactName(event.target.value)} placeholder="Например, Мария Иванова" />
+            <input autoFocus value={contactName} readOnly={Boolean(contactId)} onChange={(event) => setContactName(event.target.value)} placeholder="Например, Мария Иванова" />
           </label>
 
           <label>
@@ -106,8 +131,9 @@ export function NewDealModal({ initialStageId, stages, onCreate, onClose }: NewD
             </label>
             <label>
               <span>Ответственный</span>
-              <select value={assignee} onChange={(event) => setAssignee(event.target.value)}>
-                {assignees.map((item) => <option value={item} key={item}>{item}</option>)}
+              <select value={assigneeId} onChange={(event) => setAssigneeId(event.target.value)}>
+                <option value="">Не назначен</option>
+                {assignees.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}
               </select>
             </label>
           </div>
@@ -167,13 +193,14 @@ export function NewDealModal({ initialStageId, stages, onCreate, onClose }: NewD
               <label><span>Запрос клиента</span><textarea value={request} onChange={(event) => setRequest(event.target.value)} placeholder="Кратко опишите, что ищет клиент" /></label>
             </div>
           </details>
+          {error && <p className={styles.error} role="alert">{error}</p>}
         </div>
 
         <footer>
           <span>Остальные данные можно заполнить позже</span>
           <div>
-            <button type="button" onClick={onClose}>Отмена</button>
-            <button className={styles.createButton} type="submit" disabled={!contactName.trim()}>Создать сделку</button>
+            <button type="button" onClick={onClose} disabled={isSubmitting}>Отмена</button>
+            <button className={styles.createButton} type="submit" disabled={!contactName.trim() || isSubmitting}>{isSubmitting ? "Создаём…" : "Создать сделку"}</button>
           </div>
         </footer>
       </form>

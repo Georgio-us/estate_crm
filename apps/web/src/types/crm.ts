@@ -3,6 +3,7 @@ export type DealPriority = "low" | "medium" | "high";
 export interface Deal {
   id: string;
   number: number;
+  contactId?: string;
   contactName: string;
   phone: string;
   request: string;
@@ -14,6 +15,7 @@ export interface Deal {
   comment?: string;
   createdAt?: string;
   source: "Meta" | "Website" | "Manual";
+  assigneeId?: string;
   assignee: string;
   task?: string;
   taskState?: "normal" | "due" | "overdue";

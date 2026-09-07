@@ -1,6 +1,6 @@
 # Estate CRM
 
-CRM для агентств недвижимости. Репозиторий организован как monorepo: рабочий frontend находится в `apps/web`, Fastify API — в `apps/api`, а схема PostgreSQL и миграции Prisma — в `packages/database`. Данные интерфейса пока остаются mock-данными; перенос отдельных модулей на API выполняется следующими этапами.
+CRM для агентств недвижимости. Репозиторий организован как monorepo: рабочий frontend находится в `apps/web`, Fastify API — в `apps/api`, а схема PostgreSQL и миграции Prisma — в `packages/database`. Авторизация, контакты и основной сценарий воронки подключены к API; остальные модули переносятся с mock-данных поэтапно.
 
 ## Стек
 
@@ -36,6 +36,16 @@ pnpm dev:api
 POST /auth/login
 GET  /auth/session
 POST /auth/logout
+```
+
+Первые бизнес-endpoint'ы:
+
+```text
+GET   /contacts
+POST  /contacts
+GET   /pipeline
+POST  /deals
+PATCH /deals/:dealId/stage
 ```
 
 Сессии хранятся в PostgreSQL, а браузер получает только случайный HTTP-only cookie. Для первоначального создания администратора предусмотрена отдельная одноразовая команда `pnpm --filter @estate-crm/api bootstrap-admin`; она не открывает публичный endpoint регистрации.

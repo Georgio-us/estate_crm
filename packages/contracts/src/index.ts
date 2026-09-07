@@ -50,6 +50,14 @@ export interface ContactAssignee {
   name: string;
 }
 
+export interface ContactDealSummary {
+  id: string;
+  number: number;
+  request: string;
+  budget: string | null;
+  stage: { id: string; title: string; color: string };
+}
+
 export interface ContactRecord {
   id: string;
   name: string;
@@ -58,6 +66,8 @@ export interface ContactRecord {
   telegram: string | null;
   source: ContactSource;
   assignee: ContactAssignee | null;
+  dealIds: string[];
+  deals: ContactDealSummary[];
   comment: string | null;
   createdAt: string;
   updatedAt: string;
@@ -76,4 +86,59 @@ export interface CreateContactRequest {
   source?: ContactSource;
   assigneeId?: string | null;
   comment?: string;
+}
+
+export type DealOperation = "PURCHASE" | "RENT" | "SALE";
+
+export interface PipelineDealRecord {
+  id: string;
+  number: number;
+  contact: ContactAssignee & { phone: string | null };
+  request: string;
+  budget: string | null;
+  operation: DealOperation;
+  propertyType: string | null;
+  district: string | null;
+  rooms: string | null;
+  source: ContactSource;
+  assignee: ContactAssignee | null;
+  position: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PipelineStageRecord {
+  id: string;
+  title: string;
+  color: string;
+  position: number;
+  deals: PipelineDealRecord[];
+}
+
+export interface PipelineResponse {
+  pipeline: {
+    id: string;
+    name: string;
+    stages: PipelineStageRecord[];
+  };
+}
+
+export interface CreateDealRequest {
+  stageId: string;
+  contactId?: string;
+  contactName?: string;
+  phone?: string;
+  assigneeId?: string | null;
+  request?: string;
+  budget?: string;
+  operation?: DealOperation;
+  propertyType?: string;
+  district?: string;
+  rooms?: string;
+  source?: ContactSource;
+}
+
+export interface MoveDealRequest {
+  stageId: string;
+  position?: number;
 }

@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useCurrentUser } from "@/components/auth/AuthContext";
 import { mockActivities } from "@/data/mock-activities";
-import { pipelineStages } from "@/data/mock-pipeline";
 import type { ActivityEvent, Contact, Deal } from "@/types/crm";
 import { ContactDrawer } from "./ContactDrawer";
 import { NewContactModal, type NewContactDraft } from "./NewContactModal";
@@ -27,6 +26,8 @@ interface ApiContact {
   telegram: string | null;
   source: keyof typeof sourceFromApi;
   assignee: { id: string; name: string } | null;
+  dealIds?: string[];
+  deals?: Array<{ id: string; number: number; request: string; budget: string | null; stage: { id: string; title: string; color: string } }>;
   comment: string | null;
   createdAt: string;
   updatedAt: string;
@@ -41,23 +42,44 @@ function mapApiContact(contact: ApiContact): Contact {
     telegram: contact.telegram || undefined,
     source: sourceFromApi[contact.source],
     assignee: contact.assignee?.name || "Не назначен",
-    dealIds: [],
+    dealIds: contact.dealIds || [],
     lastContact: "Нет взаимодействий",
     comment: contact.comment || undefined,
     createdAt: new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", year: "numeric" }).format(new Date(contact.createdAt)),
   };
 }
 
-async function requestContacts(): Promise<Contact[]> {
+async function requestContacts(): Promise<{ contacts: Contact[]; dealsById: Map<string, RelatedDeal> }> {
   const response = await fetch("/api/crm/contacts", { cache: "no-store" });
   if (!response.ok) throw new Error("Не удалось загрузить контакты.");
   const payload = await response.json() as { contacts: ApiContact[] };
-  return payload.contacts.map(mapApiContact);
+  const dealsById = new Map<string, RelatedDeal>();
+  for (const contact of payload.contacts) {
+    for (const item of contact.deals || []) {
+      dealsById.set(item.id, {
+        deal: {
+          id: item.id,
+          number: item.number,
+          contactId: contact.id,
+          contactName: contact.name,
+          phone: contact.phone || "",
+          request: item.request,
+          budget: item.budget || undefined,
+          source: sourceFromApi[contact.source],
+          assignee: contact.assignee?.name || "Не назначен",
+        },
+        stageTitle: item.stage.title,
+        stageColor: item.stage.color,
+      });
+    }
+  }
+  return { contacts: payload.contacts.map(mapApiContact), dealsById };
 }
 
 export function ContactsDirectory() {
   const user = useCurrentUser();
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [dealsById, setDealsById] = useState<Map<string, RelatedDeal>>(() => new Map());
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [contactNotes, setContactNotes] = useState<Record<string, ActivityEvent[]>>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -70,7 +92,7 @@ export function ContactsDirectory() {
   useEffect(() => {
     let active = true;
     void requestContacts().then(
-      (items) => { if (active) { setContacts(items); setLoadState("ready"); } },
+      (result) => { if (active) { setContacts(result.contacts); setDealsById(result.dealsById); setLoadState("ready"); } },
       () => { if (active) setLoadState("error"); },
     );
     return () => { active = false; };
@@ -79,14 +101,15 @@ export function ContactsDirectory() {
   async function retryContacts() {
     setLoadState("loading");
     try {
-      setContacts(await requestContacts());
+      const result = await requestContacts();
+      setContacts(result.contacts);
+      setDealsById(result.dealsById);
       setLoadState("ready");
     } catch {
       setLoadState("error");
     }
   }
 
-  const dealsById = useMemo(() => new Map(pipelineStages.flatMap((stage) => stage.deals.map((deal) => [deal.id, { deal, stageTitle: stage.title, stageColor: stage.color }] as const))), []);
   const selectedContact = contacts.find((contact) => contact.id === selectedId);
   const selectedDeals = selectedContact?.dealIds.map((id) => dealsById.get(id)).filter((item): item is RelatedDeal => Boolean(item)) || [];
   const selectedActivities = selectedContact

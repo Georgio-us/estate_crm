@@ -25,6 +25,12 @@ enum ContactSource {
   MANUAL
 }
 
+enum DealOperation {
+  PURCHASE
+  RENT
+  SALE
+}
+
 model Organization {
   id          String       @id @default(uuid()) @db.Uuid
   name        String
@@ -35,6 +41,8 @@ model Organization {
   updatedAt   DateTime     @updatedAt @map("updated_at")
   memberships Membership[]
   contacts    Contact[]
+  pipelines   Pipeline[]
+  deals       Deal[]
 
   @@map("organizations")
 }
@@ -50,6 +58,7 @@ model User {
   memberships  Membership[]
   sessions     Session[]
   assignedContacts Contact[] @relation("ContactAssignee")
+  assignedDeals Deal[] @relation("DealAssignee")
 
   @@map("users")
 }
@@ -69,11 +78,74 @@ model Contact {
   updatedAt       DateTime      @updatedAt @map("updated_at")
   organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   assignee        User?         @relation("ContactAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  deals           Deal[]
 
   @@index([organizationId, createdAt])
   @@index([organizationId, normalizedPhone])
   @@index([assigneeId])
   @@map("contacts")
+}
+
+model Pipeline {
+  id             String          @id @default(uuid()) @db.Uuid
+  organizationId String          @map("organization_id") @db.Uuid
+  name           String
+  isDefault      Boolean         @default(false) @map("is_default")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  stages         PipelineStage[]
+  deals          Deal[]
+
+  @@index([organizationId])
+  @@map("pipelines")
+}
+
+model PipelineStage {
+  id         String   @id @default(uuid()) @db.Uuid
+  pipelineId String   @map("pipeline_id") @db.Uuid
+  title      String
+  color      String
+  position   Int
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+  pipeline   Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  deals      Deal[]
+
+  @@unique([pipelineId, position])
+  @@index([pipelineId])
+  @@map("pipeline_stages")
+}
+
+model Deal {
+  id             String         @id @default(uuid()) @db.Uuid
+  number         Int            @default(autoincrement())
+  organizationId String         @map("organization_id") @db.Uuid
+  pipelineId     String         @map("pipeline_id") @db.Uuid
+  stageId        String         @map("stage_id") @db.Uuid
+  contactId      String         @map("contact_id") @db.Uuid
+  assigneeId     String?        @map("assignee_id") @db.Uuid
+  request        String
+  budget         String?
+  operation      DealOperation  @default(PURCHASE)
+  propertyType   String?        @map("property_type")
+  district       String?
+  rooms          String?
+  source         ContactSource  @default(MANUAL)
+  position       Int            @default(0)
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pipeline       Pipeline       @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  stage          PipelineStage  @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  contact        Contact        @relation(fields: [contactId], references: [id], onDelete: Restrict)
+  assignee       User?          @relation("DealAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, number])
+  @@index([pipelineId, stageId, position])
+  @@index([contactId])
+  @@index([assigneeId])
+  @@map("deals")
 }
 
 model Session {
