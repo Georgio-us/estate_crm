@@ -1,6 +1,8 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
+import { AuthBoundary } from "@/components/auth/AuthBoundary";
 import { TasksProvider } from "@/components/tasks/TasksContext";
 import { Sidebar } from "./Sidebar";
 import styles from "./layout.module.css";
@@ -10,11 +12,16 @@ interface AppShellProps {
 }
 
 export function AppShell({ children }: AppShellProps) {
+  const pathname = usePathname();
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
+  if (pathname === "/login") {
+    return children;
+  }
+
   return (
-    <TasksProvider><div className={`${styles.shell} ${isSidebarCollapsed ? styles.shellCollapsed : ""}`}>
+    <AuthBoundary><TasksProvider><div className={`${styles.shell} ${isSidebarCollapsed ? styles.shellCollapsed : ""}`}>
       <button
         className={styles.mobileMenuButton}
         type="button"
@@ -39,6 +46,6 @@ export function AppShell({ children }: AppShellProps) {
         onToggle={() => setIsSidebarCollapsed((current) => !current)}
       />
       <main className={styles.main}>{children}</main>
-    </div></TasksProvider>
+    </div></TasksProvider></AuthBoundary>
   );
 }

@@ -40,6 +40,12 @@ POST /auth/logout
 
 Сессии хранятся в PostgreSQL, а браузер получает только случайный HTTP-only cookie. Для первоначального создания администратора предусмотрена отдельная одноразовая команда `pnpm --filter @estate-crm/api bootstrap-admin`; она не открывает публичный endpoint регистрации.
 
+Frontend требует адрес API во время сборки:
+
+```text
+NEXT_PUBLIC_API_URL=https://estatecrmapi-crmdelmar.up.railway.app
+```
+
 Полная проверка workspace:
 
 ```bash

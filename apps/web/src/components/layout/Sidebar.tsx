@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useState } from "react";
+import { useCurrentUser } from "@/components/auth/AuthContext";
+import { getApiUrl } from "@/lib/api";
 import styles from "./layout.module.css";
 
 const primaryItems = [
@@ -29,6 +32,34 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed, mobileOpen, onMobileClose, onToggle }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [loggingOut, setLoggingOut] = useState(false);
+  const user = useCurrentUser();
+  const roleLabel = user.organization.role === "ADMIN"
+    ? "Администратор"
+    : user.organization.role === "LEAD"
+      ? "Руководитель"
+      : "Менеджер";
+  const initials = user.name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+
+  async function logout() {
+    setLoggingOut(true);
+
+    try {
+      await fetch(`${getApiUrl()}/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+      });
+    } finally {
+      router.replace("/login");
+      router.refresh();
+    }
+  }
 
   return (
     <aside className={`${styles.sidebar} ${collapsed ? styles.sidebarCollapsed : ""} ${mobileOpen ? styles.sidebarMobileOpen : ""}`}>
@@ -70,12 +101,20 @@ export function Sidebar({ collapsed, mobileOpen, onMobileClose, onToggle }: Side
       </nav>
 
       <div className={styles.profile}>
-        <span className={styles.avatar}>ГП</span>
+        <span className={styles.avatar}>{initials || "—"}</span>
         <span className={styles.profileText}>
-          <strong>Георгий</strong>
-          <small>Администратор</small>
+          <strong>{user.name}</strong>
+          <small>{roleLabel}</small>
         </span>
-        <span className={styles.profileMore}>•••</span>
+        <button
+          className={styles.profileMore}
+          disabled={loggingOut}
+          type="button"
+          aria-label="Выйти из CRM"
+          onClick={() => void logout()}
+        >
+          {collapsed ? "↪" : "Выйти"}
+        </button>
       </div>
     </aside>
   );
