@@ -4,6 +4,7 @@ dist
 out
 .pnpm-store
 *.tsbuildinfo
+packages/database/src/generated/
 .env
 .env.local
 .env.*

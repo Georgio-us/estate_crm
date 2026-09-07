@@ -1,15 +1,15 @@
 # Estate CRM
 
-CRM для агентств недвижимости. Репозиторий организован как monorepo: рабочий frontend находится в `apps/web`, а минимальный Fastify API — в `apps/api`. Бизнес-данные всё ещё являются mock-данными; PostgreSQL, авторизация и интеграции подключаются следующими этапами.
+CRM для агентств недвижимости. Репозиторий организован как monorepo: рабочий frontend находится в `apps/web`, Fastify API — в `apps/api`, а схема PostgreSQL и миграции Prisma — в `packages/database`. Данные интерфейса пока остаются mock-данными; перенос отдельных модулей на API выполняется следующими этапами.
 
 ## Стек
 
 - Next.js App Router и React;
 - Fastify API;
+- PostgreSQL и Prisma;
 - TypeScript и pnpm workspaces;
 - обычный CSS и CSS Modules;
 - dnd-kit для drag-and-drop воронки;
-- PostgreSQL и ORM — следующий backend-этап.
 
 Tailwind в проекте не используется.
 
@@ -44,7 +44,7 @@ apps/
   api/                  Fastify API и healthcheck
 packages/
   contracts/            общие API-контракты
-  database/             будущая точка входа ORM и миграций
+  database/             Prisma-схема, клиент и миграции PostgreSQL
   config/               общая TypeScript-конфигурация
 docs/                    рабочая проектная документация
 ```
@@ -77,6 +77,15 @@ Healthcheck path: /health
 
 ```text
 WEB_APP_ORIGIN=https://estatecrm-crmdelmar.up.railway.app
+DATABASE_URL=${{Postgres.DATABASE_URL}}
 ```
 
 `PORT` устанавливается Railway автоматически. `HOST` по умолчанию уже равен `0.0.0.0`.
+
+Миграции production-базы выполняются отдельным pre-deploy шагом API:
+
+```text
+pnpm --filter @estate-crm/database db:migrate:deploy
+```
+
+`GET /health` возвращает успешный статус только после реального подключения к PostgreSQL.

@@ -12,10 +12,22 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "generate": "prisma generate --config prisma.config.ts",
+    "build": "pnpm run generate && tsc -p tsconfig.json",
+    "typecheck": "pnpm run generate && tsc -p tsconfig.json --noEmit",
+    "db:migrate:dev": "prisma migrate dev --config prisma.config.ts",
+    "db:migrate:deploy": "prisma migrate deploy --config prisma.config.ts",
+    "db:status": "prisma migrate status --config prisma.config.ts"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "7.10.0",
+    "@prisma/client": "7.10.0",
+    "dotenv": "^17.2.3",
+    "pg": "^8.23.0"
   },
   "devDependencies": {
+    "@types/pg": "8.23.1",
+    "prisma": "7.10.0",
     "typescript": "6.0.2"
   }
 }

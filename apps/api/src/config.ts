@@ -2,6 +2,7 @@ export interface ApiConfig {
   host: string;
   port: number;
   webOrigins: string[];
+  databaseUrl: string;
 }
 
 function readPort(value: string | undefined): number {
@@ -24,5 +25,6 @@ export function readApiConfig(environment: NodeJS.ProcessEnv = process.env): Api
     host: environment.HOST?.trim() || "0.0.0.0",
     port: readPort(environment.PORT),
     webOrigins,
+    databaseUrl: environment.DATABASE_URL?.trim() || "",
   };
 }

@@ -1,0 +1,63 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum MembershipRole {
+  ADMIN
+  LEAD
+  MANAGER
+}
+
+enum MembershipStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+}
+
+model Organization {
+  id          String       @id @default(uuid()) @db.Uuid
+  name        String
+  slug        String       @unique
+  timezone    String       @default("Europe/Madrid")
+  locale      String       @default("ru")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  memberships Membership[]
+
+  @@map("organizations")
+}
+
+model User {
+  id           String       @id @default(uuid()) @db.Uuid
+  email        String       @unique
+  name         String
+  phone        String?
+  passwordHash String?      @map("password_hash")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+  memberships  Membership[]
+
+  @@map("users")
+}
+
+model Membership {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @map("organization_id") @db.Uuid
+  userId         String           @map("user_id") @db.Uuid
+  role           MembershipRole   @default(MANAGER)
+  status         MembershipStatus @default(INVITED)
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([organizationId])
+  @@index([userId])
+  @@map("memberships")
+}

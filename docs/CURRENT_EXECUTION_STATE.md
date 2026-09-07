@@ -488,7 +488,7 @@ STORAGE_SECRET_KEY
 
 Секреты изолируются на уровне сервиса. Значения других Railway-сервисов подключаются через reference variables, а не копируются вручную.
 
-API framework зафиксирован: Fastify. Минимальный сервер запускается на Railway-переменной `PORT`, слушает `0.0.0.0`, имеет структурированные логи, CORS, graceful shutdown и endpoint `GET /health`.
+API framework зафиксирован: Fastify. Сервер запускается на Railway-переменной `PORT`, слушает `0.0.0.0`, имеет структурированные логи, CORS, graceful shutdown и endpoint `GET /health`. Healthcheck выполняет реальный запрос `SELECT 1` в PostgreSQL и возвращает `503`, если база недоступна.
 
 ### 7.5 Сервис `estate_crm_worker` (`apps/worker`, позднее)
 
@@ -591,7 +591,7 @@ PostgreSQL / Telegram / object storage
 Следующие решения подходят как исходные, но подтверждаются непосредственно перед реализацией:
 
 - API framework: Fastify — принято и реализовано;
-- ORM и миграции: Prisma либо сопоставимый типобезопасный инструмент;
+- ORM и миграции: Prisma 7 с PostgreSQL driver adapter — принято и реализовано;
 - очередь: PostgreSQL-backed queue без отдельного Redis на старте;
 - файлы: S3-compatible object storage, конкретный провайдер выбирается перед загрузкой реальных объектов;
 - авторизация: серверные сессии и HTTP-only cookies;
@@ -764,10 +764,7 @@ PostgreSQL / Telegram / object storage
 
 ## 13. Следующее действие
 
-1. Запушить проверенный monorepo без нарушения текущего frontend deployment.
-2. Убедиться, что `estate_crm` продолжает открываться на текущем Railway-домене.
-3. Создать в environment `crm_delmar` новый сервис `estate_crm_api` из того же GitHub-репозитория.
-4. Назначить API build/start commands и сгенерировать временный публичный домен.
-5. Проверить публичный `GET /health`.
-6. После успешного API deployment добавить PostgreSQL и подключить `DATABASE_URL` к API через Railway reference variable.
-7. Зафиксировать ORM и создать первую миграцию организаций, пользователей и membership.
+1. Запушить Prisma-слой и первую миграцию организаций, пользователей и membership.
+2. В API-сервисе Railway назначить pre-deploy command `pnpm --filter @estate-crm/database db:migrate:deploy`.
+3. Дождаться deployment и проверить, что публичный `GET /health` подтверждает `database: connected`.
+4. После этого начать первый вертикальный backend-срез: авторизация, текущая организация и роли.

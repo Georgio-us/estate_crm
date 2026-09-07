@@ -1,11 +1,15 @@
 import cors from "@fastify/cors";
 import Fastify, { type FastifyInstance } from "fastify";
 
-import type { HealthResponse } from "@estate-crm/contracts";
+import type { HealthErrorResponse, HealthResponse } from "@estate-crm/contracts";
+import type { DatabaseConnection } from "@estate-crm/database";
 
 import type { ApiConfig } from "./config.js";
 
-export async function buildApp(config: ApiConfig): Promise<FastifyInstance> {
+export async function buildApp(
+  config: ApiConfig,
+  database: DatabaseConnection,
+): Promise<FastifyInstance> {
   const app = Fastify({ logger: true });
 
   await app.register(cors, {
@@ -13,12 +17,32 @@ export async function buildApp(config: ApiConfig): Promise<FastifyInstance> {
     credentials: true,
   });
 
-  app.get<{ Reply: HealthResponse }>("/health", async () => ({
-    status: "ok",
-    service: "estate-crm-api",
-    version: process.env.npm_package_version ?? "0.1.0",
-    timestamp: new Date().toISOString(),
-  }));
+  app.addHook("onClose", async () => {
+    await database.disconnect();
+  });
+
+  app.get<{ Reply: HealthResponse | HealthErrorResponse }>("/health", async (_request, reply) => {
+    try {
+      await database.ping();
+
+      return {
+        status: "ok",
+        service: "estate-crm-api",
+        version: process.env.npm_package_version ?? "0.1.0",
+        timestamp: new Date().toISOString(),
+        database: "connected",
+      };
+    } catch (error) {
+      app.log.error({ error }, "Database healthcheck failed");
+
+      return reply.status(503).send({
+        status: "error",
+        service: "estate-crm-api",
+        timestamp: new Date().toISOString(),
+        database: "unavailable",
+      });
+    }
+  });
 
   app.setErrorHandler((error, request, reply) => {
     request.log.error({ error }, "Unhandled request error");

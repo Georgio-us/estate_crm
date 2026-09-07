@@ -1,8 +1,11 @@
+import { createDatabaseConnection } from "@estate-crm/database";
+
 import { buildApp } from "./app.js";
 import { readApiConfig } from "./config.js";
 
 const config = readApiConfig();
-const app = await buildApp(config);
+const database = createDatabaseConnection(config.databaseUrl);
+const app = await buildApp(config, database);
 
 async function shutdown(signal: NodeJS.Signals): Promise<void> {
   app.log.info({ signal }, "Shutting down API");
