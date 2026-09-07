@@ -98,10 +98,12 @@
 .fact input, .fact select { width: 100%; height: 32px; padding: 0 7px; border: 1px solid transparent; border-radius: var(--radius-sm); outline: 0; background: transparent; color: var(--text); font-size: var(--font-size-body); }
 .fact:hover input, .fact:hover select { background: var(--surface-muted); }
 .fact input:focus, .fact select:focus { border-color: #a9bee7; background: #fff; box-shadow: var(--shadow-focus); }
+.fact input[aria-invalid="true"] { border-color: #cf7a7a; background: #fff8f8; }
 .fact a { color: #37639f; text-decoration: underline; text-decoration-color: #ccd6e5; text-underline-offset: 3px; }
 .comment { margin: 0; color: #555551; font-size: var(--font-size-body); line-height: var(--line-height-relaxed); }
 .contactCommentInput { width: 100%; min-height: 80px; padding: 9px 10px; resize: vertical; border: 1px solid var(--border); border-radius: var(--radius-sm); outline: 0; background: #fbfbfa; color: var(--text); font-size: var(--font-size-body-sm); line-height: var(--line-height-relaxed); }
 .contactCommentInput:focus { border-color: #a9bee7; background: #fff; box-shadow: var(--shadow-focus); }
+.keyboardHint { display: block; margin-top: 6px; color: var(--text-subtle); font-size: var(--font-size-caption); }
 .sectionTitle { display: flex; align-items: center; gap: 8px; }
 .sectionTitle h3 { margin: 0; }
 .sectionTitle span { color: var(--text-subtle); font-size: var(--font-size-caption); }

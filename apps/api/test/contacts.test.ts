@@ -184,3 +184,29 @@ test("updating a contact persists its profile without changing linked deals", as
 
   await app.close();
 });
+
+test("updating a contact rejects an invalid email", async () => {
+  const database = {
+    client: {
+      session: {
+        async findUnique() {
+          return { id: "session-1", expiresAt: new Date(Date.now() + 60_000), user: sessionUser };
+        },
+      },
+    },
+    async ping() {},
+    async disconnect() {},
+  } as unknown as DatabaseConnection;
+
+  const app = await buildApp(config, database);
+  const response = await app.inject({
+    method: "PATCH",
+    url: "/contacts/201f180c-d032-49a0-8aa7-04db19095eb2",
+    headers: { cookie: "estate_crm_session=test-token" },
+    payload: { email: "not-an-email" },
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().error, "validation_error");
+  await app.close();
+});

@@ -495,6 +495,7 @@ export function PipelineBoard() {
 
       {selectedDeal && selectedStage && (
         <DealDrawer
+          key={selectedDeal.id}
           deal={selectedDeal}
           stageId={selectedStage.id}
           stages={stageOptions}
@@ -527,5 +528,5 @@ function DealList({ stages, onOpenDeal }: { stages: PipelineStage[]; onOpenDeal:
 
   if (!rows.length) return <div className={styles.emptyDeals}><strong>Сделки не найдены</strong><span>Измените запрос или сбросьте фильтры.</span></div>;
 
-  return <div className={styles.listView}><header><span>Контакт</span><span>Сделка и запрос</span><span>Этап</span><span>Ответственный</span><span>Следующая задача</span></header>{rows.map(({ deal, stage }) => <button type="button" onClick={() => onOpenDeal(deal.id, stage.id)} key={deal.id}><span className={styles.listContact}><i>{deal.contactName.slice(0, 1)}</i><span><strong>{deal.contactName}</strong><small>Сделка #{deal.number} · {deal.phone}</small></span></span><span className={styles.listRequest}><strong>{deal.title || deal.request}</strong><small>{deal.request} · {deal.budget || "Бюджет не указан"}</small></span><span className={styles.listStage}><i style={{ backgroundColor: stage.color }} />{stage.title}</span><span>{deal.assignee}</span><span className={`${styles.listTask} ${deal.taskState ? styles[deal.taskState] : ""}`}>{deal.task || "Нет задачи"}</span><b>›</b></button>)}</div>;
+  return <div className={styles.listView}><header><span>Контакт</span><span>Сделка и запрос</span><span>Этап</span><span>Ответственный</span><span>Следующая задача</span></header>{rows.map(({ deal, stage }) => <button type="button" onClick={() => onOpenDeal(deal.id, stage.id)} key={deal.id}><span className={styles.listContact}><i>{deal.contactName.slice(0, 1)}</i><span><strong>{deal.contactName}</strong><small>Сделка #{deal.number} · {deal.phone}</small></span></span><span className={styles.listRequest}><strong>{deal.title || deal.request}</strong><small>{deal.request || "Запрос не указан"} · {deal.budget || "Бюджет не указан"}</small></span><span className={styles.listStage}><i style={{ backgroundColor: stage.color }} />{stage.title}</span><span>{deal.assignee}</span><span className={`${styles.listTask} ${deal.taskState ? styles[deal.taskState] : ""}`}>{deal.task || "Нет задачи"}</span><b>›</b></button>)}</div>;
 }

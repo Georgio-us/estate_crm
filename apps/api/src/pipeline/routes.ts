@@ -171,6 +171,12 @@ export async function registerPipelineRoutes(
       contact = normalizedPhone ? await database.client.contact.findFirst({
         where: { organizationId: user.organization.id, normalizedPhone },
       }) : null;
+      if (contact) {
+        return reply.status(409).send({
+          error: "contact_already_exists",
+          message: `Контакт «${contact.name}» с таким телефоном уже существует. Выберите его в поле «Контакт из базы».`,
+        });
+      }
       if (!contact) {
         contact = await database.client.contact.create({
           data: {
@@ -193,7 +199,7 @@ export async function registerPipelineRoutes(
         contactId: contact.id,
         assigneeId: request.body.assigneeId ?? null,
         title: optionalText(request.body.title) ?? optionalText(request.body.request) ?? contact.name,
-        request: optionalText(request.body.request) ?? "Запрос ещё не уточнён",
+        request: optionalText(request.body.request) ?? "",
         budget: optionalText(request.body.budget),
         comment: optionalText(request.body.comment),
         operation: request.body.operation ?? "PURCHASE",
@@ -268,7 +274,7 @@ export async function registerPipelineRoutes(
         ...(request.body.stageId !== undefined ? { stageId: request.body.stageId } : {}),
         ...(request.body.assigneeId !== undefined ? { assigneeId: request.body.assigneeId } : {}),
         ...(request.body.title !== undefined ? { title: request.body.title.trim() } : {}),
-        ...(request.body.request !== undefined ? { request: optionalText(request.body.request) ?? "Запрос ещё не уточнён" } : {}),
+        ...(request.body.request !== undefined ? { request: optionalText(request.body.request) ?? "" } : {}),
         ...(request.body.budget !== undefined ? { budget: optionalText(request.body.budget ?? undefined) } : {}),
         ...(request.body.operation !== undefined ? { operation: request.body.operation } : {}),
         ...(request.body.propertyType !== undefined ? { propertyType: optionalText(request.body.propertyType ?? undefined) } : {}),

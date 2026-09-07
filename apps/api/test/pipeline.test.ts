@@ -173,3 +173,36 @@ test("updating a deal title does not mutate the linked contact", async () => {
   assert.equal(contactUpdates, 0);
   await app.close();
 });
+
+test("deal creation does not silently reuse a phone from an existing contact", async () => {
+  let dealCreates = 0;
+  const database = {
+    client: {
+      session: { async findUnique() { return session(); } },
+      pipelineStage: {
+        async findFirst() { return { id: stageId, pipelineId, pipeline: { id: pipelineId, organizationId: user.memberships[0].organization.id } }; },
+      },
+      contact: {
+        async findFirst() { return { id: contactId, name: "Тестовый контакт", phone: "+380938849214" }; },
+      },
+      deal: {
+        async create() { dealCreates += 1; },
+      },
+    },
+    async ping() {},
+    async disconnect() {},
+  } as unknown as DatabaseConnection;
+
+  const app = await buildApp(config, database);
+  const response = await app.inject({
+    method: "POST",
+    url: "/deals",
+    headers: { cookie: "estate_crm_session=test-token" },
+    payload: { stageId, contactName: "Другое имя", phone: "+38 (093) 884-92-14" },
+  });
+
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.json().error, "contact_already_exists");
+  assert.equal(dealCreates, 0);
+  await app.close();
+});

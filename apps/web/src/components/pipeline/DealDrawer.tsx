@@ -58,12 +58,6 @@ export function DealDrawer({
   const comparable = (value: Deal) => ({ title: value.title, assigneeId: value.assigneeId, budget: value.budget, operation: value.operation, propertyType: value.propertyType, district: value.district, rooms: value.rooms, request: value.request, comment: value.comment, source: value.source });
   const isDirty = draftStageId !== stageId || JSON.stringify(comparable(draft)) !== JSON.stringify(comparable(deal));
 
-  useEffect(() => {
-    setDraft(deal);
-    setDraftStageId(stageId);
-    setSaveError("");
-  }, [deal, stageId]);
-
   function updateDraft(patch: Partial<Deal>) {
     setDraft((current) => ({ ...current, ...patch }));
   }
@@ -228,7 +222,7 @@ export function DealDrawer({
               {isCompletingTask && deal.task && (
                 <div className={styles.completionForm}>
                   <label htmlFor="task-result">Результат задачи</label>
-                  <textarea id="task-result" value={taskResult} onChange={(event) => setTaskResult(event.target.value)} placeholder="Например, договорились о просмотре" />
+                  <textarea id="task-result" value={taskResult} onChange={(event) => setTaskResult(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); completeCurrentTask(); } }} placeholder="Например, договорились о просмотре" />
                   <div><button type="button" onClick={() => setIsCompletingTask(false)}>Отмена</button><button type="button" onClick={completeCurrentTask}>Подтвердить</button></div>
                 </div>
               )}
@@ -247,7 +241,7 @@ export function DealDrawer({
                 <button className={composerMode === "note" ? styles.composerTabActive : ""} type="button" onClick={() => setComposerMode("note")}>Примечание</button>
                 <button className={composerMode === "task" ? styles.composerTabActive : ""} type="button" onClick={() => setComposerMode("task")}>Задача</button>
               </div>
-              <textarea value={composerText} onChange={(event) => setComposerText(event.target.value)} placeholder={composerMode === "note" ? "Добавить примечание к сделке…" : "Что необходимо сделать?"} aria-label={composerMode === "note" ? "Новое примечание" : "Новая задача"} />
+              <textarea value={composerText} onChange={(event) => setComposerText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); submitComposer(); } }} placeholder={composerMode === "note" ? "Добавить примечание к сделке…" : "Что необходимо сделать?"} aria-label={composerMode === "note" ? "Новое примечание" : "Новая задача"} />
               <div className={styles.composerFooter}>
                 {composerMode === "task" ? (
                   <div className={styles.duePicker}>

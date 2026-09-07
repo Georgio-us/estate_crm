@@ -166,11 +166,11 @@ export function ContactsDirectory() {
       body: JSON.stringify({
         name: nextContact.name,
         phone: nextContact.phone,
-        email: nextContact.email || "",
-        telegram: nextContact.telegram || "",
+        email: nextContact.email || null,
+        telegram: nextContact.telegram || null,
         source: sourceToApi[nextContact.source],
         assigneeId: nextContact.assigneeId || null,
-        comment: nextContact.comment || "",
+        comment: nextContact.comment || null,
       }),
     });
     const payload = await response.json() as { contact?: ApiContact; message?: string };
@@ -244,7 +244,7 @@ export function ContactsDirectory() {
         </section>
       </div>
 
-      {selectedContact && <ContactDrawer contact={selectedContact} deals={selectedDeals} activities={selectedActivities} assignees={[{ id: user.id, name: user.name }]} onSave={saveContact} onAddNote={addContactNote} onClose={() => setSelectedId(null)} />}
+      {selectedContact && <ContactDrawer key={selectedContact.id} contact={selectedContact} deals={selectedDeals} activities={selectedActivities} assignees={[{ id: user.id, name: user.name }]} onSave={saveContact} onAddNote={addContactNote} onClose={() => setSelectedId(null)} />}
       {isCreating && <NewContactModal onCreate={createContact} onClose={() => setIsCreating(false)} assignees={[{ id: user.id, name: user.name }]} />}
     </section>
   );

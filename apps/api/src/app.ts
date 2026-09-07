@@ -55,6 +55,13 @@ export async function buildApp(
   await registerPipelineRoutes(app, database);
 
   app.setErrorHandler((error, request, reply) => {
+    if (typeof error === "object" && error !== null && "validation" in error && error.validation) {
+      return reply.status(400).send({
+        error: "validation_error",
+        message: "Проверьте корректность заполненных полей.",
+      });
+    }
+
     request.log.error({ error }, "Unhandled request error");
 
     void reply.status(500).send({

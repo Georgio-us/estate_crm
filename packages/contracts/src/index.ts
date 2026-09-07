@@ -89,7 +89,15 @@ export interface CreateContactRequest {
   comment?: string;
 }
 
-export type UpdateContactRequest = Partial<CreateContactRequest>;
+export interface UpdateContactRequest {
+  name?: string;
+  phone?: string | null;
+  email?: string | null;
+  telegram?: string | null;
+  source?: ContactSource;
+  assigneeId?: string | null;
+  comment?: string | null;
+}
 
 export type DealOperation = "PURCHASE" | "RENT" | "SALE";
 

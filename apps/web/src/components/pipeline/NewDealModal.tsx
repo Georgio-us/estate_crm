@@ -27,6 +27,10 @@ interface NewDealModalProps {
   onClose: () => void;
 }
 
+function normalizePhone(value: string): string {
+  return value.replace(/\D/g, "");
+}
+
 export function NewDealModal({ initialStageId, stages, contacts, assignees, onCreate, onClose }: NewDealModalProps) {
   const [contactId, setContactId] = useState("");
   const [contactName, setContactName] = useState("");
@@ -42,6 +46,10 @@ export function NewDealModal({ initialStageId, stages, contacts, assignees, onCr
   const [request, setRequest] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const normalizedPhone = normalizePhone(phone);
+  const matchingContact = !contactId && normalizedPhone
+    ? contacts.find((contact) => normalizePhone(contact.phone || "") === normalizedPhone)
+    : undefined;
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -55,6 +63,10 @@ export function NewDealModal({ initialStageId, stages, contacts, assignees, onCr
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!contactName.trim()) return;
+    if (matchingContact) {
+      setError(`Контакт «${matchingContact.name}» с таким телефоном уже существует. Сначала выберите его из базы.`);
+      return;
+    }
     setError("");
     setIsSubmitting(true);
     try {
@@ -81,6 +93,7 @@ export function NewDealModal({ initialStageId, stages, contacts, assignees, onCr
 
   function selectContact(id: string) {
     setContactId(id);
+    setError("");
     const contact = contacts.find((item) => item.id === id);
     setContactName(contact?.name || "");
     setPhone(contact?.phone || "");
@@ -122,8 +135,9 @@ export function NewDealModal({ initialStageId, stages, contacts, assignees, onCr
 
           <label>
             <span>Телефон <small>необязательно</small></span>
-            <input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+38 000 000 00 00" />
+            <input value={phone} readOnly={Boolean(contactId)} onChange={(event) => { setPhone(event.target.value); setError(""); }} placeholder="+38 000 000 00 00" />
           </label>
+          {matchingContact && <div className={styles.existingContact}><span>Найден существующий контакт: <strong>{matchingContact.name}</strong></span><button type="button" onClick={() => selectContact(matchingContact.id)}>Выбрать контакт</button></div>}
 
           <label>
             <span>Название сделки <small>необязательно</small></span>
@@ -198,7 +212,7 @@ export function NewDealModal({ initialStageId, stages, contacts, assignees, onCr
                   </select>
                 </label>
               </div>
-              <label><span>Запрос клиента</span><textarea value={request} onChange={(event) => setRequest(event.target.value)} placeholder="Кратко опишите, что ищет клиент" /></label>
+              <label><span>Запрос клиента</span><textarea value={request} onChange={(event) => setRequest(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} placeholder="Кратко опишите, что ищет клиент" /></label>
             </div>
           </details>
           {error && <p className={styles.error} role="alert">{error}</p>}

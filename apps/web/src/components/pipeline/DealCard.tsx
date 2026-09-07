@@ -74,7 +74,7 @@ function DealCardContent({ deal }: { deal: Deal }) {
       >
         {deal.phone}
       </a>
-      <p className={styles.request}>{deal.contactName} · {deal.request}</p>
+      <p className={styles.request}>{deal.contactName}{deal.request ? ` · ${deal.request}` : ""}</p>
       {deal.budget && <p className={styles.budget}>{deal.budget}</p>}
 
       <div className={styles.tags}>

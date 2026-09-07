@@ -11,7 +11,7 @@ import type { DatabaseConnection } from "@estate-crm/database";
 
 import { requireUser } from "../auth/require-user.js";
 
-function optionalText(value: string | undefined): string | null {
+function optionalText(value: string | null | undefined): string | null {
   return value?.trim() || null;
 }
 
@@ -90,7 +90,7 @@ export async function registerContactRoutes(
         properties: {
           name: { type: "string", minLength: 1, maxLength: 200 },
           phone: { type: "string", maxLength: 50 },
-          email: { type: "string", maxLength: 320 },
+          email: { type: "string", format: "email", maxLength: 320 },
           telegram: { type: "string", maxLength: 100 },
           source: { type: "string", enum: ["META", "WEBSITE", "MANUAL"] },
           assigneeId: { anyOf: [{ type: "string", format: "uuid" }, { type: "null" }] },
@@ -152,12 +152,12 @@ export async function registerContactRoutes(
         minProperties: 1,
         properties: {
           name: { type: "string", minLength: 1, maxLength: 200 },
-          phone: { type: "string", maxLength: 50 },
-          email: { type: "string", maxLength: 320 },
-          telegram: { type: "string", maxLength: 100 },
+          phone: { anyOf: [{ type: "string", maxLength: 50 }, { type: "null" }] },
+          email: { anyOf: [{ type: "string", format: "email", maxLength: 320 }, { type: "null" }] },
+          telegram: { anyOf: [{ type: "string", maxLength: 100 }, { type: "null" }] },
           source: { type: "string", enum: ["META", "WEBSITE", "MANUAL"] },
           assigneeId: { anyOf: [{ type: "string", format: "uuid" }, { type: "null" }] },
-          comment: { type: "string", maxLength: 5_000 },
+          comment: { anyOf: [{ type: "string", maxLength: 5_000 }, { type: "null" }] },
         },
       },
     },

@@ -48,6 +48,8 @@
 .additional summary { padding-top: 17px; color: var(--text-muted); cursor: pointer; font-size: var(--font-size-caption); user-select: none; }
 .additionalFields { display: grid; gap: 16px; padding-top: 18px; }
 .error { margin: 0; color: #a33b3b; font-size: var(--font-size-caption); }
+.existingContact { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: -10px; padding: 10px 12px; border: 1px solid #c9d7ee; border-radius: var(--radius-sm); background: #f3f7fd; color: #4f617d; font-size: var(--font-size-caption); }
+.existingContact button { flex: 0 0 auto; padding: 0; border: 0; background: transparent; color: #2765bf; cursor: pointer; font: inherit; font-weight: var(--font-weight-semibold); }
 
 .modal > footer { display: flex; min-height: 66px; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 24px; border-top: 1px solid var(--border); background: #fbfbfa; }
 .modal > footer > span { color: var(--text-subtle); font-size: var(--font-size-caption); }
