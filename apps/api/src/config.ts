@@ -3,6 +3,8 @@ export interface ApiConfig {
   port: number;
   webOrigins: string[];
   databaseUrl: string;
+  sessionDays: number;
+  secureCookies: boolean;
 }
 
 function readPort(value: string | undefined): number {
@@ -26,5 +28,7 @@ export function readApiConfig(environment: NodeJS.ProcessEnv = process.env): Api
     port: readPort(environment.PORT),
     webOrigins,
     databaseUrl: environment.DATABASE_URL?.trim() || "",
+    sessionDays: 30,
+    secureCookies: environment.NODE_ENV === "production",
   };
 }

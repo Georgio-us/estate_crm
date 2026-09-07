@@ -30,6 +30,16 @@ pnpm dev:api
 
 По умолчанию healthcheck доступен по адресу `http://localhost:3001/health`.
 
+Доступные auth-endpoint'ы API:
+
+```text
+POST /auth/login
+GET  /auth/session
+POST /auth/logout
+```
+
+Сессии хранятся в PostgreSQL, а браузер получает только случайный HTTP-only cookie. Для первоначального создания администратора предусмотрена отдельная одноразовая команда `pnpm --filter @estate-crm/api bootstrap-admin`; она не открывает публичный endpoint регистрации.
+
 Полная проверка workspace:
 
 ```bash

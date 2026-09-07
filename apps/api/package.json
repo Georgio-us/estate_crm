@@ -7,12 +7,14 @@
     "dev": "tsx watch src/server.ts",
     "build": "pnpm --filter @estate-crm/database build && tsc -b tsconfig.build.json",
     "start": "node dist/server.js",
+    "bootstrap-admin": "node dist/auth/bootstrap-admin.js",
     "typecheck": "tsc -b tsconfig.build.json --pretty false",
     "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {
     "@estate-crm/contracts": "workspace:*",
     "@estate-crm/database": "workspace:*",
+    "@fastify/cookie": "^11.1.2",
     "@fastify/cors": "^11.3.0",
     "fastify": "^5.12.3"
   },

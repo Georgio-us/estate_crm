@@ -1,10 +1,12 @@
 import cors from "@fastify/cors";
+import cookie from "@fastify/cookie";
 import Fastify, { type FastifyInstance } from "fastify";
 
 import type { HealthErrorResponse, HealthResponse } from "@estate-crm/contracts";
 import type { DatabaseConnection } from "@estate-crm/database";
 
 import type { ApiConfig } from "./config.js";
+import { registerAuthRoutes } from "./auth/routes.js";
 
 export async function buildApp(
   config: ApiConfig,
@@ -16,6 +18,8 @@ export async function buildApp(
     origin: config.webOrigins,
     credentials: true,
   });
+
+  await app.register(cookie);
 
   app.addHook("onClose", async () => {
     await database.disconnect();
@@ -43,6 +47,8 @@ export async function buildApp(
       });
     }
   });
+
+  await registerAuthRoutes(app, config, database);
 
   app.setErrorHandler((error, request, reply) => {
     request.log.error({ error }, "Unhandled request error");
