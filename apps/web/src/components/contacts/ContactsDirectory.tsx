@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useCurrentUser } from "@/components/auth/AuthContext";
 import { mockActivities } from "@/data/mock-activities";
-import { mockContacts } from "@/data/mock-contacts";
 import { pipelineStages } from "@/data/mock-pipeline";
 import type { ActivityEvent, Contact, Deal } from "@/types/crm";
 import { ContactDrawer } from "./ContactDrawer";
@@ -16,9 +16,49 @@ export interface RelatedDeal {
 }
 
 const sourceLabels: Record<Deal["source"], string> = { Meta: "Meta", Website: "Сайт", Manual: "Вручную" };
+const sourceFromApi = { META: "Meta", WEBSITE: "Website", MANUAL: "Manual" } as const;
+const sourceToApi = { Meta: "META", Website: "WEBSITE", Manual: "MANUAL" } as const;
+
+interface ApiContact {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  telegram: string | null;
+  source: keyof typeof sourceFromApi;
+  assignee: { id: string; name: string } | null;
+  comment: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+function mapApiContact(contact: ApiContact): Contact {
+  return {
+    id: contact.id,
+    name: contact.name,
+    phone: contact.phone || "",
+    email: contact.email || undefined,
+    telegram: contact.telegram || undefined,
+    source: sourceFromApi[contact.source],
+    assignee: contact.assignee?.name || "Не назначен",
+    dealIds: [],
+    lastContact: "Нет взаимодействий",
+    comment: contact.comment || undefined,
+    createdAt: new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", year: "numeric" }).format(new Date(contact.createdAt)),
+  };
+}
+
+async function requestContacts(): Promise<Contact[]> {
+  const response = await fetch("/api/crm/contacts", { cache: "no-store" });
+  if (!response.ok) throw new Error("Не удалось загрузить контакты.");
+  const payload = await response.json() as { contacts: ApiContact[] };
+  return payload.contacts.map(mapApiContact);
+}
 
 export function ContactsDirectory() {
-  const [contacts, setContacts] = useState(mockContacts);
+  const user = useCurrentUser();
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [contactNotes, setContactNotes] = useState<Record<string, ActivityEvent[]>>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -26,6 +66,25 @@ export function ContactsDirectory() {
   const [assignee, setAssignee] = useState("all");
   const [source, setSource] = useState("all");
   const [dealFilter, setDealFilter] = useState("all");
+
+  useEffect(() => {
+    let active = true;
+    void requestContacts().then(
+      (items) => { if (active) { setContacts(items); setLoadState("ready"); } },
+      () => { if (active) setLoadState("error"); },
+    );
+    return () => { active = false; };
+  }, []);
+
+  async function retryContacts() {
+    setLoadState("loading");
+    try {
+      setContacts(await requestContacts());
+      setLoadState("ready");
+    } catch {
+      setLoadState("error");
+    }
+  }
 
   const dealsById = useMemo(() => new Map(pipelineStages.flatMap((stage) => stage.deals.map((deal) => [deal.id, { deal, stageTitle: stage.title, stageColor: stage.color }] as const))), []);
   const selectedContact = contacts.find((contact) => contact.id === selectedId);
@@ -44,23 +103,27 @@ export function ContactsDirectory() {
   }, [assignee, contacts, dealFilter, search, source]);
 
   const hasFilters = Boolean(search || assignee !== "all" || source !== "all" || dealFilter !== "all");
+  const assigneeOptions = useMemo(() => Array.from(new Set(contacts.map((contact) => contact.assignee))), [contacts]);
 
   function resetFilters() { setSearch(""); setAssignee("all"); setSource("all"); setDealFilter("all"); }
 
-  function createContact(draft: NewContactDraft) {
-    const contact: Contact = {
-      id: `contact-${Date.now()}`,
-      name: draft.name.trim(),
-      phone: draft.phone.trim(),
-      email: draft.email.trim() || undefined,
-      telegram: draft.telegram.trim() || undefined,
-      source: draft.source,
-      assignee: draft.assignee,
-      dealIds: [],
-      lastContact: "Только что",
-      comment: draft.comment.trim() || undefined,
-      createdAt: "Только что",
-    };
+  async function createContact(draft: NewContactDraft) {
+    const response = await fetch("/api/crm/contacts", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: draft.name.trim(),
+        phone: draft.phone.trim() || undefined,
+        email: draft.email.trim() || undefined,
+        telegram: draft.telegram.trim() || undefined,
+        source: sourceToApi[draft.source],
+        assigneeId: draft.assigneeId || null,
+        comment: draft.comment.trim() || undefined,
+      }),
+    });
+    const payload = await response.json() as { contact?: ApiContact; message?: string };
+    if (!response.ok || !payload.contact) throw new Error(payload.message || "Не удалось создать контакт.");
+    const contact = mapApiContact(payload.contact);
     setContacts((current) => [contact, ...current]);
     setIsCreating(false);
     setSelectedId(contact.id);
@@ -91,14 +154,14 @@ export function ContactsDirectory() {
 
         <section className={styles.workspace}>
           <div className={styles.filters}>
-            <Filter label="Ответственный" value={assignee} onChange={setAssignee} options={["Не назначен", "Георгий", "Елена", "Андрей"]} />
+            <Filter label="Ответственный" value={assignee} onChange={setAssignee} options={assigneeOptions} />
             <Filter label="Источник" value={source} onChange={setSource} options={["Meta", "Website", "Manual"]} optionLabels={{ Website: "Сайт", Manual: "Вручную" }} />
             <Filter label="Сделки" value={dealFilter} onChange={setDealFilter} options={["with", "without"]} optionLabels={{ with: "Есть активные", without: "Без сделок" }} />
             <span className={styles.resultCount}>{visibleContacts.length} из {contacts.length}</span>
             {hasFilters && <button className={styles.resetButton} type="button" onClick={resetFilters}>Сбросить</button>}
           </div>
 
-          {visibleContacts.length ? (
+          {loadState === "loading" ? <StatusState symbol="…" title="Загружаем контакты" text="Получаем клиентскую базу из CRM." /> : loadState === "error" ? <StatusState symbol="!" title="Не удалось загрузить контакты" text="Проверьте соединение с сервером и попробуйте ещё раз." action="Повторить" onAction={() => { void retryContacts(); }} /> : visibleContacts.length ? (
             <div className={styles.tableRegion}>
               <div className={styles.tableWrap}>
                 <table>
@@ -108,7 +171,7 @@ export function ContactsDirectory() {
                     return (
                       <tr key={contact.id} onClick={() => setSelectedId(contact.id)}>
                         <td><div className={styles.contactCell}><span className={styles.avatar}>{initials(contact.name)}</span><span><strong>{contact.name}</strong><small>Добавлен {contact.createdAt}</small></span></div></td>
-                        <td><a href={`tel:${contact.phone.replaceAll(" ", "")}`} onClick={(event) => event.stopPropagation()}>{contact.phone}</a><small>{contact.telegram || contact.email || "Дополнительных каналов нет"}</small></td>
+                        <td>{contact.phone ? <a href={`tel:${contact.phone.replaceAll(" ", "")}`} onClick={(event) => event.stopPropagation()}>{contact.phone}</a> : <span className={styles.muted}>Телефон не указан</span>}<small>{contact.telegram || contact.email || "Дополнительных каналов нет"}</small></td>
                         <td><span className={styles.assigneeDot}>{contact.assignee === "Не назначен" ? "—" : contact.assignee.slice(0, 1)}</span>{contact.assignee}</td>
                         <td><span className={styles.sourceTag}>{sourceLabels[contact.source]}</span></td>
                         <td>{relatedDeals.length ? <><strong>{relatedDeals.length}</strong><small>{relatedDeals.map((item) => item?.stageTitle).join(", ")}</small></> : <span className={styles.muted}>Нет сделок</span>}</td>
@@ -120,18 +183,22 @@ export function ContactsDirectory() {
                 </table>
               </div>
             </div>
-          ) : <div className={styles.empty}><span>⌕</span><h3>Контакты не найдены</h3><p>Измените запрос или сбросьте фильтры.</p><button type="button" onClick={resetFilters}>Сбросить фильтры</button></div>}
+          ) : hasFilters ? <StatusState symbol="⌕" title="Контакты не найдены" text="Измените запрос или сбросьте фильтры." action="Сбросить фильтры" onAction={resetFilters} /> : <StatusState symbol="＋" title="Контактов пока нет" text="Создайте первый контакт — он сохранится в базе этого пространства." action="Создать контакт" onAction={() => setIsCreating(true)} />}
         </section>
       </div>
 
       {selectedContact && <ContactDrawer contact={selectedContact} deals={selectedDeals} activities={selectedActivities} onAddNote={addContactNote} onClose={() => setSelectedId(null)} />}
-      {isCreating && <NewContactModal onCreate={createContact} onClose={() => setIsCreating(false)} />}
+      {isCreating && <NewContactModal onCreate={createContact} onClose={() => setIsCreating(false)} assignees={[{ id: user.id, name: user.name }]} />}
     </section>
   );
 }
 
 function Filter({ label, value, options, optionLabels = {}, onChange }: { label: string; value: string; options: string[]; optionLabels?: Record<string, string>; onChange: (value: string) => void }) {
   return <label className={styles.filter}><span>{label}</span><select value={value} onChange={(event) => onChange(event.target.value)}><option value="all">Все</option>{options.map((option) => <option value={option} key={option}>{optionLabels[option] || option}</option>)}</select></label>;
+}
+
+function StatusState({ symbol, title, text, action, onAction }: { symbol: string; title: string; text: string; action?: string; onAction?: () => void }) {
+  return <div className={styles.empty}><span>{symbol}</span><h3>{title}</h3><p>{text}</p>{action && onAction && <button type="button" onClick={onAction}>{action}</button>}</div>;
 }
 
 function initials(name: string) { return name.split(" ").slice(0, 2).map((part) => part[0]).join(""); }

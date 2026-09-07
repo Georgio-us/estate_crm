@@ -42,3 +42,38 @@ export interface ApiErrorResponse {
   error: string;
   message: string;
 }
+
+export type ContactSource = "META" | "WEBSITE" | "MANUAL";
+
+export interface ContactAssignee {
+  id: string;
+  name: string;
+}
+
+export interface ContactRecord {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  telegram: string | null;
+  source: ContactSource;
+  assignee: ContactAssignee | null;
+  comment: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ContactListResponse {
+  contacts: ContactRecord[];
+  total: number;
+}
+
+export interface CreateContactRequest {
+  name: string;
+  phone?: string;
+  email?: string;
+  telegram?: string;
+  source?: ContactSource;
+  assigneeId?: string | null;
+  comment?: string;
+}

@@ -20,7 +20,7 @@ export function ContactDrawer({ contact, deals, activities, onAddNote, onClose }
         </header>
         <div className={styles.drawerWorkspace}>
           <div className={styles.detailsPane}>
-            <section><h3>Контактные данные</h3><Fact label="Телефон" value={contact.phone} link={`tel:${contact.phone.replaceAll(" ", "")}`} /><Fact label="Telegram" value={contact.telegram || "Не указан"} /><Fact label="Email" value={contact.email || "Не указан"} /></section>
+            <section><h3>Контактные данные</h3><Fact label="Телефон" value={contact.phone || "Не указан"} link={contact.phone ? `tel:${contact.phone.replaceAll(" ", "")}` : undefined} /><Fact label="Telegram" value={contact.telegram || "Не указан"} /><Fact label="Email" value={contact.email || "Не указан"} /></section>
             <section><h3>CRM</h3><Fact label="Ответственный" value={contact.assignee} /><Fact label="Источник" value={sourceLabels[contact.source]} /><Fact label="Последний контакт" value={contact.lastContact} /></section>
             {contact.comment && <section><h3>Комментарий</h3><p className={styles.comment}>{contact.comment}</p></section>}
             <section className={styles.dealsSection}><div className={styles.sectionTitle}><h3>Связанные сделки</h3><span>{deals.length}</span></div>{deals.length ? deals.map(({ deal, stageTitle, stageColor }) => <article className={styles.dealRow} key={deal.id}><span className={styles.dealColor} style={{ background: stageColor }} /><div><strong>{deal.request}</strong><small>Сделка #{deal.number} · {stageTitle}</small></div><span>{deal.budget || "Без бюджета"}</span></article>) : <div className={styles.noDeals}>У контакта пока нет сделок<button type="button">＋ Создать сделку</button></div>}</section>

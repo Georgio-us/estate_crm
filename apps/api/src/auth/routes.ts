@@ -60,7 +60,7 @@ function mapAuthenticatedUser(session: {
   };
 }
 
-async function readSessionUser(
+export async function readSessionUser(
   token: string,
   database: DatabaseConnection,
 ): Promise<AuthenticatedUser | null> {
