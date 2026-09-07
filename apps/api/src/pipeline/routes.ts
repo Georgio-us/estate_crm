@@ -6,6 +6,7 @@ import type {
   MoveDealRequest,
   PipelineDealRecord,
   PipelineResponse,
+  UpdateDealRequest,
 } from "@estate-crm/contracts";
 import type { DatabaseConnection } from "@estate-crm/database";
 
@@ -44,6 +45,8 @@ function mapDeal(deal: {
   updatedAt: Date;
   contact: { id: string; name: string; phone: string | null };
   assignee: { id: string; name: string } | null;
+  title: string;
+  comment: string | null;
 }): PipelineDealRecord {
   return {
     ...deal,
@@ -122,6 +125,7 @@ export async function registerPipelineRoutes(
           contactName: { type: "string", minLength: 1, maxLength: 200 },
           phone: { type: "string", maxLength: 50 },
           assigneeId: { anyOf: [{ type: "string", format: "uuid" }, { type: "null" }] },
+          title: { type: "string", maxLength: 300 },
           request: { type: "string", maxLength: 1_000 },
           budget: { type: "string", maxLength: 100 },
           operation: { type: "string", enum: ["PURCHASE", "RENT", "SALE"] },
@@ -129,6 +133,7 @@ export async function registerPipelineRoutes(
           district: { type: "string", maxLength: 100 },
           rooms: { type: "string", maxLength: 30 },
           source: { type: "string", enum: ["META", "WEBSITE", "MANUAL"] },
+          comment: { type: "string", maxLength: 5_000 },
         },
         anyOf: [{ required: ["contactId"] }, { required: ["contactName"] }],
       },
@@ -187,8 +192,10 @@ export async function registerPipelineRoutes(
         stageId: stage.id,
         contactId: contact.id,
         assigneeId: request.body.assigneeId ?? null,
+        title: optionalText(request.body.title) ?? optionalText(request.body.request) ?? contact.name,
         request: optionalText(request.body.request) ?? "Запрос ещё не уточнён",
         budget: optionalText(request.body.budget),
+        comment: optionalText(request.body.comment),
         operation: request.body.operation ?? "PURCHASE",
         propertyType: optionalText(request.body.propertyType),
         district: optionalText(request.body.district),
@@ -202,6 +209,81 @@ export async function registerPipelineRoutes(
     });
 
     return reply.status(201).send({ deal: mapDeal(deal), stageId: stage.id });
+  });
+
+  app.patch<{
+    Params: { dealId: string };
+    Body: UpdateDealRequest;
+    Reply: { deal: PipelineDealRecord; stageId: string } | ApiErrorResponse;
+  }>("/deals/:dealId", {
+    schema: {
+      params: { type: "object", required: ["dealId"], properties: { dealId: { type: "string", format: "uuid" } } },
+      body: {
+        type: "object",
+        additionalProperties: false,
+        minProperties: 1,
+        properties: {
+          stageId: { type: "string", format: "uuid" },
+          assigneeId: { anyOf: [{ type: "string", format: "uuid" }, { type: "null" }] },
+          title: { type: "string", minLength: 1, maxLength: 300 },
+          request: { type: "string", maxLength: 1_000 },
+          budget: { anyOf: [{ type: "string", maxLength: 100 }, { type: "null" }] },
+          operation: { type: "string", enum: ["PURCHASE", "RENT", "SALE"] },
+          propertyType: { anyOf: [{ type: "string", maxLength: 100 }, { type: "null" }] },
+          district: { anyOf: [{ type: "string", maxLength: 100 }, { type: "null" }] },
+          rooms: { anyOf: [{ type: "string", maxLength: 30 }, { type: "null" }] },
+          source: { type: "string", enum: ["META", "WEBSITE", "MANUAL"] },
+          comment: { anyOf: [{ type: "string", maxLength: 5_000 }, { type: "null" }] },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const user = await requireUser(request, reply, database);
+    if (!user) return reply;
+
+    const existing = await database.client.deal.findFirst({
+      where: { id: request.params.dealId, organizationId: user.organization.id },
+    });
+    if (!existing) return reply.status(404).send({ error: "deal_not_found", message: "Сделка не найдена." });
+
+    if (request.body.stageId) {
+      const stage = await database.client.pipelineStage.findFirst({
+        where: { id: request.body.stageId, pipelineId: existing.pipelineId },
+      });
+      if (!stage) return reply.status(400).send({ error: "invalid_stage", message: "Этап воронки не найден." });
+    }
+
+    if (request.body.assigneeId) {
+      const membership = await database.client.membership.findUnique({
+        where: { organizationId_userId: { organizationId: user.organization.id, userId: request.body.assigneeId } },
+      });
+      if (!membership || membership.status !== "ACTIVE") {
+        return reply.status(400).send({ error: "invalid_assignee", message: "Ответственный не входит в эту организацию." });
+      }
+    }
+
+    const updated = await database.client.deal.update({
+      where: { id: existing.id },
+      data: {
+        ...(request.body.stageId !== undefined ? { stageId: request.body.stageId } : {}),
+        ...(request.body.assigneeId !== undefined ? { assigneeId: request.body.assigneeId } : {}),
+        ...(request.body.title !== undefined ? { title: request.body.title.trim() } : {}),
+        ...(request.body.request !== undefined ? { request: optionalText(request.body.request) ?? "Запрос ещё не уточнён" } : {}),
+        ...(request.body.budget !== undefined ? { budget: optionalText(request.body.budget ?? undefined) } : {}),
+        ...(request.body.operation !== undefined ? { operation: request.body.operation } : {}),
+        ...(request.body.propertyType !== undefined ? { propertyType: optionalText(request.body.propertyType ?? undefined) } : {}),
+        ...(request.body.district !== undefined ? { district: optionalText(request.body.district ?? undefined) } : {}),
+        ...(request.body.rooms !== undefined ? { rooms: optionalText(request.body.rooms ?? undefined) } : {}),
+        ...(request.body.source !== undefined ? { source: request.body.source } : {}),
+        ...(request.body.comment !== undefined ? { comment: optionalText(request.body.comment ?? undefined) } : {}),
+      },
+      include: {
+        contact: { select: { id: true, name: true, phone: true } },
+        assignee: { select: { id: true, name: true } },
+      },
+    });
+
+    return { deal: mapDeal(updated), stageId: updated.stageId };
   });
 
   app.patch<{

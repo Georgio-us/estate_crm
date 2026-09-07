@@ -109,6 +109,67 @@ test("deal creation links an existing contact inside the current organization", 
   assert.equal(response.statusCode, 201);
   assert.equal(createdData.organizationId, user.memberships[0].organization.id);
   assert.equal(createdData.contactId, contactId);
+  assert.equal(createdData.title, "Квартира у моря");
   assert.equal(response.json().deal.number, 1001);
+  await app.close();
+});
+
+test("updating a deal title does not mutate the linked contact", async () => {
+  const dealId = "14a292bd-d84e-447c-b71a-aa185b809b88";
+  let updatedData: Record<string, unknown> = {};
+  let contactUpdates = 0;
+  const now = new Date("2026-09-07T18:00:00.000Z");
+  const database = {
+    client: {
+      session: { async findUnique() { return session(); } },
+      deal: {
+        async findFirst() {
+          return { id: dealId, pipelineId, organizationId: user.memberships[0].organization.id };
+        },
+        async update({ data }: { data: Record<string, unknown> }) {
+          updatedData = data;
+          return {
+            id: dealId,
+            number: 1001,
+            title: data.title,
+            request: "Квартира у моря",
+            budget: null,
+            comment: null,
+            operation: "PURCHASE" as const,
+            propertyType: null,
+            district: null,
+            rooms: null,
+            source: "MANUAL" as const,
+            position: 0,
+            stageId,
+            createdAt: now,
+            updatedAt: now,
+            contact: { id: contactId, name: "Тестовый контакт", phone: "+380938849214" },
+            assignee: null,
+          };
+        },
+      },
+      contact: {
+        async update() {
+          contactUpdates += 1;
+        },
+      },
+    },
+    async ping() {},
+    async disconnect() {},
+  } as unknown as DatabaseConnection;
+
+  const app = await buildApp(config, database);
+  const response = await app.inject({
+    method: "PATCH",
+    url: `/deals/${dealId}`,
+    headers: { cookie: "estate_crm_session=test-token" },
+    payload: { title: "Клиент не берёт трубку" },
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(updatedData.title, "Клиент не берёт трубку");
+  assert.equal(response.json().deal.contact.name, "Тестовый контакт");
+  assert.equal(contactUpdates, 0);
   await app.close();
 });

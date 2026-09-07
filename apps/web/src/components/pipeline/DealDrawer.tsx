@@ -6,9 +6,9 @@ interface DealDrawerProps {
   deal: Deal;
   stageId: string;
   stages: Array<{ id: string; title: string }>;
+  assignees: Array<{ id: string; name: string }>;
   activities: ActivityEvent[];
-  onChange: (patch: Partial<Deal>) => void;
-  onChangeStage: (stageId: string) => void;
+  onSave: (deal: Deal, stageId: string) => Promise<{ deal: Deal; stageId: string }>;
   onAddNote: (text: string) => void;
   onAddTask: (title: string, dueAt?: string) => void;
   onCompleteTask: (result: string) => void;
@@ -18,7 +18,6 @@ interface DealDrawerProps {
 type ComposerMode = "note" | "task";
 type ActivityFilter = "all" | ActivityCategory;
 
-const assignees = ["Не назначен", "Георгий", "Елена", "Андрей"];
 const propertyTypes = ["Квартира", "Дом", "Участок", "Коммерческая недвижимость"];
 const districts = ["Приморский", "Киевский", "Пересыпский", "Хаджибейский"];
 const roomOptions = ["1", "2", "3", "4+"];
@@ -36,9 +35,9 @@ export function DealDrawer({
   deal,
   stageId,
   stages,
+  assignees,
   activities,
-  onChange,
-  onChangeStage,
+  onSave,
   onAddNote,
   onAddTask,
   onCompleteTask,
@@ -51,6 +50,44 @@ export function DealDrawer({
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
   const [isCompletingTask, setIsCompletingTask] = useState(false);
   const [taskResult, setTaskResult] = useState("");
+  const [draft, setDraft] = useState(deal);
+  const [draftStageId, setDraftStageId] = useState(stageId);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+
+  const comparable = (value: Deal) => ({ title: value.title, assigneeId: value.assigneeId, budget: value.budget, operation: value.operation, propertyType: value.propertyType, district: value.district, rooms: value.rooms, request: value.request, comment: value.comment, source: value.source });
+  const isDirty = draftStageId !== stageId || JSON.stringify(comparable(draft)) !== JSON.stringify(comparable(deal));
+
+  useEffect(() => {
+    setDraft(deal);
+    setDraftStageId(stageId);
+    setSaveError("");
+  }, [deal, stageId]);
+
+  function updateDraft(patch: Partial<Deal>) {
+    setDraft((current) => ({ ...current, ...patch }));
+  }
+
+  function discardChanges() {
+    setDraft(deal);
+    setDraftStageId(stageId);
+    setSaveError("");
+  }
+
+  async function saveChanges() {
+    if (!isDirty || isSaving) return;
+    setIsSaving(true);
+    setSaveError("");
+    try {
+      const saved = await onSave(draft, draftStageId);
+      setDraft(saved.deal);
+      setDraftStageId(saved.stageId);
+    } catch (cause) {
+      setSaveError(cause instanceof Error ? cause.message : "Не удалось сохранить сделку.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
 
   const visibleActivities = useMemo(
     () => activityFilter === "all" ? activities : activities.filter((event) => event.category === activityFilter),
@@ -95,7 +132,7 @@ export function DealDrawer({
         <header className={styles.header}>
           <div className={styles.headerIdentity}>
             <span className={styles.eyebrow}>Карточка сделки</span>
-            <InlineTitleEditor value={deal.contactName} onSave={(value) => onChange({ contactName: value })} />
+            <InlineTitleEditor value={draft.title || draft.request} onSave={(value) => updateDraft({ title: value })} />
             <div className={styles.headerMeta}>
               <span>#{deal.number}</span>
               <span className={styles.sourceTag}>{deal.source}</span>
@@ -114,46 +151,47 @@ export function DealDrawer({
             <section className={styles.statusSection}>
               <label className={styles.statusControl}>
                 <span>Этап сделки</span>
-                <select value={stageId} onChange={(event) => onChangeStage(event.target.value)}>
+                <select value={draftStageId} onChange={(event) => setDraftStageId(event.target.value)}>
                   {stages.map((stage) => <option value={stage.id} key={stage.id}>{stage.title}</option>)}
                 </select>
               </label>
               <div className={styles.stageTrack} aria-hidden="true">
-                {stages.map((stage) => <span className={stage.id === stageId ? styles.trackActive : ""} key={stage.id} />)}
+                {stages.map((stage) => <span className={stage.id === draftStageId ? styles.trackActive : ""} key={stage.id} />)}
               </div>
             </section>
 
             <section className={styles.propertySection}>
               <h3>Основное</h3>
-              <PropertySelect label="Ответственный" icon="У" value={deal.assignee} options={assignees} onChange={(value) => onChange({ assignee: value })} />
-              <PropertyInput label="Бюджет" icon="$" value={deal.budget || ""} placeholder="Не указан" onChange={(value) => onChange({ budget: value })} />
-              <PropertySelect label="Операция" icon="↔" value={deal.operation || "Покупка"} options={["Покупка", "Аренда", "Продажа"]} onChange={(value) => onChange({ operation: value as Deal["operation"] })} />
-              <PropertySelect label="Тип объекта" icon="⌂" value={deal.propertyType || ""} placeholder="Выбрать" options={propertyTypes} onChange={(value) => onChange({ propertyType: value })} />
-              <PropertySelect label="Район" icon="⌖" value={deal.district || ""} placeholder="Выбрать" options={districts} onChange={(value) => onChange({ district: value })} />
-              <PropertySelect label="Комнаты" icon="№" value={deal.rooms || ""} placeholder="Не указано" options={roomOptions} onChange={(value) => onChange({ rooms: value })} />
+              <AssigneeSelect value={draft.assigneeId || ""} options={assignees} onChange={(id) => updateDraft({ assigneeId: id || undefined, assignee: assignees.find((item) => item.id === id)?.name || "Не назначен" })} />
+              <PropertyInput label="Бюджет" icon="$" value={draft.budget || ""} placeholder="Не указан" onChange={(value) => updateDraft({ budget: value })} />
+              <PropertySelect label="Операция" icon="↔" value={draft.operation || "Покупка"} options={["Покупка", "Аренда", "Продажа"]} onChange={(value) => updateDraft({ operation: value as Deal["operation"] })} />
+              <PropertySelect label="Тип объекта" icon="⌂" value={draft.propertyType || ""} placeholder="Выбрать" options={propertyTypes} onChange={(value) => updateDraft({ propertyType: value })} />
+              <PropertySelect label="Район" icon="⌖" value={draft.district || ""} placeholder="Выбрать" options={districts} onChange={(value) => updateDraft({ district: value })} />
+              <PropertySelect label="Комнаты" icon="№" value={draft.rooms || ""} placeholder="Не указано" options={roomOptions} onChange={(value) => updateDraft({ rooms: value })} />
             </section>
 
             <section className={styles.contactSection}>
               <div className={styles.contactHeader}>
                 <span className={styles.contactAvatar}>{deal.contactName.slice(0, 1)}</span>
                 <div>
-                  <InlineContactEditor value={deal.contactName} onSave={(value) => onChange({ contactName: value })} />
-                  <span>Контакт клиента · нажмите на имя для изменения</span>
+                  <strong className={styles.contactName}>{deal.contactName}</strong>
+                  <span>Основной контакт сделки</span>
                 </div>
                 <button type="button" aria-label="Меню контакта">•••</button>
               </div>
-              <PropertyInput label="Телефон" icon="☎" value={deal.phone} onChange={(value) => onChange({ phone: value })} />
-              <PropertyInput label="Источник" icon="↗" value={deal.source} readOnly onChange={() => undefined} />
+              <PropertyInput label="Телефон" icon="☎" value={deal.phone || ""} readOnly onChange={() => undefined} />
+              <PropertySelect label="Источник" icon="↗" value={draft.source} options={["Meta", "Website", "Manual"]} onChange={(value) => updateDraft({ source: value as Deal["source"] })} />
             </section>
 
             <section className={styles.notesSection}>
               <h3>Запрос клиента</h3>
-              <InlineTextEditor label="Запрос клиента" value={deal.request} placeholder="Запрос ещё не уточнён" onSave={(value) => onChange({ request: value })} />
+              <InlineTextEditor label="Запрос клиента" value={draft.request} placeholder="Запрос ещё не уточнён" onSave={(value) => updateDraft({ request: value })} />
               <h3>Комментарий</h3>
-              <InlineTextEditor label="Комментарий" value={deal.comment || ""} placeholder="Добавить комментарий" onSave={(value) => onChange({ comment: value })} />
+              <InlineTextEditor label="Комментарий" value={draft.comment || ""} placeholder="Добавить комментарий" onSave={(value) => updateDraft({ comment: value })} />
             </section>
 
             <button className={styles.addContactButton} type="button"><span>＋</span> Добавить связанный контакт</button>
+            {isDirty && <div className={styles.saveBar}><div>{saveError || "Есть несохранённые изменения"}</div><button type="button" onClick={discardChanges} disabled={isSaving}>Отменить</button><button type="button" onClick={() => { void saveChanges(); }} disabled={isSaving}>{isSaving ? "Сохраняем…" : "Сохранить"}</button></div>}
           </div>
 
           <div className={styles.activityPane}>
@@ -243,6 +281,10 @@ function PropertySelect({ label, icon, value, placeholder, options, onChange }: 
   return <label className={styles.propertyRow}><span className={styles.propertyLabel}><i>{icon}</i>{label}</span><select value={value} onChange={(event) => onChange(event.target.value)}>{placeholder && <option value="">{placeholder}</option>}{options.map((option) => <option value={option} key={option}>{option}</option>)}</select></label>;
 }
 
+function AssigneeSelect({ value, options, onChange }: { value: string; options: Array<{ id: string; name: string }>; onChange: (value: string) => void }) {
+  return <label className={styles.propertyRow}><span className={styles.propertyLabel}><i>У</i>Ответственный</span><select value={value} onChange={(event) => onChange(event.target.value)}><option value="">Не назначен</option>{options.map((option) => <option value={option.id} key={option.id}>{option.name}</option>)}</select></label>;
+}
+
 function InlineTitleEditor({ value, onSave }: { value: string; onSave: (value: string) => void }) {
   const [isEditing, setIsEditing] = useState(false);
   const [draft, setDraft] = useState(value);
@@ -259,22 +301,6 @@ function InlineTitleEditor({ value, onSave }: { value: string; onSave: (value: s
   }
 
   return <input className={styles.titleInput} autoFocus aria-label="Название сделки" value={draft} onChange={(event) => setDraft(event.target.value)} onBlur={save} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); save(); } if (event.key === "Escape") { event.stopPropagation(); setDraft(value); setIsEditing(false); } }} />;
-}
-
-function InlineContactEditor({ value, onSave }: { value: string; onSave: (value: string) => void }) {
-  const [isEditing, setIsEditing] = useState(false);
-  const [draft, setDraft] = useState(value);
-
-  function save() {
-    const nextValue = draft.trim();
-    if (nextValue) onSave(nextValue);
-    else setDraft(value);
-    setIsEditing(false);
-  }
-
-  if (!isEditing) return <button className={styles.contactNameButton} type="button" onClick={() => { setDraft(value); setIsEditing(true); }}>{value}</button>;
-
-  return <input className={styles.contactNameInput} autoFocus aria-label="Имя контакта" value={draft} onChange={(event) => setDraft(event.target.value)} onBlur={save} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); save(); } if (event.key === "Escape") { event.stopPropagation(); setDraft(value); setIsEditing(false); } }} />;
 }
 
 function InlineTextEditor({ label, value, placeholder, onSave }: { label: string; value: string; placeholder: string; onSave: (value: string) => void }) {

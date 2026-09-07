@@ -27,7 +27,7 @@ interface ApiContact {
   source: keyof typeof sourceFromApi;
   assignee: { id: string; name: string } | null;
   dealIds?: string[];
-  deals?: Array<{ id: string; number: number; request: string; budget: string | null; stage: { id: string; title: string; color: string } }>;
+  deals?: Array<{ id: string; number: number; title: string; request: string; budget: string | null; stage: { id: string; title: string; color: string } }>;
   comment: string | null;
   createdAt: string;
   updatedAt: string;
@@ -41,11 +41,32 @@ function mapApiContact(contact: ApiContact): Contact {
     email: contact.email || undefined,
     telegram: contact.telegram || undefined,
     source: sourceFromApi[contact.source],
+    assigneeId: contact.assignee?.id,
     assignee: contact.assignee?.name || "Не назначен",
     dealIds: contact.dealIds || [],
     lastContact: "Нет взаимодействий",
     comment: contact.comment || undefined,
     createdAt: new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", year: "numeric" }).format(new Date(contact.createdAt)),
+  };
+}
+
+function mapRelatedDeal(contact: ApiContact, item: NonNullable<ApiContact["deals"]>[number]): RelatedDeal {
+  return {
+    deal: {
+      id: item.id,
+      number: item.number,
+      contactId: contact.id,
+      contactName: contact.name,
+      phone: contact.phone || "",
+      title: item.title,
+      request: item.request,
+      budget: item.budget || undefined,
+      source: sourceFromApi[contact.source],
+      assigneeId: contact.assignee?.id,
+      assignee: contact.assignee?.name || "Не назначен",
+    },
+    stageTitle: item.stage.title,
+    stageColor: item.stage.color,
   };
 }
 
@@ -56,21 +77,7 @@ async function requestContacts(): Promise<{ contacts: Contact[]; dealsById: Map<
   const dealsById = new Map<string, RelatedDeal>();
   for (const contact of payload.contacts) {
     for (const item of contact.deals || []) {
-      dealsById.set(item.id, {
-        deal: {
-          id: item.id,
-          number: item.number,
-          contactId: contact.id,
-          contactName: contact.name,
-          phone: contact.phone || "",
-          request: item.request,
-          budget: item.budget || undefined,
-          source: sourceFromApi[contact.source],
-          assignee: contact.assignee?.name || "Не назначен",
-        },
-        stageTitle: item.stage.title,
-        stageColor: item.stage.color,
-      });
+      dealsById.set(item.id, mapRelatedDeal(contact, item));
     }
   }
   return { contacts: payload.contacts.map(mapApiContact), dealsById };
@@ -152,6 +159,33 @@ export function ContactsDirectory() {
     setSelectedId(contact.id);
   }
 
+  async function saveContact(nextContact: Contact) {
+    const response = await fetch(`/api/crm/contacts/${nextContact.id}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: nextContact.name,
+        phone: nextContact.phone,
+        email: nextContact.email || "",
+        telegram: nextContact.telegram || "",
+        source: sourceToApi[nextContact.source],
+        assigneeId: nextContact.assigneeId || null,
+        comment: nextContact.comment || "",
+      }),
+    });
+    const payload = await response.json() as { contact?: ApiContact; message?: string };
+    if (!response.ok || !payload.contact) throw new Error(payload.message || "Не удалось сохранить контакт.");
+    const saved = mapApiContact(payload.contact);
+    setContacts((current) => current.map((contact) => contact.id === saved.id ? saved : contact));
+    setDealsById((current) => {
+      const next = new Map(current);
+      for (const dealId of saved.dealIds) next.delete(dealId);
+      for (const item of payload.contact!.deals || []) next.set(item.id, mapRelatedDeal(payload.contact!, item));
+      return next;
+    });
+    return saved;
+  }
+
   function addContactNote(text: string) {
     if (!selectedContact) return;
     const event: ActivityEvent = { id: `contact-note-${Date.now()}`, dealId: "", category: "note", title: "Добавлено примечание", description: text, author: "Георгий", occurredAt: new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit" }).format(new Date()) };
@@ -210,7 +244,7 @@ export function ContactsDirectory() {
         </section>
       </div>
 
-      {selectedContact && <ContactDrawer contact={selectedContact} deals={selectedDeals} activities={selectedActivities} onAddNote={addContactNote} onClose={() => setSelectedId(null)} />}
+      {selectedContact && <ContactDrawer contact={selectedContact} deals={selectedDeals} activities={selectedActivities} assignees={[{ id: user.id, name: user.name }]} onSave={saveContact} onAddNote={addContactNote} onClose={() => setSelectedId(null)} />}
       {isCreating && <NewContactModal onCreate={createContact} onClose={() => setIsCreating(false)} assignees={[{ id: user.id, name: user.name }]} />}
     </section>
   );

@@ -259,6 +259,7 @@
 .contactHeader div { display: grid; min-width: 0; flex: 1; gap: 3px; }
 .contactHeader h3 { margin: 0; font-size: var(--font-size-body); font-weight: var(--font-weight-semibold); }
 .contactHeader div > span { color: var(--text-muted); font-size: var(--font-size-caption); }
+.contactName { overflow: hidden; font-size: var(--font-size-body); font-weight: var(--font-weight-semibold); text-overflow: ellipsis; white-space: nowrap; }
 
 .contactHeader > button {
   margin-left: auto;
@@ -370,6 +371,26 @@
   border-radius: 50%;
   font-size: var(--font-size-body-lg);
 }
+
+.saveBar {
+  position: sticky;
+  z-index: 4;
+  bottom: 0;
+  display: grid;
+  min-height: 64px;
+  align-items: center;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  padding: 11px 18px;
+  border-top: 1px solid var(--border-strong);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 -8px 20px rgba(25, 25, 23, 0.06);
+}
+
+.saveBar div { overflow: hidden; color: var(--text-muted); font-size: var(--font-size-caption); text-overflow: ellipsis; white-space: nowrap; }
+.saveBar button { height: 32px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: #fff; cursor: pointer; font-size: var(--font-size-caption); }
+.saveBar button:last-child { border-color: var(--primary); background: var(--primary); color: #fff; }
+.saveBar button:disabled { cursor: default; opacity: 0.65; }
 
 .activityPane {
   position: relative;

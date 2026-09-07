@@ -125,8 +125,10 @@ model Deal {
   stageId        String         @map("stage_id") @db.Uuid
   contactId      String         @map("contact_id") @db.Uuid
   assigneeId     String?        @map("assignee_id") @db.Uuid
+  title          String
   request        String
   budget         String?
+  comment        String?
   operation      DealOperation  @default(PURCHASE)
   propertyType   String?        @map("property_type")
   district       String?

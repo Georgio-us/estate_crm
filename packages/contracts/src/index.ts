@@ -53,6 +53,7 @@ export interface ContactAssignee {
 export interface ContactDealSummary {
   id: string;
   number: number;
+  title: string;
   request: string;
   budget: string | null;
   stage: { id: string; title: string; color: string };
@@ -88,12 +89,15 @@ export interface CreateContactRequest {
   comment?: string;
 }
 
+export type UpdateContactRequest = Partial<CreateContactRequest>;
+
 export type DealOperation = "PURCHASE" | "RENT" | "SALE";
 
 export interface PipelineDealRecord {
   id: string;
   number: number;
   contact: ContactAssignee & { phone: string | null };
+  title: string;
   request: string;
   budget: string | null;
   operation: DealOperation;
@@ -102,6 +106,7 @@ export interface PipelineDealRecord {
   rooms: string | null;
   source: ContactSource;
   assignee: ContactAssignee | null;
+  comment: string | null;
   position: number;
   createdAt: string;
   updatedAt: string;
@@ -129,6 +134,7 @@ export interface CreateDealRequest {
   contactName?: string;
   phone?: string;
   assigneeId?: string | null;
+  title?: string;
   request?: string;
   budget?: string;
   operation?: DealOperation;
@@ -136,6 +142,21 @@ export interface CreateDealRequest {
   district?: string;
   rooms?: string;
   source?: ContactSource;
+  comment?: string;
+}
+
+export interface UpdateDealRequest {
+  stageId?: string;
+  assigneeId?: string | null;
+  title?: string;
+  request?: string;
+  budget?: string | null;
+  operation?: DealOperation;
+  propertyType?: string | null;
+  district?: string | null;
+  rooms?: string | null;
+  source?: ContactSource;
+  comment?: string | null;
 }
 
 export interface MoveDealRequest {

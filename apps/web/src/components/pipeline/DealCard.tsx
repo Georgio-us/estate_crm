@@ -54,7 +54,7 @@ function DealCardContent({ deal }: { deal: Deal }) {
   return (
     <>
       <div className={styles.cardTopline}>
-        <h4>{deal.contactName}</h4>
+        <h4>{deal.title || deal.request}</h4>
         <div className={styles.cardActions}>
           <button
             className={styles.dragHandle}
@@ -74,7 +74,7 @@ function DealCardContent({ deal }: { deal: Deal }) {
       >
         {deal.phone}
       </a>
-      <p className={styles.request}>{deal.request}</p>
+      <p className={styles.request}>{deal.contactName} · {deal.request}</p>
       {deal.budget && <p className={styles.budget}>{deal.budget}</p>}
 
       <div className={styles.tags}>

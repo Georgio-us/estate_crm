@@ -8,6 +8,7 @@ export interface NewDealDraft {
   phone: string;
   stageId: string;
   assigneeId?: string;
+  title?: string;
   source: Deal["source"];
   operation?: Deal["operation"];
   propertyType?: string;
@@ -32,6 +33,7 @@ export function NewDealModal({ initialStageId, stages, contacts, assignees, onCr
   const [phone, setPhone] = useState("");
   const [stageId, setStageId] = useState(initialStageId);
   const [assigneeId, setAssigneeId] = useState("");
+  const [title, setTitle] = useState("");
   const [operation, setOperation] = useState<Deal["operation"]>("Покупка");
   const [propertyType, setPropertyType] = useState("");
   const [budget, setBudget] = useState("");
@@ -62,6 +64,7 @@ export function NewDealModal({ initialStageId, stages, contacts, assignees, onCr
         phone: phone.trim(),
         stageId,
         assigneeId: assigneeId || undefined,
+        title: title.trim() || undefined,
         source: "Manual",
         operation,
         propertyType: propertyType.trim() || undefined,
@@ -120,6 +123,11 @@ export function NewDealModal({ initialStageId, stages, contacts, assignees, onCr
           <label>
             <span>Телефон <small>необязательно</small></span>
             <input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+38 000 000 00 00" />
+          </label>
+
+          <label>
+            <span>Название сделки <small>необязательно</small></span>
+            <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Например, Не берёт телефон — перезвонить вечером" />
           </label>
 
           <div className={styles.twoColumns}>

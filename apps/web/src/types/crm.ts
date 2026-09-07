@@ -4,6 +4,7 @@ export interface Deal {
   id: string;
   number: number;
   contactId?: string;
+  title?: string;
   contactName: string;
   phone: string;
   request: string;
@@ -76,6 +77,7 @@ export interface Contact {
   email?: string;
   telegram?: string;
   source: Deal["source"];
+  assigneeId?: string;
   assignee: string;
   dealIds: string[];
   lastContact: string;

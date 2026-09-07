@@ -32,6 +32,7 @@ interface ApiDeal {
   id: string;
   number: number;
   contact: { id: string; name: string; phone: string | null };
+  title: string;
   request: string;
   budget: string | null;
   operation: keyof typeof operationFromApi;
@@ -40,6 +41,7 @@ interface ApiDeal {
   rooms: string | null;
   source: keyof typeof sourceFromApi;
   assignee: { id: string; name: string } | null;
+  comment: string | null;
   createdAt: string;
 }
 
@@ -51,6 +53,7 @@ function mapApiDeal(deal: ApiDeal): Deal {
     id: deal.id,
     number: deal.number,
     contactId: deal.contact.id,
+    title: deal.title,
     contactName: deal.contact.name,
     phone: deal.contact.phone || "",
     request: deal.request,
@@ -62,6 +65,7 @@ function mapApiDeal(deal: ApiDeal): Deal {
     source: sourceFromApi[deal.source],
     assigneeId: deal.assignee?.id,
     assignee: deal.assignee?.name || "Не назначен",
+    comment: deal.comment || undefined,
     createdAt: new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(deal.createdAt)),
   };
 }
@@ -152,7 +156,7 @@ export function PipelineBoard() {
     return stages.map((stage) => ({
       ...stage,
       deals: stage.deals.filter((deal) => {
-        const matchesQuery = !normalized || `${deal.contactName} ${deal.phone} ${deal.request} ${deal.number}`.toLocaleLowerCase("ru").includes(normalized);
+        const matchesQuery = !normalized || `${deal.title || ""} ${deal.contactName} ${deal.phone} ${deal.request} ${deal.number}`.toLocaleLowerCase("ru").includes(normalized);
         const matchesAssignee = assigneeFilter === "Все" || deal.assignee === assigneeFilter;
         const matchesSource = sourceFilter === "Все" || deal.source === sourceFilter;
         const matchesTask = taskFilter === "Все" || (taskFilter === "Без задачи" ? !deal.task : deal.taskState === taskFilter);
@@ -221,35 +225,42 @@ export function PipelineBoard() {
     );
   }
 
-  function moveDeal(nextStageId: string) {
-    if (!selected || nextStageId === selected.stageId || !selectedDeal) return;
-
-    const previousStageTitle = stages.find((stage) => stage.id === selected.stageId)?.title;
-    const nextStageTitle = stages.find((stage) => stage.id === nextStageId)?.title;
-
-    setStages((current) =>
-      current.map((stage) => {
-        if (stage.id === selected.stageId) {
-          return { ...stage, deals: stage.deals.filter((deal) => deal.id !== selected.dealId) };
-        }
-
-        if (stage.id === nextStageId) {
-          return { ...stage, deals: [...stage.deals, selectedDeal] };
-        }
-
-        return stage;
+  async function saveDeal(nextDeal: Deal, nextStageId: string) {
+    if (!selected || !selectedDeal) throw new Error("Сделка больше не открыта.");
+    const response = await fetch(`/api/crm/deals/${selected.dealId}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        stageId: nextStageId,
+        assigneeId: nextDeal.assigneeId || null,
+        title: nextDeal.title || nextDeal.request,
+        request: nextDeal.request,
+        budget: nextDeal.budget || null,
+        operation: nextDeal.operation ? operationToApi[nextDeal.operation] : "PURCHASE",
+        propertyType: nextDeal.propertyType || null,
+        district: nextDeal.district || null,
+        rooms: nextDeal.rooms || null,
+        source: sourceToApi[nextDeal.source],
+        comment: nextDeal.comment || null,
       }),
-    );
-    setSelected({ ...selected, stageId: nextStageId });
-    void persistStageMove(selected.dealId, nextStageId);
+    });
+    const payload = await response.json() as { deal?: ApiDeal; stageId?: string; message?: string };
+    if (!response.ok || !payload.deal || !payload.stageId) throw new Error(payload.message || "Не удалось сохранить сделку.");
+    const savedDeal = mapApiDeal(payload.deal);
 
+    setStages((current) => current.map((stage) => {
+      const withoutDeal = stage.deals.filter((deal) => deal.id !== savedDeal.id);
+      return stage.id === payload.stageId ? { ...stage, deals: [savedDeal, ...withoutDeal] } : { ...stage, deals: withoutDeal };
+    }));
+    setSelected({ dealId: savedDeal.id, stageId: payload.stageId });
     appendActivity({
-      dealId: selected.dealId,
+      dealId: savedDeal.id,
       category: "change",
-      title: "Этап изменён",
-      description: `${previousStageTitle} → ${nextStageTitle}`,
+      title: "Изменения сохранены",
+      description: "Обновлены параметры сделки",
       author: user.name,
     });
+    return { deal: savedDeal, stageId: payload.stageId };
   }
 
   function addNote(text: string) {
@@ -301,6 +312,7 @@ export function PipelineBoard() {
         contactName: draft.contactId ? undefined : draft.contactName,
         phone: draft.contactId ? undefined : draft.phone,
         assigneeId: draft.assigneeId || null,
+        title: draft.title,
         request: draft.request,
         budget: draft.budget,
         operation: draft.operation ? operationToApi[draft.operation] : undefined,
@@ -402,7 +414,7 @@ export function PipelineBoard() {
   }
 
   function exportDeals() {
-    const rows = [["Номер", "Контакт", "Телефон", "Запрос", "Этап", "Ответственный", "Источник"], ...stages.flatMap((stage) => stage.deals.map((deal) => [String(deal.number), deal.contactName, deal.phone, deal.request, stage.title, deal.assignee, deal.source]))];
+    const rows = [["Номер", "Название сделки", "Контакт", "Телефон", "Запрос", "Этап", "Ответственный", "Источник"], ...stages.flatMap((stage) => stage.deals.map((deal) => [String(deal.number), deal.title || deal.request, deal.contactName, deal.phone, deal.request, stage.title, deal.assignee, deal.source]))];
     const csv = rows.map((row) => row.map((cell) => `"${cell.replaceAll('"', '""')}"`).join(",")).join("\n");
     const link = document.createElement("a");
     link.href = URL.createObjectURL(new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8" }));
@@ -486,9 +498,9 @@ export function PipelineBoard() {
           deal={selectedDeal}
           stageId={selectedStage.id}
           stages={stageOptions}
+          assignees={[{ id: user.id, name: user.name }]}
           activities={selectedActivities}
-          onChange={updateDeal}
-          onChangeStage={moveDeal}
+          onSave={saveDeal}
           onAddNote={addNote}
           onAddTask={addTask}
           onCompleteTask={completeTask}
@@ -515,5 +527,5 @@ function DealList({ stages, onOpenDeal }: { stages: PipelineStage[]; onOpenDeal:
 
   if (!rows.length) return <div className={styles.emptyDeals}><strong>Сделки не найдены</strong><span>Измените запрос или сбросьте фильтры.</span></div>;
 
-  return <div className={styles.listView}><header><span>Контакт</span><span>Запрос</span><span>Этап</span><span>Ответственный</span><span>Следующая задача</span></header>{rows.map(({ deal, stage }) => <button type="button" onClick={() => onOpenDeal(deal.id, stage.id)} key={deal.id}><span className={styles.listContact}><i>{deal.contactName.slice(0, 1)}</i><span><strong>{deal.contactName}</strong><small>Сделка #{deal.number} · {deal.phone}</small></span></span><span className={styles.listRequest}><strong>{deal.request}</strong><small>{deal.budget || "Бюджет не указан"}</small></span><span className={styles.listStage}><i style={{ backgroundColor: stage.color }} />{stage.title}</span><span>{deal.assignee}</span><span className={`${styles.listTask} ${deal.taskState ? styles[deal.taskState] : ""}`}>{deal.task || "Нет задачи"}</span><b>›</b></button>)}</div>;
+  return <div className={styles.listView}><header><span>Контакт</span><span>Сделка и запрос</span><span>Этап</span><span>Ответственный</span><span>Следующая задача</span></header>{rows.map(({ deal, stage }) => <button type="button" onClick={() => onOpenDeal(deal.id, stage.id)} key={deal.id}><span className={styles.listContact}><i>{deal.contactName.slice(0, 1)}</i><span><strong>{deal.contactName}</strong><small>Сделка #{deal.number} · {deal.phone}</small></span></span><span className={styles.listRequest}><strong>{deal.title || deal.request}</strong><small>{deal.request} · {deal.budget || "Бюджет не указан"}</small></span><span className={styles.listStage}><i style={{ backgroundColor: stage.color }} />{stage.title}</span><span>{deal.assignee}</span><span className={`${styles.listTask} ${deal.taskState ? styles[deal.taskState] : ""}`}>{deal.task || "Нет задачи"}</span><b>›</b></button>)}</div>;
 }

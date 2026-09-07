@@ -1,13 +1,33 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ActivityEvent, Contact } from "@/types/crm";
 import type { RelatedDeal } from "./ContactsDirectory";
 import styles from "./contacts.module.css";
 
 const icons = { note: "≡", task: "✓", change: "↔", source: "↗", object: "⌂" };
-const sourceLabels = { Meta: "Meta", Website: "Сайт", Manual: "Вручную" };
 
-export function ContactDrawer({ contact, deals, activities, onAddNote, onClose }: { contact: Contact; deals: RelatedDeal[]; activities: ActivityEvent[]; onAddNote: (text: string) => void; onClose: () => void }) {
+export function ContactDrawer({ contact, deals, activities, assignees, onSave, onAddNote, onClose }: { contact: Contact; deals: RelatedDeal[]; activities: ActivityEvent[]; assignees: Array<{ id: string; name: string }>; onSave: (contact: Contact) => Promise<Contact>; onAddNote: (text: string) => void; onClose: () => void }) {
   const [note, setNote] = useState("");
+  const [draft, setDraft] = useState(contact);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const editable = (value: Contact) => ({ name: value.name, phone: value.phone, email: value.email, telegram: value.telegram, source: value.source, assigneeId: value.assigneeId, comment: value.comment });
+  const isDirty = JSON.stringify(editable(draft)) !== JSON.stringify(editable(contact));
+
+  useEffect(() => {
+    setDraft(contact);
+    setSaveError("");
+  }, [contact]);
+
+  function update(patch: Partial<Contact>) { setDraft((current) => ({ ...current, ...patch })); }
+  function discard() { setDraft(contact); setSaveError(""); }
+  async function save() {
+    if (!isDirty || isSaving || !draft.name.trim()) return;
+    setIsSaving(true);
+    setSaveError("");
+    try { setDraft(await onSave({ ...draft, name: draft.name.trim() })); }
+    catch (cause) { setSaveError(cause instanceof Error ? cause.message : "Не удалось сохранить контакт."); }
+    finally { setIsSaving(false); }
+  }
   function submitNote() { if (!note.trim()) return; onAddNote(note.trim()); setNote(""); }
 
   return (
@@ -15,15 +35,16 @@ export function ContactDrawer({ contact, deals, activities, onAddNote, onClose }
       <button className={styles.backdrop} type="button" onClick={onClose} aria-label="Закрыть карточку контакта" />
       <aside className={styles.drawer} role="dialog" aria-modal="true" aria-label={`Контакт ${contact.name}`}>
         <header className={styles.drawerHeader}>
-          <div className={styles.identity}><span className={styles.largeAvatar}>{contact.name.slice(0, 1)}</span><div><span>Карточка контакта</span><h2>{contact.name}</h2><p>Добавлен {contact.createdAt}</p></div></div>
+          <div className={styles.identity}><span className={styles.largeAvatar}>{draft.name.slice(0, 1)}</span><div><span>Карточка контакта</span><input className={styles.contactTitleInput} value={draft.name} onChange={(event) => update({ name: event.target.value })} aria-label="Имя контакта" /><p>Добавлен {contact.createdAt}</p></div></div>
           <div className={styles.headerActions}><button type="button" aria-label="Меню контакта">•••</button><button type="button" onClick={onClose} aria-label="Закрыть">×</button></div>
         </header>
         <div className={styles.drawerWorkspace}>
           <div className={styles.detailsPane}>
-            <section><h3>Контактные данные</h3><Fact label="Телефон" value={contact.phone || "Не указан"} link={contact.phone ? `tel:${contact.phone.replaceAll(" ", "")}` : undefined} /><Fact label="Telegram" value={contact.telegram || "Не указан"} /><Fact label="Email" value={contact.email || "Не указан"} /></section>
-            <section><h3>CRM</h3><Fact label="Ответственный" value={contact.assignee} /><Fact label="Источник" value={sourceLabels[contact.source]} /><Fact label="Последний контакт" value={contact.lastContact} /></section>
-            {contact.comment && <section><h3>Комментарий</h3><p className={styles.comment}>{contact.comment}</p></section>}
-            <section className={styles.dealsSection}><div className={styles.sectionTitle}><h3>Связанные сделки</h3><span>{deals.length}</span></div>{deals.length ? deals.map(({ deal, stageTitle, stageColor }) => <article className={styles.dealRow} key={deal.id}><span className={styles.dealColor} style={{ background: stageColor }} /><div><strong>{deal.request}</strong><small>Сделка #{deal.number} · {stageTitle}</small></div><span>{deal.budget || "Без бюджета"}</span></article>) : <div className={styles.noDeals}>У контакта пока нет сделок<button type="button">＋ Создать сделку</button></div>}</section>
+            <section><h3>Контактные данные</h3><FactInput label="Телефон" value={draft.phone || ""} placeholder="Не указан" onChange={(value) => update({ phone: value })} /><FactInput label="Telegram" value={draft.telegram || ""} placeholder="Не указан" onChange={(value) => update({ telegram: value || undefined })} /><FactInput label="Email" value={draft.email || ""} placeholder="Не указан" type="email" onChange={(value) => update({ email: value || undefined })} /></section>
+            <section><h3>CRM</h3><FactSelect label="Ответственный" value={draft.assigneeId || ""} options={[{ value: "", label: "Не назначен" }, ...assignees.map((item) => ({ value: item.id, label: item.name }))]} onChange={(value) => update({ assigneeId: value || undefined, assignee: assignees.find((item) => item.id === value)?.name || "Не назначен" })} /><FactSelect label="Источник" value={draft.source} options={[{ value: "Meta", label: "Meta" }, { value: "Website", label: "Сайт" }, { value: "Manual", label: "Вручную" }]} onChange={(value) => update({ source: value as Contact["source"] })} /><Fact label="Последний контакт" value={contact.lastContact} /></section>
+            <section><h3>Комментарий</h3><textarea className={styles.contactCommentInput} value={draft.comment || ""} onChange={(event) => update({ comment: event.target.value || undefined })} placeholder="Добавить комментарий" /></section>
+            <section className={styles.dealsSection}><div className={styles.sectionTitle}><h3>Связанные сделки</h3><span>{deals.length}</span></div>{deals.length ? deals.map(({ deal, stageTitle, stageColor }) => <article className={styles.dealRow} key={deal.id}><span className={styles.dealColor} style={{ background: stageColor }} /><div><strong>{deal.title || deal.request}</strong><small>Сделка #{deal.number} · {stageTitle}</small></div><span>{deal.budget || "Без бюджета"}</span></article>) : <div className={styles.noDeals}>У контакта пока нет сделок<button type="button">＋ Создать сделку</button></div>}</section>
+            {isDirty && <div className={styles.contactSaveBar}><span>{saveError || "Есть несохранённые изменения"}</span><button type="button" onClick={discard} disabled={isSaving}>Отменить</button><button type="button" onClick={() => { void save(); }} disabled={isSaving || !draft.name.trim()}>{isSaving ? "Сохраняем…" : "Сохранить"}</button></div>}
           </div>
           <div className={styles.activityPane}>
             <div className={styles.activityHeader}><div><h3>История взаимодействия</h3><span>{activities.length} событий по контакту</span></div><button type="button">＋ Задача</button></div>
@@ -38,4 +59,12 @@ export function ContactDrawer({ contact, deals, activities, onAddNote, onClose }
 
 function Fact({ label, value, link }: { label: string; value: string; link?: string }) {
   return <div className={styles.fact}><span>{label}</span>{link ? <a href={link}>{value}</a> : <strong>{value}</strong>}</div>;
+}
+
+function FactInput({ label, value, placeholder, type = "text", onChange }: { label: string; value: string; placeholder: string; type?: string; onChange: (value: string) => void }) {
+  return <label className={styles.fact}><span>{label}</span><input type={type} value={value} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} /></label>;
+}
+
+function FactSelect({ label, value, options, onChange }: { label: string; value: string; options: Array<{ value: string; label: string }>; onChange: (value: string) => void }) {
+  return <label className={styles.fact}><span>{label}</span><select value={value} onChange={(event) => onChange(event.target.value)}>{options.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select></label>;
 }
