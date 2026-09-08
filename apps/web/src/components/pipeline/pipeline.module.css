@@ -369,6 +369,7 @@
 .column {
   width: 292px;
   min-width: 292px;
+  align-self: stretch;
   border-radius: var(--radius-md);
   scroll-snap-align: start;
   transition: background-color 120ms ease;
@@ -431,6 +432,8 @@
 
 .cardList {
   display: grid;
+  min-height: calc(100vh - var(--topbar-height) - 190px);
+  align-content: start;
   gap: 8px;
 }
 

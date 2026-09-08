@@ -6,10 +6,13 @@ import {
   DragOverlay,
   DndContext,
   KeyboardSensor,
+  MeasuringStrategy,
   MouseSensor,
+  pointerWithin,
   TouchSensor,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
@@ -30,6 +33,15 @@ const sourceFromApi = { META: "Meta", WEBSITE: "Website", MANUAL: "Manual" } as 
 const sourceToApi = { Meta: "META", Website: "WEBSITE", Manual: "MANUAL" } as const;
 const operationFromApi = { PURCHASE: "Покупка", RENT: "Аренда", SALE: "Продажа" } as const;
 const operationToApi = { Покупка: "PURCHASE", Аренда: "RENT", Продажа: "SALE" } as const;
+
+const pipelineCollisionDetection: CollisionDetection = (args) => {
+  const pointerCollisions = pointerWithin(args);
+  if (pointerCollisions.length) {
+    const cardCollision = pointerCollisions.find(({ id }) => !String(id).startsWith("stage:"));
+    return cardCollision ? [cardCollision] : [pointerCollisions[0]!];
+  }
+  return closestCorners(args);
+};
 
 interface ApiDeal {
   id: string;
@@ -538,7 +550,8 @@ export function PipelineBoard() {
       {loadState === "loading" ? <div className={styles.emptyDeals}><strong>Загружаем воронку…</strong><span>Получаем этапы и сделки из CRM.</span></div> : loadState === "error" ? <div className={styles.emptyDeals}><strong>Не удалось загрузить воронку</strong><span>Проверьте соединение и обновите страницу.</span></div> : view === "board" ? <DndContext
         id="pipeline-dnd"
         sensors={sensors}
-        collisionDetection={closestCorners}
+        collisionDetection={pipelineCollisionDetection}
+        measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
         onDragStart={handleDragStart}
         onDragCancel={() => setActiveDealId(null)}
         onDragEnd={handleDragEnd}
