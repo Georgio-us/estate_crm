@@ -355,13 +355,13 @@
 .relatedContact strong { overflow: hidden; font-size: var(--font-size-body-sm); text-overflow: ellipsis; white-space: nowrap; }
 .relatedContact small { color: var(--text-muted); }
 .relatedContact button { border: 0; background: transparent; color: var(--text-subtle); cursor: pointer; font-size: 20px; }
-.relatedPicker { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding-top: 8px; }
-.relatedPicker button { min-height: 36px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: #fff; }
-.relatedPicker button { padding: 0 10px; cursor: pointer; }
-.relatedPicker button:last-child { border-color: var(--primary); background: var(--primary); color: #fff; }
-.relatedChoices { display: grid; grid-column: 1 / -1; max-height: 180px; gap: 4px; overflow-y: auto; padding: 5px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: #fbfbfa; }
-.relatedChoices > button { display: grid; gap: 2px; padding: 8px 10px; border-color: transparent; text-align: left; }
+.relatedPicker { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding-top: 8px; }
+.relatedPicker > button { min-height: 36px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: #fff; cursor: pointer; }
+.relatedPicker > button:last-child { border-color: var(--primary); background: var(--primary); color: #fff; }
+.relatedChoices { display: flex; grid-column: 1 / -1; max-height: 240px; flex-direction: column; gap: 4px; overflow-y: auto; padding: 5px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: #fbfbfa; }
+.relatedChoices > button { display: grid; min-height: 58px; flex: 0 0 auto; align-content: center; gap: 3px; padding: 8px 10px; border: 1px solid transparent; border-radius: var(--radius-sm); background: #fff; cursor: pointer; text-align: left; }
 .relatedChoices > button:hover, .relatedChoices > .relatedChoiceActive { border-color: #a9bee7; background: #f2f6ff; color: var(--text); }
+.relatedChoices strong, .relatedChoices small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .relatedChoices small { color: var(--text-subtle); }
 .relatedError { margin: 8px 0 0; color: #b04a4a; font-size: var(--font-size-caption); }
 
