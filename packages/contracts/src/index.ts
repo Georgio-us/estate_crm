@@ -354,3 +354,62 @@ export interface ActivityListResponse {
 export interface CreateNoteRequest {
   text: string;
 }
+
+export type IntegrationProvider = "TEST" | "META_LEAD_ADS" | "INSTAGRAM_DIRECT" | "TELEPHONY" | "TELEGRAM";
+export type IntegrationConnectionStatus = "READY" | "CREDENTIALS_REQUIRED" | "CONNECTED" | "ERROR";
+export type IntegrationEventStatus = "RECEIVED" | "PROCESSED" | "DUPLICATE" | "FAILED";
+
+export interface IntegrationConnectionRecord {
+  provider: IntegrationProvider;
+  status: IntegrationConnectionStatus;
+  enabled: boolean;
+  pipelineId: string | null;
+  stageId: string | null;
+  lastEventAt: string | null;
+  lastError: string | null;
+  processedCount: number;
+}
+
+export interface IntegrationEventRecord {
+  id: string;
+  provider: IntegrationProvider;
+  externalId: string;
+  eventType: string;
+  status: IntegrationEventStatus;
+  contactId: string | null;
+  contactName: string | null;
+  dealId: string | null;
+  dealNumber: number | null;
+  receivedAt: string;
+  processedAt: string | null;
+}
+
+export interface IntegrationsResponse {
+  connections: IntegrationConnectionRecord[];
+  events: IntegrationEventRecord[];
+  pendingNotifications: number;
+}
+
+export interface TestInboundLeadRequest {
+  provider: "META_LEAD_ADS" | "INSTAGRAM_DIRECT" | "TELEPHONY" | "TEST";
+  externalId?: string;
+  name: string;
+  phone: string;
+  message?: string;
+}
+
+export interface UpdateIntegrationConnectionRequest {
+  pipelineId: string;
+  stageId: string;
+}
+
+export interface InboundLeadResult {
+  eventId: string;
+  contactId: string;
+  dealId: string;
+  dealNumber: number;
+  duplicate: boolean;
+  reusedContact: boolean;
+  reusedDeal: boolean;
+  notificationQueued: boolean;
+}

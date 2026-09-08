@@ -86,22 +86,54 @@ enum Currency {
   EUR
 }
 
+enum IntegrationProvider {
+  TEST
+  META_LEAD_ADS
+  INSTAGRAM_DIRECT
+  TELEPHONY
+  TELEGRAM
+}
+
+enum IntegrationConnectionStatus {
+  READY
+  CREDENTIALS_REQUIRED
+  CONNECTED
+  ERROR
+}
+
+enum IntegrationEventStatus {
+  RECEIVED
+  PROCESSED
+  DUPLICATE
+  FAILED
+}
+
+enum NotificationOutboxStatus {
+  PENDING
+  SENT
+  FAILED
+  CANCELLED
+}
+
 model Organization {
-  id               String            @id @default(uuid()) @db.Uuid
-  name             String
-  slug             String            @unique
-  timezone         String            @default("Europe/Madrid")
-  locale           String            @default("ru")
-  createdAt        DateTime          @default(now()) @map("created_at")
-  updatedAt        DateTime          @updatedAt @map("updated_at")
-  memberships      Membership[]
-  contacts         Contact[]
-  pipelines        Pipeline[]
-  deals            Deal[]
-  activities       ActivityEvent[]
-  contactRelations ContactRelation[]
-  tasks            Task[]
-  properties       Property[]
+  id                     String                  @id @default(uuid()) @db.Uuid
+  name                   String
+  slug                   String                  @unique
+  timezone               String                  @default("Europe/Madrid")
+  locale                 String                  @default("ru")
+  createdAt              DateTime                @default(now()) @map("created_at")
+  updatedAt              DateTime                @updatedAt @map("updated_at")
+  memberships            Membership[]
+  contacts               Contact[]
+  pipelines              Pipeline[]
+  deals                  Deal[]
+  activities             ActivityEvent[]
+  contactRelations       ContactRelation[]
+  tasks                  Task[]
+  properties             Property[]
+  integrationConnections IntegrationConnection[]
+  integrationEvents      IntegrationEvent[]
+  notificationOutbox     NotificationOutbox[]
 
   @@map("organizations")
 }
@@ -125,26 +157,27 @@ model User {
 }
 
 model Contact {
-  id              String               @id @default(uuid()) @db.Uuid
-  organizationId  String               @map("organization_id") @db.Uuid
-  name            String
-  phone           String?
-  normalizedPhone String?              @map("normalized_phone")
-  email           String?
-  telegram        String?
-  source          ContactSource        @default(MANUAL)
-  assigneeId      String?              @map("assignee_id") @db.Uuid
-  comment         String?
-  createdAt       DateTime             @default(now()) @map("created_at")
-  updatedAt       DateTime             @updatedAt @map("updated_at")
-  organization    Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  assignee        User?                @relation("ContactAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  deals           Deal[]
-  relatedDeals    DealRelatedContact[]
-  relationsAsA    ContactRelation[]    @relation("ContactRelationA")
-  relationsAsB    ContactRelation[]    @relation("ContactRelationB")
-  activities      ActivityEvent[]
-  tasks           Task[]
+  id                String               @id @default(uuid()) @db.Uuid
+  organizationId    String               @map("organization_id") @db.Uuid
+  name              String
+  phone             String?
+  normalizedPhone   String?              @map("normalized_phone")
+  email             String?
+  telegram          String?
+  source            ContactSource        @default(MANUAL)
+  assigneeId        String?              @map("assignee_id") @db.Uuid
+  comment           String?
+  createdAt         DateTime             @default(now()) @map("created_at")
+  updatedAt         DateTime             @updatedAt @map("updated_at")
+  organization      Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignee          User?                @relation("ContactAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  deals             Deal[]
+  relatedDeals      DealRelatedContact[]
+  relationsAsA      ContactRelation[]    @relation("ContactRelationA")
+  relationsAsB      ContactRelation[]    @relation("ContactRelationB")
+  activities        ActivityEvent[]
+  tasks             Task[]
+  integrationEvents IntegrationEvent[]
 
   @@index([organizationId, createdAt])
   @@index([organizationId, normalizedPhone])
@@ -170,30 +203,32 @@ model ContactRelation {
 }
 
 model Pipeline {
-  id             String          @id @default(uuid()) @db.Uuid
-  organizationId String          @map("organization_id") @db.Uuid
-  name           String
-  isDefault      Boolean         @default(false) @map("is_default")
-  createdAt      DateTime        @default(now()) @map("created_at")
-  updatedAt      DateTime        @updatedAt @map("updated_at")
-  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  stages         PipelineStage[]
-  deals          Deal[]
+  id                     String                  @id @default(uuid()) @db.Uuid
+  organizationId         String                  @map("organization_id") @db.Uuid
+  name                   String
+  isDefault              Boolean                 @default(false) @map("is_default")
+  createdAt              DateTime                @default(now()) @map("created_at")
+  updatedAt              DateTime                @updatedAt @map("updated_at")
+  organization           Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  stages                 PipelineStage[]
+  deals                  Deal[]
+  integrationConnections IntegrationConnection[]
 
   @@index([organizationId])
   @@map("pipelines")
 }
 
 model PipelineStage {
-  id         String   @id @default(uuid()) @db.Uuid
-  pipelineId String   @map("pipeline_id") @db.Uuid
-  title      String
-  color      String
-  position   Int
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
-  pipeline   Pipeline @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
-  deals      Deal[]
+  id                     String                  @id @default(uuid()) @db.Uuid
+  pipelineId             String                  @map("pipeline_id") @db.Uuid
+  title                  String
+  color                  String
+  position               Int
+  createdAt              DateTime                @default(now()) @map("created_at")
+  updatedAt              DateTime                @updatedAt @map("updated_at")
+  pipeline               Pipeline                @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  deals                  Deal[]
+  integrationConnections IntegrationConnection[]
 
   @@unique([pipelineId, position])
   @@index([pipelineId])
@@ -201,35 +236,36 @@ model PipelineStage {
 }
 
 model Deal {
-  id              String               @id @default(uuid()) @db.Uuid
-  number          Int                  @default(autoincrement())
-  organizationId  String               @map("organization_id") @db.Uuid
-  pipelineId      String               @map("pipeline_id") @db.Uuid
-  stageId         String               @map("stage_id") @db.Uuid
-  contactId       String               @map("contact_id") @db.Uuid
-  assigneeId      String?              @map("assignee_id") @db.Uuid
-  title           String
-  request         String
-  budget          String?
-  comment         String?
-  operation       DealOperation        @default(PURCHASE)
-  propertyType    String?              @map("property_type")
-  district        String?
-  rooms           String?
-  source          ContactSource        @default(MANUAL)
-  status          DealStatus           @default(ACTIVE)
-  position        Int                  @default(0)
-  closedAt        DateTime?            @map("closed_at")
-  createdAt       DateTime             @default(now()) @map("created_at")
-  updatedAt       DateTime             @updatedAt @map("updated_at")
-  organization    Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  pipeline        Pipeline             @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
-  stage           PipelineStage        @relation(fields: [stageId], references: [id], onDelete: Restrict)
-  contact         Contact              @relation(fields: [contactId], references: [id], onDelete: Restrict)
-  assignee        User?                @relation("DealAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  activities      ActivityEvent[]
-  relatedContacts DealRelatedContact[]
-  tasks           Task[]
+  id                String               @id @default(uuid()) @db.Uuid
+  number            Int                  @default(autoincrement())
+  organizationId    String               @map("organization_id") @db.Uuid
+  pipelineId        String               @map("pipeline_id") @db.Uuid
+  stageId           String               @map("stage_id") @db.Uuid
+  contactId         String               @map("contact_id") @db.Uuid
+  assigneeId        String?              @map("assignee_id") @db.Uuid
+  title             String
+  request           String
+  budget            String?
+  comment           String?
+  operation         DealOperation        @default(PURCHASE)
+  propertyType      String?              @map("property_type")
+  district          String?
+  rooms             String?
+  source            ContactSource        @default(MANUAL)
+  status            DealStatus           @default(ACTIVE)
+  position          Int                  @default(0)
+  closedAt          DateTime?            @map("closed_at")
+  createdAt         DateTime             @default(now()) @map("created_at")
+  updatedAt         DateTime             @updatedAt @map("updated_at")
+  organization      Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pipeline          Pipeline             @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  stage             PipelineStage        @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  contact           Contact              @relation(fields: [contactId], references: [id], onDelete: Restrict)
+  assignee          User?                @relation("DealAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  activities        ActivityEvent[]
+  relatedContacts   DealRelatedContact[]
+  tasks             Task[]
+  integrationEvents IntegrationEvent[]
 
   @@unique([organizationId, number])
   @@index([pipelineId, status, stageId, position])
@@ -269,6 +305,75 @@ model ActivityEvent {
   @@index([contactId, createdAt])
   @@index([dealId, createdAt])
   @@map("activity_events")
+}
+
+model IntegrationConnection {
+  id             String                      @id @default(uuid()) @db.Uuid
+  organizationId String                      @map("organization_id") @db.Uuid
+  provider       IntegrationProvider
+  status         IntegrationConnectionStatus @default(CREDENTIALS_REQUIRED)
+  enabled        Boolean                     @default(false)
+  pipelineId     String?                     @map("pipeline_id") @db.Uuid
+  stageId        String?                     @map("stage_id") @db.Uuid
+  config         Json?
+  lastEventAt    DateTime?                   @map("last_event_at")
+  lastError      String?                     @map("last_error")
+  createdAt      DateTime                    @default(now()) @map("created_at")
+  updatedAt      DateTime                    @updatedAt @map("updated_at")
+  organization   Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pipeline       Pipeline?                   @relation(fields: [pipelineId], references: [id], onDelete: SetNull)
+  stage          PipelineStage?              @relation(fields: [stageId], references: [id], onDelete: SetNull)
+  events         IntegrationEvent[]
+
+  @@unique([organizationId, provider])
+  @@index([organizationId, status])
+  @@map("integration_connections")
+}
+
+model IntegrationEvent {
+  id             String                 @id @default(uuid()) @db.Uuid
+  organizationId String                 @map("organization_id") @db.Uuid
+  connectionId   String?                @map("connection_id") @db.Uuid
+  provider       IntegrationProvider
+  externalId     String                 @map("external_id")
+  eventType      String                 @map("event_type")
+  payload        Json
+  status         IntegrationEventStatus @default(RECEIVED)
+  contactId      String?                @map("contact_id") @db.Uuid
+  dealId         String?                @map("deal_id") @db.Uuid
+  error          String?
+  receivedAt     DateTime               @default(now()) @map("received_at")
+  processedAt    DateTime?              @map("processed_at")
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  connection     IntegrationConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+  contact        Contact?               @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  deal           Deal?                  @relation(fields: [dealId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, provider, externalId])
+  @@index([organizationId, receivedAt])
+  @@index([dealId, receivedAt])
+  @@map("integration_events")
+}
+
+model NotificationOutbox {
+  id             String                   @id @default(uuid()) @db.Uuid
+  organizationId String                   @map("organization_id") @db.Uuid
+  channel        IntegrationProvider      @default(TELEGRAM)
+  eventType      String                   @map("event_type")
+  title          String
+  body           String
+  actionUrl      String?                  @map("action_url")
+  payload        Json?
+  status         NotificationOutboxStatus @default(PENDING)
+  attempts       Int                      @default(0)
+  nextAttemptAt  DateTime?                @map("next_attempt_at")
+  lastError      String?                  @map("last_error")
+  createdAt      DateTime                 @default(now()) @map("created_at")
+  sentAt         DateTime?                @map("sent_at")
+  organization   Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status, createdAt])
+  @@map("notification_outbox")
 }
 
 model Task {

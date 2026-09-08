@@ -1,114 +1,72 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import styles from "./integrations.module.css";
 
-type Category = "Все" | "Реклама" | "Мессенджеры" | "Телефония" | "Данные" | "AI";
-type Availability = "Доступно" | "Pro" | "Платно" | "Через специалиста" | "Скоро";
+type IntegrationProvider = "TEST" | "META_LEAD_ADS" | "INSTAGRAM_DIRECT" | "TELEPHONY" | "TELEGRAM";
+type IntegrationConnectionRecord = { provider: IntegrationProvider; status: "READY" | "CREDENTIALS_REQUIRED" | "CONNECTED" | "ERROR"; enabled: boolean; pipelineId: string | null; stageId: string | null; lastEventAt: string | null; lastError: string | null; processedCount: number };
+type IntegrationEventRecord = { id: string; provider: IntegrationProvider; contactName: string | null; dealNumber: number | null; receivedAt: string };
+type IntegrationsResponse = { connections: IntegrationConnectionRecord[]; events: IntegrationEventRecord[]; pendingNotifications: number };
+type InboundLeadResult = { dealNumber: number; duplicate: boolean; reusedDeal: boolean };
 
-type Integration = {
-  id: string;
-  name: string;
-  category: Exclude<Category, "Все">;
-  description: string;
-  mark: string;
-  brand: string;
-  availability: Availability;
-  connected?: boolean;
-  featured?: boolean;
-  activity?: string;
-};
-
-const categories: Category[] = ["Все", "Реклама", "Мессенджеры", "Телефония", "Данные", "AI"];
-
-const initialIntegrations: Integration[] = [
-  { id: "facebook", name: "Facebook Lead Ads", category: "Реклама", description: "Лид-формы автоматически создают контакты и сделки.", mark: "f", brand: "facebook", availability: "Доступно", connected: true, featured: true, activity: "12 лидов сегодня" },
-  { id: "instagram", name: "Instagram", category: "Реклама", description: "Обращения из Direct и рекламных форм Meta.", mark: "◎", brand: "instagram", availability: "Доступно", connected: true, activity: "Синхронизация 4 мин назад" },
-  { id: "google", name: "Google Ads", category: "Реклама", description: "Импорт лидов и передача статусов конверсий.", mark: "G", brand: "google", availability: "Pro", featured: true },
-  { id: "tiktok", name: "TikTok Lead Generation", category: "Реклама", description: "Новые лиды из рекламных форм TikTok.", mark: "♪", brand: "tiktok", availability: "Pro" },
-  { id: "telegram", name: "Telegram", category: "Мессенджеры", description: "Боты, входящие чаты и уведомления менеджерам.", mark: "➤", brand: "telegram", availability: "Доступно", connected: true, featured: true, activity: "3 диалога сегодня" },
-  { id: "whatsapp", name: "WhatsApp Business", category: "Мессенджеры", description: "Диалоги с клиентами прямо из карточки сделки.", mark: "◔", brand: "whatsapp", availability: "Платно" },
-  { id: "gmail", name: "Gmail", category: "Мессенджеры", description: "История переписки в контактах и сделках.", mark: "M", brand: "gmail", availability: "Скоро" },
-  { id: "telephony", name: "Телефония", category: "Телефония", description: "Фиксация входящих, записи звонков и источники номеров.", mark: "☎", brand: "phone", availability: "Через специалиста", featured: true },
-  { id: "binotel", name: "Binotel", category: "Телефония", description: "Звонки, пропущенные и запись разговоров.", mark: "B", brand: "binotel", availability: "Платно" },
-  { id: "via", name: "Via AI", category: "AI", description: "Квалификация обращений и умное заполнение CRM.", mark: "V", brand: "via", availability: "Pro", featured: true },
-  { id: "postgres", name: "PostgreSQL", category: "Данные", description: "Синхронизация с собственной клиентской базой.", mark: "P", brand: "postgres", availability: "Через специалиста" },
-  { id: "webhook", name: "Webhooks", category: "Данные", description: "События CRM для ваших сервисов в реальном времени.", mark: "↗", brand: "webhook", availability: "Pro" },
-  { id: "json", name: "JSON API", category: "Данные", description: "Собственные сценарии обмена через REST API.", mark: "{ }", brand: "json", availability: "Pro" },
-  { id: "csv", name: "CSV / Excel", category: "Данные", description: "Импорт контактов, объектов и сделок из файла.", mark: "CSV", brand: "csv", availability: "Доступно" },
-  { id: "notion", name: "Notion", category: "Данные", description: "Обмен объектами и внутренними базами команды.", mark: "N", brand: "notion", availability: "Скоро" },
+type Category = "Все" | "Реклама" | "Мессенджеры" | "Телефония" | "Данные";
+type Integration = { id: string; provider?: IntegrationProvider; name: string; category: Exclude<Category, "Все">; description: string; mark: string; brand: string; available: boolean };
+const categories: Category[] = ["Все", "Реклама", "Мессенджеры", "Телефония", "Данные"];
+const integrations: Integration[] = [
+  { id: "facebook", provider: "META_LEAD_ADS", name: "Facebook Lead Ads", category: "Реклама", description: "Лиды из форм Meta поступают в единый входящий шлюз.", mark: "f", brand: "facebook", available: false },
+  { id: "instagram", provider: "INSTAGRAM_DIRECT", name: "Instagram Direct", category: "Мессенджеры", description: "Будущий адаптер обращений из Direct без привязки ядра CRM к Meta.", mark: "◎", brand: "instagram", available: false },
+  { id: "telephony", provider: "TELEPHONY", name: "Телефония", category: "Телефония", description: "Единый адаптер для входящих и пропущенных звонков.", mark: "☎", brand: "phone", available: false },
+  { id: "telegram", provider: "TELEGRAM", name: "Telegram", category: "Мессенджеры", description: "Транспорт уведомлений менеджерам из очереди CRM.", mark: "➤", brand: "telegram", available: false },
+  { id: "test", provider: "TEST", name: "Тестовый шлюз", category: "Данные", description: "Проверка полного маршрута лида без внешних аккаунтов и ключей.", mark: "↗", brand: "webhook", available: true },
+  { id: "csv", name: "CSV / Excel", category: "Данные", description: "Импорт и экспорт сделок из файлов.", mark: "CSV", brand: "csv", available: true },
 ];
+const providerNames: Record<IntegrationProvider, string> = { TEST: "Тестовый шлюз", META_LEAD_ADS: "Facebook Lead Ads", INSTAGRAM_DIRECT: "Instagram Direct", TELEPHONY: "Телефония", TELEGRAM: "Telegram" };
 
 export function IntegrationsMarketplace() {
-  const [integrations, setIntegrations] = useState(initialIntegrations);
-  const [category, setCategory] = useState<Category>("Все");
-  const [query, setQuery] = useState("");
-  const [installedOnly, setInstalledOnly] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const selected = integrations.find((item) => item.id === selectedId) || null;
+  const [data, setData] = useState<IntegrationsResponse | null>(null);
+  const [loading, setLoading] = useState(true); const [error, setError] = useState("");
+  const [category, setCategory] = useState<Category>("Все"); const [query, setQuery] = useState(""); const [selectedId, setSelectedId] = useState<string | null>(null);
+  const load = useCallback(async () => { try { const response = await fetch("/api/crm/integrations", { cache: "no-store" }); if (!response.ok) throw new Error("Не удалось загрузить состояние интеграций."); setData(await response.json() as IntegrationsResponse); setError(""); } catch (caught) { setError(caught instanceof Error ? caught.message : "Не удалось загрузить интеграции."); } finally { setLoading(false); } }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch("/api/crm/integrations", { cache: "no-store", signal: controller.signal })
+      .then(async (response) => { if (!response.ok) throw new Error("Не удалось загрузить состояние интеграций."); setData(await response.json() as IntegrationsResponse); setError(""); })
+      .catch((caught: unknown) => { if (!controller.signal.aborted) setError(caught instanceof Error ? caught.message : "Не удалось загрузить интеграции."); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, []);
+  const states = useMemo(() => new Map(data?.connections.map((item) => [item.provider, item]) ?? []), [data]);
+  const visible = useMemo(() => { const normalized = query.trim().toLocaleLowerCase("ru"); return integrations.filter((item) => (category === "Все" || item.category === category) && (!normalized || `${item.name} ${item.description}`.toLocaleLowerCase("ru").includes(normalized))); }, [category, query]);
+  const selected = integrations.find((item) => item.id === selectedId) ?? null;
+  const connected = data?.connections.filter((item) => item.status === "CONNECTED").length ?? 0;
+  const processed = data?.connections.reduce((sum, item) => sum + item.processedCount, 0) ?? 0;
 
-  const visible = useMemo(() => {
-    const normalized = query.trim().toLocaleLowerCase("ru");
-    return integrations.filter((item) => (category === "Все" || item.category === category) && (!installedOnly || item.connected) && (!normalized || `${item.name} ${item.description} ${item.category}`.toLocaleLowerCase("ru").includes(normalized)));
-  }, [category, installedOnly, integrations, query]);
-
-  const connected = integrations.filter((item) => item.connected);
-
-  function toggleConnection(id: string) {
-    setIntegrations((current) => current.map((item) => item.id === id ? { ...item, connected: !item.connected, activity: item.connected ? undefined : "Подключено только что" } : item));
-  }
-
-  return (
-    <section className={styles.page}>
-      <header className={styles.topbar}>
-        <h1>Интеграции</h1>
-        <label className={styles.topSearch}><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Найти интеграцию" /></label>
-        <button className={styles.webhookButton} type="button" onClick={() => setSelectedId("webhook")}>Webhooks</button>
-        <button className={styles.primaryButton} type="button" onClick={() => setSelectedId("json")}>＋ Своя интеграция</button>
-      </header>
-
-      <main className={styles.content}>
-        <section className={styles.hero}>
-          <div className={styles.heroCopy}><span className={styles.eyebrow}>Центр подключений</span><h2>Все каналы — в одной CRM</h2><p>Получайте лиды, отвечайте клиентам и синхронизируйте данные без ручного переноса.</p><button type="button" onClick={() => { setCategory("Все"); setInstalledOnly(false); document.getElementById("catalog")?.scrollIntoView({ behavior: "smooth" }); }}>Смотреть каталог <span>→</span></button></div>
-          <div className={styles.heroVisual} aria-hidden="true"><span className={`${styles.heroTile} ${styles.facebook}`}>f<small>Lead Ads</small></span><span className={`${styles.heroTile} ${styles.telegram}`}>➤<small>Telegram</small></span><span className={`${styles.heroTile} ${styles.via}`}>V<small>Via AI</small></span><i className={styles.connectorOne} /><i className={styles.connectorTwo} /><span className={styles.crmNode}>E<small>Estate CRM</small></span></div>
-        </section>
-
-        <section className={styles.statusStrip}>
-          <div><strong>{connected.length}</strong><span>подключено</span></div><div><strong>15</strong><span>обращений сегодня</span></div><div><strong>4 мин</strong><span>назад синхронизация</span></div><div className={styles.healthy}><strong>●</strong><span>Все системы работают</span></div>
-        </section>
-
-        <section className={styles.connectedSection}>
-          <header><div><span className={styles.eyebrow}>Работают сейчас</span><h3>Подключённые интеграции</h3></div><button type="button" onClick={() => setInstalledOnly(true)}>Управлять всеми →</button></header>
-          <div className={styles.connectedList}>{connected.map((item) => <button type="button" onClick={() => setSelectedId(item.id)} key={item.id}><BrandMark item={item} /><span><strong>{item.name}</strong><small>{item.activity}</small></span><i>Подключено</i><b>›</b></button>)}</div>
-        </section>
-
-        <section className={styles.catalog} id="catalog">
-          <header><div><span className={styles.eyebrow}>Marketplace</span><h3>Доступные интеграции</h3><p>Расширяйте CRM по мере роста команды.</p></div><span>{visible.length} решений</span></header>
-          <div className={styles.controls}>
-            <label className={styles.catalogSearch}><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Поиск по каталогу" /></label>
-            <nav>{categories.map((item) => <button className={category === item ? styles.activeCategory : ""} type="button" onClick={() => { setCategory(item); setInstalledOnly(false); }} key={item}>{item}</button>)}</nav>
-            <button className={installedOnly ? styles.installedActive : ""} type="button" onClick={() => setInstalledOnly((value) => !value)}>✓ Подключённые</button>
-          </div>
-          {visible.length ? <div className={styles.marketGrid}>{visible.map((item) => <button className={styles.marketCard} type="button" onClick={() => setSelectedId(item.id)} key={item.id}><div className={`${styles.cardArt} ${styles[item.brand]}`}><BrandMark item={item} /><span>{item.category}</span></div><div className={styles.cardBody}><span><strong>{item.name}</strong>{item.connected && <i>✓</i>}</span><p>{item.description}</p><footer><AvailabilityBadge value={item.connected ? "Доступно" : item.availability} connected={item.connected} /><b>{item.connected ? "Настроить" : item.availability === "Скоро" ? "Подробнее" : "Подключить"} →</b></footer></div></button>)}</div> : <div className={styles.empty}><strong>Ничего не найдено</strong><span>Попробуйте изменить категорию или запрос.</span><button type="button" onClick={() => { setQuery(""); setCategory("Все"); setInstalledOnly(false); }}>Сбросить фильтры</button></div>}
-        </section>
-      </main>
-
-      {selected && <IntegrationPanel item={selected} onToggle={() => toggleConnection(selected.id)} onClose={() => setSelectedId(null)} />}
-    </section>
-  );
+  return <section className={styles.page}>
+    <header className={styles.topbar}><h1>Интеграции</h1><label className={styles.topSearch}><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Найти интеграцию" /></label><button className={styles.primaryButton} type="button" onClick={() => setSelectedId("test")}>＋ Тестовый лид</button></header>
+    <main className={styles.content}>
+      <section className={styles.hero}><div className={styles.heroCopy}><span className={styles.eyebrow}>Интеграционный шлюз</span><h2>Каналы подключаются как модули</h2><p>CRM отделяет приём обращения, обработку лида и доставку уведомлений. Внешние доступы подключаются следующим слоем.</p><button type="button" onClick={() => setSelectedId("test")}>Проверить маршрут <span>→</span></button></div><div className={styles.heroVisual} aria-hidden="true"><span className={`${styles.heroTile} ${styles.facebook}`}>f<small>Lead Ads</small></span><span className={`${styles.heroTile} ${styles.telegram}`}>➤<small>Telegram</small></span><i className={styles.connectorOne} /><i className={styles.connectorTwo} /><span className={styles.crmNode}>E<small>Estate CRM</small></span></div></section>
+      <section className={styles.statusStrip}><div><strong>{connected}</strong><span>реально подключено</span></div><div><strong>{processed}</strong><span>обращений обработано</span></div><div><strong>{data?.pendingNotifications ?? 0}</strong><span>уведомлений в очереди</span></div><div className={error ? "" : styles.healthy}><strong>{loading ? "…" : error ? "!" : "●"}</strong><span>{loading ? "Проверяем состояние" : error || "Ядро работает"}</span></div></section>
+      <section className={styles.catalog}><header><div><span className={styles.eyebrow}>Модули</span><h3>Интеграции CRM</h3><p>Статусы ниже приходят из базы, а не из макета.</p></div><span>{visible.length} решений</span></header><div className={styles.controls}><label className={styles.catalogSearch}><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Поиск" /></label><nav>{categories.map((item) => <button className={category === item ? styles.activeCategory : ""} type="button" onClick={() => setCategory(item)} key={item}>{item}</button>)}</nav></div>
+        <div className={styles.marketGrid}>{visible.map((item) => { const state = item.provider ? states.get(item.provider) : undefined; const ready = state?.status === "READY" || state?.status === "CONNECTED"; return <button className={styles.marketCard} type="button" onClick={() => setSelectedId(item.id)} key={item.id}><div className={`${styles.cardArt} ${styles[item.brand]}`}><BrandMark item={item} /><span>{item.category}</span></div><div className={styles.cardBody}><span><strong>{item.name}</strong>{ready && <i>✓</i>}</span><p>{item.description}</p><footer><StatusBadge item={item} state={state} /><b>Открыть →</b></footer></div></button>; })}</div>
+      </section>
+      {data?.events.length ? <section className={styles.syncLog}><h3>Последние входящие события</h3>{data.events.slice(0, 8).map((event) => <div key={event.id}><span><strong>{providerNames[event.provider]}</strong> · {event.contactName ?? "Контакт"}{event.dealNumber ? ` · сделка #${event.dealNumber}` : ""}</span><time>{new Date(event.receivedAt).toLocaleString("ru")}</time></div>)}</section> : null}
+    </main>
+    {selected && <IntegrationPanel item={selected} state={selected.provider ? states.get(selected.provider) : undefined} onCreated={load} onClose={() => setSelectedId(null)} />}
+  </section>;
 }
 
-function BrandMark({ item }: { item: Integration }) {
-  return <span className={`${styles.brandMark} ${styles[item.brand]}`}>{item.mark}</span>;
-}
+function BrandMark({ item }: { item: Integration }) { return <span className={`${styles.brandMark} ${styles[item.brand]}`}>{item.mark}</span>; }
+function StatusBadge({ item, state }: { item: Integration; state?: IntegrationConnectionRecord }) { const ready = state?.status === "READY" || state?.status === "CONNECTED"; const label = state?.status === "CONNECTED" ? "● Подключено" : state?.status === "READY" ? "● Готово" : item.available ? "Доступно" : "Нужны доступы"; return <span className={`${styles.availability} ${ready ? styles.connectedBadge : styles.expertBadge}`}>{label}</span>; }
 
-function AvailabilityBadge({ value, connected = false }: { value: Availability; connected?: boolean }) {
-  return <span className={`${styles.availability} ${connected ? styles.connectedBadge : value === "Pro" ? styles.proBadge : value === "Платно" ? styles.paidBadge : value === "Через специалиста" ? styles.expertBadge : value === "Скоро" ? styles.soonBadge : ""}`}>{connected ? "● Подключено" : value}</span>;
-}
-
-function IntegrationPanel({ item, onToggle, onClose }: { item: Integration; onToggle: () => void; onClose: () => void }) {
-  const canConnect = item.availability !== "Скоро";
-  const bodyRef = useRef<HTMLDivElement>(null);
-  useEffect(() => { bodyRef.current?.scrollTo({ top: 0 }); }, [item.id]);
-  return <div className={styles.panelLayer}><button className={styles.backdrop} type="button" aria-label="Закрыть" onClick={onClose} /><aside className={styles.panel}><header><BrandMark item={item} /><span><small>{item.category}</small><h2>{item.name}</h2></span><button type="button" aria-label="Закрыть" onClick={onClose}>×</button></header><div className={styles.panelBody} ref={bodyRef}><AvailabilityBadge value={item.availability} connected={item.connected} /><p>{item.description}</p>{item.connected ? <><section className={styles.connectionState}><span><i>✓</i><strong>Интеграция работает</strong></span><small>{item.activity || "Синхронизация активна"}</small></section><section className={styles.settings}><h3>Настройки потока</h3><label><span><strong>Создавать новую сделку</strong><small>Для каждого нового обращения</small></span><input type="checkbox" defaultChecked /></label><label><span><strong>Ответственный</strong><small>Кому назначать новые обращения</small></span><select defaultValue="auto"><option value="auto">По очереди</option><option>Георгий</option><option>Елена</option><option>Андрей</option></select></label><label><span><strong>Воронка</strong><small>Первый этап для новых сделок</small></span><select><option>Продажа недвижимости</option></select></label></section><section className={styles.syncLog}><h3>Последние события</h3><div><span>Синхронизация выполнена</span><time>4 минуты назад</time></div><div><span>Получено новое обращение</span><time>Сегодня, 12:46</time></div></section></> : <section className={styles.installInfo}><h3>{item.availability === "Скоро" ? "Готовим интеграцию" : item.availability === "Через специалиста" ? "Подключение со специалистом" : "Готово к подключению"}</h3><p>{item.availability === "Через специалиста" ? "Специалист уточнит схему данных, номера или доступы и настроит безопасный обмен." : item.availability === "Скоро" ? "Оставьте интерес — сообщим, когда подключение станет доступно." : "Авторизуйтесь в сервисе и выберите правила создания новых обращений."}</p><div><span>○ Авторизация</span><span>○ Настройка потока</span><span>○ Тестовое обращение</span></div></section>}</div><footer>{item.connected && <button className={styles.disconnect} type="button" onClick={onToggle}>Отключить</button>}<button className={styles.panelPrimary} type="button" disabled={!canConnect} onClick={item.connected ? onClose : canConnect ? onToggle : undefined}>{item.connected ? "Сохранить настройки" : item.availability === "Через специалиста" ? "Запросить подключение" : item.availability === "Скоро" ? "Скоро" : "Подключить"}</button></footer></aside></div>;
+function IntegrationPanel({ item, state, onCreated, onClose }: { item: Integration; state?: IntegrationConnectionRecord; onCreated: () => Promise<void>; onClose: () => void }) {
+  const [provider, setProvider] = useState<"TEST" | "META_LEAD_ADS" | "INSTAGRAM_DIRECT" | "TELEPHONY">(item.provider && item.provider !== "TELEGRAM" ? item.provider : "TEST");
+  const [name, setName] = useState(""); const [phone, setPhone] = useState(""); const [message, setMessage] = useState(""); const [busy, setBusy] = useState(false); const [feedback, setFeedback] = useState("");
+  async function submit(event: React.FormEvent) { event.preventDefault(); setBusy(true); setFeedback(""); try { const response = await fetch("/api/crm/integrations/test-lead", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ provider, name, phone, message }) }); const payload = await response.json() as { result?: InboundLeadResult; message?: string }; if (!response.ok || !payload.result) throw new Error(payload.message || "Не удалось обработать тестовый лид."); setFeedback(payload.result.duplicate ? `Дубль события: сделка #${payload.result.dealNumber} не продублирована.` : `${payload.result.reusedDeal ? "Повторное обращение записано" : "Новая сделка создана"}: #${payload.result.dealNumber}. Уведомление поставлено в очередь.`); await onCreated(); } catch (caught) { setFeedback(caught instanceof Error ? caught.message : "Ошибка обработки."); } finally { setBusy(false); } }
+  const canTest = item.provider !== "TELEGRAM" && item.id !== "csv";
+  return <div className={styles.panelLayer}><button className={styles.backdrop} type="button" aria-label="Закрыть" onClick={onClose} /><aside className={styles.panel}><header><BrandMark item={item} /><span><small>{item.category}</small><h2>{item.name}</h2></span><button type="button" aria-label="Закрыть" onClick={onClose}>×</button></header><div className={styles.panelBody}><StatusBadge item={item} state={state} /><p>{item.description}</p>
+    {state?.lastEventAt && <section className={styles.connectionState}><span><i>✓</i><strong>Последнее событие обработано</strong></span><small>{new Date(state.lastEventAt).toLocaleString("ru")}</small></section>}
+    {!item.available && <section className={styles.installInfo}><h3>Адаптер подготовлен</h3><p>Ядро CRM готово принять данные канала. Для реального подключения позже потребуются реквизиты провайдера; сейчас сервис честно не отмечен подключённым.</p><div><span>✓ Единая обработка лида</span><span>✓ Защита от дублей</span><span>✓ Очередь уведомлений</span><span>○ Внешние реквизиты</span></div></section>}
+    {canTest && <form className={styles.testForm} onSubmit={submit}><h3>Проверить входящий маршрут</h3><label><span>Источник события</span><select value={provider} onChange={(event) => setProvider(event.target.value as typeof provider)}><option value="TEST">Тестовый шлюз</option><option value="META_LEAD_ADS">Facebook Lead Ads</option><option value="INSTAGRAM_DIRECT">Instagram Direct</option><option value="TELEPHONY">Телефония</option></select></label><label><span>Имя</span><input required value={name} onChange={(event) => setName(event.target.value)} placeholder="Тестовый клиент" /></label><label><span>Телефон</span><input required inputMode="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+380 63 123 45 67" /></label><label><span>Запрос</span><textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Интересуется покупкой квартиры" /></label>{feedback && <p className={styles.formFeedback}>{feedback}</p>}<button className={styles.panelPrimary} disabled={busy} type="submit">{busy ? "Обрабатываем…" : "Отправить тестовый лид"}</button></form>}
+    {item.id === "csv" && <section className={styles.installInfo}><h3>Файловый обмен уже находится в воронке</h3><p>Импорт и экспорт CSV/XLSX запускаются из меню воронки и не требуют внешней авторизации.</p></section>}
+  </div></aside></div>;
 }

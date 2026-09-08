@@ -138,6 +138,14 @@
 .disconnect { margin-right: auto; border: 0; background: transparent; color: #c24e52; }
 .panelPrimary { border: 0; background: var(--primary); color: #fff; font-weight: var(--font-weight-semibold); }
 .panelPrimary:disabled { background: #d6d8d4; cursor: default; }
+.testForm { display: grid; gap: 14px; margin-top: 30px; padding-top: 26px; border-top: 1px solid var(--border); }
+.testForm h3 { margin: 0 0 4px; font-size: var(--font-size-body); }
+.testForm label { display: grid; gap: 7px; color: var(--text-muted); font-size: var(--font-size-caption); }
+.testForm input, .testForm select, .testForm textarea { width: 100%; min-height: 42px; padding: 9px 11px; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: #fff; color: var(--text); font: inherit; }
+.testForm textarea { min-height: 90px; resize: vertical; }
+.testForm input:focus, .testForm select:focus, .testForm textarea:focus { border-color: #a9bfe9; outline: 0; box-shadow: var(--shadow-focus); }
+.testForm .panelPrimary { justify-self: start; min-height: var(--control-height); padding: 0 16px; border: 0; border-radius: var(--radius-md); }
+.formFeedback { margin: 0 !important; padding: 12px; border-radius: var(--radius-md); background: #eef3fb; color: #3d557d !important; font-size: var(--font-size-caption); }
 
 @media (max-width: 1120px) {
   .marketGrid { grid-template-columns: repeat(3,minmax(0,1fr)); }
