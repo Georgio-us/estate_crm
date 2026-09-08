@@ -181,6 +181,9 @@
 .field input, .field select { height: 38px; padding: 0 9px; }
 .field textarea { min-height: 76px; padding: 9px; resize: vertical; }
 .field input:focus, .field select:focus, .field textarea:focus { border-color: #a9bee7; background: #fff; box-shadow: var(--shadow-focus); }
+.field input[aria-invalid="true"] { border-color: #cf6c6c; background: #fffafa; box-shadow: 0 0 0 3px rgba(196, 74, 74, 0.09); }
+.fieldInvalid > span { color: #9f4545; }
+.field > .fieldError { color: #b23d3d; font-size: var(--font-size-caption); line-height: 1.35; }
 .modalError { margin: 0; color: #a33b3b; font-size: var(--font-size-caption); }
 .formGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .modal > footer { display: flex; min-height: 65px; align-items: center; justify-content: space-between; gap: 14px; padding: 11px 24px; border-top: 1px solid var(--border); background: #fbfbfa; }

@@ -41,6 +41,9 @@
 .body input:focus,
 .body select:focus,
 .body textarea:focus { border-color: #a9bee7; background: #fff; box-shadow: var(--shadow-focus); }
+.body input[aria-invalid="true"] { border-color: #cf6c6c; background: #fffafa; box-shadow: 0 0 0 3px rgba(196, 74, 74, 0.09); }
+.body label > .fieldError { color: #b23d3d; font-size: var(--font-size-caption); line-height: 1.35; }
+.fieldInvalid > span { color: #9f4545 !important; }
 .primaryField input { height: 44px; background: #fff; font-size: var(--font-size-body); }
 .twoColumns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 

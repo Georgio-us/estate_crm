@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Deal } from "@/types/crm";
-import { isValidPhone } from "@/lib/phone";
+import { formatPhoneInput, isValidPhone } from "@/lib/phone";
 import styles from "./contacts.module.css";
 
 export interface NewContactDraft { name: string; phone: string; email: string; telegram: string; source: Deal["source"]; assigneeId: string; comment: string; }
@@ -9,14 +9,17 @@ export function NewContactModal({ onCreate, onClose, assignees }: { onCreate: (d
   const [draft, setDraft] = useState<NewContactDraft>({ name: "", phone: "", email: "", telegram: "", source: "Manual", assigneeId: "", comment: "" });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [phoneError, setPhoneError] = useState("");
   const update = (patch: Partial<NewContactDraft>) => setDraft((current) => ({ ...current, ...patch }));
 
   async function submit() {
     if (!draft.name.trim() || isSubmitting) return;
     if (!isValidPhone(draft.phone)) {
-      setError("Введите корректный номер телефона.");
+      setPhoneError("Введите корректный номер телефона.");
+      setError("");
       return;
     }
+    setPhoneError("");
     setError("");
     setIsSubmitting(true);
     try {
@@ -34,7 +37,7 @@ export function NewContactModal({ onCreate, onClose, assignees }: { onCreate: (d
         <header><div><span>Новый контакт</span><h2>Добавить человека или компанию</h2></div><button type="button" onClick={onClose} aria-label="Закрыть">×</button></header>
         <div className={styles.modalBody}>
           <Field label="Имя или название" required><input autoFocus aria-label="Имя или название" value={draft.name} onChange={(event) => update({ name: event.target.value })} placeholder="Например, Мария Иванова" /></Field>
-          <div className={styles.formGrid}><Field label="Телефон" required><input type="tel" value={draft.phone} onChange={(event) => { update({ phone: event.target.value }); setError(""); }} placeholder="+380 93 888 49 21" /></Field><Field label="Telegram"><input value={draft.telegram} onChange={(event) => update({ telegram: event.target.value })} placeholder="@username" /></Field></div>
+          <div className={styles.formGrid}><Field label="Телефон" required error={phoneError}><input type="tel" inputMode="numeric" autoComplete="tel" value={draft.phone} aria-invalid={Boolean(phoneError)} onChange={(event) => { update({ phone: formatPhoneInput(event.target.value) }); setPhoneError(""); setError(""); }} placeholder="+380 93 888 49 21" /></Field><Field label="Telegram"><input value={draft.telegram} onChange={(event) => update({ telegram: event.target.value })} placeholder="@username" /></Field></div>
           <Field label="Email"><input type="email" value={draft.email} onChange={(event) => update({ email: event.target.value })} placeholder="name@example.com" /></Field>
           <div className={styles.formGrid}><Field label="Источник"><select value={draft.source} onChange={(event) => update({ source: event.target.value as Deal["source"] })}><option value="Manual">Не указан</option><option value="Meta">Meta</option><option value="Website">Сайт</option></select></Field><Field label="Ответственный"><select value={draft.assigneeId} onChange={(event) => update({ assigneeId: event.target.value })}><option value="">Не назначен</option>{assignees.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></Field></div>
           <Field label="Комментарий"><textarea value={draft.comment} onChange={(event) => update({ comment: event.target.value })} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} placeholder="Контекст знакомства или важная информация" /></Field>
@@ -46,4 +49,4 @@ export function NewContactModal({ onCreate, onClose, assignees }: { onCreate: (d
   );
 }
 
-function Field({ label, required = false, children }: { label: string; required?: boolean; children: React.ReactNode }) { return <label className={styles.field}><span>{label}{required && <b>обязательно</b>}</span>{children}</label>; }
+function Field({ label, required = false, error = "", children }: { label: string; required?: boolean; error?: string; children: React.ReactNode }) { return <label className={`${styles.field} ${error ? styles.fieldInvalid : ""}`}><span>{label}{required && <b>обязательно</b>}</span>{children}{error && <small className={styles.fieldError} role="alert">{error}</small>}</label>; }

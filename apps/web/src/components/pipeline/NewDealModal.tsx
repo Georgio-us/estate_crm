@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Deal } from "@/types/crm";
-import { isValidPhone, normalizePhone } from "@/lib/phone";
+import { formatPhoneInput, isValidPhone, normalizePhone } from "@/lib/phone";
 import styles from "./new-deal-modal.module.css";
 
 export interface NewDealDraft {
@@ -55,6 +55,7 @@ export function NewDealModal({ initialStageId, initialContactId, stages, contact
   const [request, setRequest] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [phoneError, setPhoneError] = useState("");
   const normalizedPhone = normalizePhone(phone);
   const matchingContact = !contactId && normalizedPhone
     ? contacts.find((contact) => normalizePhone(contact.phone || "") === normalizedPhone)
@@ -75,13 +76,16 @@ export function NewDealModal({ initialStageId, initialContactId, stages, contact
     event.preventDefault();
     if (!contactName.trim()) return;
     if (!contactId && !isValidPhone(phone)) {
-      setError("Введите корректный номер телефона.");
+      setPhoneError("Введите корректный номер телефона.");
+      setError("");
       return;
     }
     if (matchingContact) {
-      setError(`Контакт «${matchingContact.name}» с таким телефоном уже существует. Сначала выберите его из базы.`);
+      setPhoneError(`Контакт «${matchingContact.name}» с таким телефоном уже существует. Выберите его из базы.`);
+      setError("");
       return;
     }
+    setPhoneError("");
     setError("");
     setIsSubmitting(true);
     try {
@@ -109,6 +113,7 @@ export function NewDealModal({ initialStageId, initialContactId, stages, contact
   function selectContact(id: string) {
     setContactId(id);
     setError("");
+    setPhoneError("");
     const contact = contacts.find((item) => item.id === id);
     setContactName(contact?.name || "");
     setPhone(contact?.phone || "");
@@ -149,9 +154,24 @@ export function NewDealModal({ initialStageId, initialContactId, stages, contact
             <input autoFocus value={contactName} readOnly={Boolean(contactId)} onChange={(event) => setContactName(event.target.value)} placeholder="Например, Мария Иванова" />
           </label>
 
-          <label>
+          <label className={phoneError ? styles.fieldInvalid : undefined}>
             <span>Телефон {!contactId && <b>обязательно</b>}</span>
-            <input type="tel" value={phone} readOnly={Boolean(contactId)} onChange={(event) => { setPhone(event.target.value); setError(""); }} placeholder="+380 93 888 49 21" />
+            <input
+              type="tel"
+              inputMode="numeric"
+              autoComplete="tel"
+              value={phone}
+              readOnly={Boolean(contactId)}
+              aria-invalid={Boolean(phoneError)}
+              aria-describedby={phoneError ? "new-deal-phone-error" : undefined}
+              onChange={(event) => {
+                setPhone(formatPhoneInput(event.target.value));
+                setPhoneError("");
+                setError("");
+              }}
+              placeholder="+380 93 888 49 21"
+            />
+            {phoneError && <small className={styles.fieldError} id="new-deal-phone-error" role="alert">{phoneError}</small>}
           </label>
           {matchingContact && <div className={styles.existingContact}><span>Найден существующий контакт: <strong>{matchingContact.name}</strong></span><button type="button" onClick={() => selectContact(matchingContact.id)}>Выбрать контакт</button></div>}
           {existingDealCount > 0 && <div className={styles.existingContact}><span>У контакта уже {existingDealCount} {activeDealsLabel(existingDealCount)}. Новая сделка будет отдельным обращением.</span></div>}
