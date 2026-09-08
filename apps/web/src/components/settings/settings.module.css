@@ -72,6 +72,8 @@
 .rowActions button:disabled { opacity: .25; cursor: default; }
 .rowActions .removeButton { color: #ba4b4e; font-size: 19px; }
 .moduleEditor > footer { display: flex; justify-content: space-between; gap: 18px; padding-top: 17px; color: var(--text-subtle); font-size: var(--font-size-caption); }
+.moduleEditor > footer .footerSaveButton { min-height: 40px; padding: 0 16px; border: 1px solid var(--text); border-radius: var(--radius-md); background: var(--text); color: #fff; font-weight: var(--font-weight-semibold); }
+.moduleEditor > footer .footerSaveButton:disabled { border-color: var(--border); background: #efefed; color: var(--text-subtle); cursor: default; }
 .formSection { padding: 38px 0; border-bottom: 1px solid var(--border); }
 .formSection h3 { margin: 0 0 22px; font-size: var(--font-size-heading-sm); }
 .formGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 22px 28px; }

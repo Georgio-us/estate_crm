@@ -1,6 +1,6 @@
 import { getApiUrl } from "@/lib/api";
 
-const allowedMethods = new Set(["GET", "POST", "PATCH", "DELETE"]);
+const allowedMethods = new Set(["GET", "POST", "PUT", "PATCH", "DELETE"]);
 
 async function proxyCrmRequest(
   request: Request,
@@ -49,5 +49,6 @@ async function proxyCrmRequest(
 
 export const GET = proxyCrmRequest;
 export const POST = proxyCrmRequest;
+export const PUT = proxyCrmRequest;
 export const PATCH = proxyCrmRequest;
 export const DELETE = proxyCrmRequest;
