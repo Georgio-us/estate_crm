@@ -287,6 +287,22 @@ export interface CreatePropertyRequest {
 
 export type UpdatePropertyRequest = Partial<CreatePropertyRequest>;
 
+export interface DashboardResponse {
+  deals: {
+    total: number;
+    unassigned: number;
+    withoutTask: number;
+  };
+  contacts: { total: number };
+  properties: { available: number };
+  stages: Array<{ id: string; title: string; color: string; position: number; dealCount: number }>;
+  activities: Array<ActivityEventRecord & {
+    contactName: string | null;
+    dealNumber: number | null;
+    dealTitle: string | null;
+  }>;
+}
+
 export type ActivityCategory = "NOTE" | "TASK" | "CHANGE" | "SOURCE" | "OBJECT";
 
 export interface ActivityEventRecord {

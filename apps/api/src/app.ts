@@ -9,6 +9,7 @@ import type { ApiConfig } from "./config.js";
 import { registerActivityRoutes } from "./activities/routes.js";
 import { registerAuthRoutes } from "./auth/routes.js";
 import { registerContactRoutes } from "./contacts/routes.js";
+import { registerDashboardRoutes } from "./dashboard/routes.js";
 import { registerPipelineRoutes } from "./pipeline/routes.js";
 import { registerPropertyRoutes } from "./properties/routes.js";
 import { registerTaskRoutes } from "./tasks/routes.js";
@@ -59,6 +60,7 @@ export async function buildApp(
   await registerActivityRoutes(app, database);
   await registerTaskRoutes(app, database);
   await registerPropertyRoutes(app, database);
+  await registerDashboardRoutes(app, database);
 
   app.setErrorHandler((error, request, reply) => {
     if (typeof error === "object" && error !== null && "validation" in error && error.validation) {

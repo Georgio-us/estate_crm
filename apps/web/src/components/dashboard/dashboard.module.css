@@ -30,6 +30,7 @@
 .notificationItem time { margin-top: 3px; color: var(--text-subtle); font-size: 11px; }
 .notificationPanel > footer { display: flex; min-height: 48px; align-items: center; justify-content: center; }
 .notificationPanel > footer a { color: #3568b7; font-size: var(--font-size-body-sm); }
+.notificationEmpty { padding: 24px 16px; color: var(--text-muted); font-size: var(--font-size-body-sm); text-align: center; }
 
 .content { width: min(1440px, 100%); margin: 0 auto; padding: 38px 38px 0; }
 .heroBand { background: var(--dashboard-surface-context); }
@@ -37,6 +38,7 @@
 .eyebrow { color: var(--text-subtle); font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); letter-spacing: .08em; text-transform: uppercase; }
 .heading h2 { margin: 7px 0 5px; font-size: var(--font-size-heading-lg); font-weight: var(--font-weight-bold); letter-spacing: -.035em; }
 .heading p { margin: 0; color: var(--text-muted); font-size: var(--font-size-body); }
+.retryButton { margin-top: 9px; padding: 0; border: 0; background: transparent; color: #3568b7; cursor: pointer; font-size: var(--font-size-body-sm); }
 .command { display: grid; min-height: 228px; grid-template-columns: minmax(0, 1.25fr) minmax(390px, .85fr); margin-top: 28px; overflow: hidden; border-radius: 14px; background: #252b32; color: #fff; box-shadow: 0 12px 32px rgba(26,31,36,.12); }
 .commandMain { display: grid; align-content: start; padding: 25px 30px 26px; }
 .commandMeta { display: flex; align-items: center; justify-content: space-between; gap: 20px; color: #b7bec7; font-size: var(--font-size-body-sm); }
@@ -133,6 +135,7 @@
 .activity strong, .activity small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .activity strong { font-size: var(--font-size-body-sm); font-weight: var(--font-weight-semibold); }
 .activity small, .activity time { color: var(--text-subtle); font-size: var(--font-size-caption); }
+.activityEmpty { display: grid; min-height: 195px; place-items: center; color: var(--text-muted); font-size: var(--font-size-body-sm); }
 
 @media (max-width: 1360px) {
   .command { grid-template-columns: 1fr minmax(350px, .8fr); }

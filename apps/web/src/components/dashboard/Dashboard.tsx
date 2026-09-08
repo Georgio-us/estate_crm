@@ -1,10 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
-import { mockActivities } from "@/data/mock-activities";
-import { pipelineStages } from "@/data/mock-pipeline";
-import { mockProperties } from "@/data/mock-properties";
+import { useEffect, useState } from "react";
 import { CompleteTaskModal } from "@/components/tasks/CompleteTaskModal";
 import { TaskDetailsModal } from "@/components/tasks/TaskDetailsModal";
 import { useTasks } from "@/components/tasks/TasksContext";
@@ -27,20 +24,54 @@ const taskKindIcons: Record<CrmTask["kind"], string> = {
   Другое: "✓",
 };
 
-function activityWeight(occurredAt: string) {
-  if (occurredAt.startsWith("Вчера")) return -1;
-  const match = occurredAt.match(/(\d{1,2}):(\d{2})/);
-  return match ? Number(match[1]) * 60 + Number(match[2]) : -2;
+interface DashboardData {
+  deals: { total: number; unassigned: number; withoutTask: number };
+  contacts: { total: number };
+  properties: { available: number };
+  stages: Array<{ id: string; title: string; color: string; position: number; dealCount: number }>;
+  activities: Array<{ id: string; contactId: string | null; dealId: string | null; category: "NOTE" | "TASK" | "CHANGE" | "SOURCE" | "OBJECT"; title: string; description: string | null; occurredAt: string; contactName: string | null; dealNumber: number | null; dealTitle: string | null }>;
+}
+
+const emptyDashboard: DashboardData = { deals: { total: 0, unassigned: 0, withoutTask: 0 }, contacts: { total: 0 }, properties: { available: 0 }, stages: [], activities: [] };
+const activityCategoryFromApi = { NOTE: "note", TASK: "task", CHANGE: "change", SOURCE: "source", OBJECT: "object" } as const;
+
+function activityTime(value: string) {
+  const date = new Date(value);
+  const now = new Date();
+  const sameDay = date.toDateString() === now.toDateString();
+  return sameDay ? new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit" }).format(date) : new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(date);
 }
 
 export function Dashboard() {
   const user = useCurrentUser();
   const { tasks, contacts, deals: taskDeals, updateTask, completeTask: persistCompleteTask } = useTasks();
+  const [dashboard, setDashboard] = useState<DashboardData>(emptyDashboard);
+  const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
 
-  const deals = useMemo(() => pipelineStages.flatMap((stage) => stage.deals), []);
+  async function reloadDashboard() {
+    setLoadState("loading");
+    try {
+      const response = await fetch("/api/crm/dashboard", { cache: "no-store" });
+      const payload = await response.json() as DashboardData;
+      if (!response.ok) throw new Error();
+      setDashboard(payload);
+      setLoadState("ready");
+    } catch { setLoadState("error"); }
+  }
+
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/crm/dashboard", { cache: "no-store" }).then(async (response) => {
+      const payload = await response.json() as DashboardData;
+      if (!response.ok) throw new Error();
+      if (active) { setDashboard(payload); setLoadState("ready"); }
+    }).catch(() => { if (active) setLoadState("error"); });
+    return () => { active = false; };
+  }, []);
+
   const focusTasks = tasks
     .filter((task) => task.period === "overdue" || task.period === "today")
     .sort((first, second) => {
@@ -49,29 +80,26 @@ export function Dashboard() {
     });
   const overdueCount = tasks.filter((task) => task.period === "overdue").length;
   const todayCount = tasks.filter((task) => task.period === "today").length;
-  const notificationCount = 2 + (overdueCount ? 1 : 0);
-  const unassignedDeals = deals.filter((deal) => deal.assignee === "Не назначен");
-  const dealsWithoutTask = deals.filter((deal) => !deal.task);
-  const availableProperties = mockProperties.filter((property) => property.status === "Доступен").length;
+  const notificationCount = overdueCount + dashboard.deals.unassigned + dashboard.deals.withoutTask;
   const completedToday = tasks.filter((task) => task.period === "completed").length;
   const priorityTask = focusTasks[0];
   const selectedTask = tasks.find((task) => task.id === selectedTaskId);
   const completingTask = tasks.find((task) => task.id === completingTaskId);
   const todayLabel = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" }).format(new Date());
 
-  const recentActivities = useMemo(() => Object.values(mockActivities)
-    .flat()
-    .map((activity) => ({
-      ...activity,
-      deal: deals.find((deal) => deal.id === activity.dealId),
-    }))
-    .sort((first, second) => activityWeight(second.occurredAt) - activityWeight(first.occurredAt))
-    .slice(0, 6), [deals]);
+  const recentActivities = dashboard.activities.slice(0, 6);
 
   async function completeTask(result: string) {
     if (!completingTask) return;
     await persistCompleteTask(completingTask.id, result);
+    await reloadDashboard();
     setCompletingTaskId(null);
+  }
+
+  async function saveTask(task: CrmTask) {
+    const saved = await updateTask(task);
+    await reloadDashboard();
+    return saved;
   }
 
   return (
@@ -81,7 +109,7 @@ export function Dashboard() {
         <div className={styles.notifications}>
           <button className={styles.notificationButton} type="button" aria-label={`Уведомления: ${notificationCount} новых`} aria-expanded={notificationsOpen} onClick={() => setNotificationsOpen((current) => !current)}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg>
-            <span>{notificationCount}</span>
+            {notificationCount > 0 && <span>{notificationCount}</span>}
           </button>
           {notificationsOpen && <>
             <button className={styles.notificationBackdrop} type="button" aria-label="Закрыть уведомления" onClick={() => setNotificationsOpen(false)} />
@@ -90,12 +118,13 @@ export function Dashboard() {
               {overdueCount > 0 && <button className={styles.notificationItem} type="button" onClick={() => { if (priorityTask) setSelectedTaskId(priorityTask.id); setNotificationsOpen(false); }}>
                 <i className={styles.notificationDanger}>!</i><span><strong>Просрочена задача</strong><small>{priorityTask?.title}{priorityTask?.contactName ? ` · ${priorityTask.contactName}` : ""}</small><time>Сейчас</time></span>
               </button>}
-              <Link className={styles.notificationItem} href="/" onClick={() => setNotificationsOpen(false)}>
-                <i className={styles.notificationLead}>↗</i><span><strong>Новый лид из Meta</strong><small>Анна Коваленко · ищет квартиру</small><time>10:42</time></span>
-              </Link>
-              <Link className={styles.notificationItem} href="/" onClick={() => setNotificationsOpen(false)}>
-                <i className={styles.notificationWarning}>♙</i><span><strong>Не назначен ответственный</strong><small>Две сделки ожидают распределения</small><time>Сегодня</time></span>
-              </Link>
+              {dashboard.deals.unassigned > 0 && <Link className={styles.notificationItem} href="/" onClick={() => setNotificationsOpen(false)}>
+                <i className={styles.notificationWarning}>♙</i><span><strong>Без ответственного</strong><small>{dashboard.deals.unassigned} сделок ожидают назначения менеджера</small><time>Сейчас</time></span>
+              </Link>}
+              {dashboard.deals.withoutTask > 0 && <Link className={styles.notificationItem} href="/" onClick={() => setNotificationsOpen(false)}>
+                <i className={styles.notificationLead}>↗</i><span><strong>Нет следующего шага</strong><small>В {dashboard.deals.withoutTask} сделках не поставлена активная задача</small><time>Сейчас</time></span>
+              </Link>}
+              {notificationCount === 0 && <div className={styles.notificationEmpty}>Новых ситуаций, требующих внимания, нет.</div>}
               <footer><Link href="/tasks" onClick={() => setNotificationsOpen(false)}>Перейти к задачам</Link></footer>
             </aside>
           </>}
@@ -105,7 +134,7 @@ export function Dashboard() {
       <main className={styles.content}>
         <section className={styles.heroBand}>
           <div className={styles.heading}>
-            <div><span className={styles.eyebrow}>Рабочий день</span><h2>Добрый день, Георгий</h2><p>Коротко о том, что происходит прямо сейчас.</p></div>
+            <div><span className={styles.eyebrow}>Рабочий день</span><h2>Добрый день, {user.name.split(/\s+/)[0]}</h2><p>{loadState === "loading" ? "Загружаем фактическое состояние CRM…" : loadState === "error" ? "Не удалось получить сводку CRM." : "Коротко о том, что происходит прямо сейчас."}</p>{loadState === "error" && <button className={styles.retryButton} type="button" onClick={() => { void reloadDashboard(); }}>Повторить загрузку</button>}</div>
           </div>
 
           <section className={styles.command} aria-label="Главное на сегодня">
@@ -117,15 +146,15 @@ export function Dashboard() {
             </div>
             <div className={styles.commandStats}>
               <Link href="/tasks"><strong>{todayCount}</strong><span>задачи<br />на сегодня</span></Link>
-              <Link href="/"><strong>{unassignedDeals.length}</strong><span>сделки без<br />ответственного</span></Link>
-              <Link href="/"><strong>{dealsWithoutTask.length}</strong><span>сделки без<br />следующего шага</span></Link>
+              <Link href="/"><strong>{dashboard.deals.unassigned}</strong><span>сделки без<br />ответственного</span></Link>
+              <Link href="/"><strong>{dashboard.deals.withoutTask}</strong><span>сделки без<br />следующего шага</span></Link>
             </div>
           </section>
 
           <section className={styles.infoStrip} aria-label="Общее состояние CRM">
-            <InfoMetric href="/" value={deals.length} label="Активных сделок" />
-            <InfoMetric href="/contacts" value={contacts.length} label="Контактов в базе" />
-            <InfoMetric href="/objects" value={availableProperties} label="Доступных объектов" />
+            <InfoMetric href="/" value={dashboard.deals.total} label="Активных сделок" />
+            <InfoMetric href="/contacts" value={dashboard.contacts.total} label="Контактов в базе" />
+            <InfoMetric href="/objects" value={dashboard.properties.available} label="Доступных объектов" />
             <InfoMetric href="/tasks" value={completedToday} label="Задач выполнено" />
           </section>
         </section>
@@ -150,8 +179,8 @@ export function Dashboard() {
               <PanelHeader title="Требует внимания" subtitle="Ситуации, где работа может остановиться" />
               <div className={styles.attentionList}>
                 <Attention href="/tasks" value={overdueCount} title="Просроченная задача" detail="Нужно зафиксировать результат" tone="red" />
-                <Attention href="/" value={unassignedDeals.length} title="Без ответственного" detail="Новые сделки ждут менеджера" tone="orange" />
-                <Attention href="/" value={dealsWithoutTask.length} title="Без следующего шага" detail="В сделках не назначена задача" tone="blue" />
+                <Attention href="/" value={dashboard.deals.unassigned} title="Без ответственного" detail="Новые сделки ждут менеджера" tone="orange" />
+                <Attention href="/" value={dashboard.deals.withoutTask} title="Без следующего шага" detail="В сделках не назначена задача" tone="blue" />
               </div>
             </section>
           </div>
@@ -163,10 +192,10 @@ export function Dashboard() {
               <PanelHeader title="Воронка продаж" subtitle="Где сейчас находятся активные сделки" href="/" linkLabel="Открыть доску" />
               <div className={styles.pipeline}>
                 <div className={styles.pipelineBar} aria-label="Распределение сделок по этапам">
-                  {pipelineStages.map((stage) => <span title={`${stage.title}: ${stage.deals.length}`} style={{ background: stage.color, flexGrow: Math.max(stage.deals.length, .15) }} key={stage.id} />)}
+                  {dashboard.stages.map((stage) => <span title={`${stage.title}: ${stage.dealCount}`} style={{ background: stage.color, flexGrow: Math.max(stage.dealCount, .15) }} key={stage.id} />)}
                 </div>
                 <div className={styles.pipelineLegend}>
-                  {pipelineStages.map((stage) => <Link href="/" key={stage.id}><i style={{ background: stage.color }} /><strong>{stage.deals.length}</strong><span>{stage.title}</span></Link>)}
+                  {dashboard.stages.map((stage) => <Link href="/" key={stage.id}><i style={{ background: stage.color }} /><strong>{stage.dealCount}</strong><span>{stage.title}</span></Link>)}
                 </div>
               </div>
             </section>
@@ -174,7 +203,7 @@ export function Dashboard() {
             <section className={styles.panel}>
               <PanelHeader title="Последние события" subtitle="Свежие изменения по сделкам" href="/" linkLabel="В воронку" />
               <div className={styles.activityList}>
-                {recentActivities.map((activity) => <Link className={styles.activity} href="/" key={activity.id}><span className={styles.activityIcon}>{activityIcons[activity.category]}</span><span><strong>{activity.title}</strong><small>{activity.deal?.contactName || `Сделка #${activity.dealId}`}{activity.description ? ` · ${activity.description}` : ""}</small></span><time>{activity.occurredAt}</time></Link>)}
+                {recentActivities.length ? recentActivities.map((activity) => <Link className={styles.activity} href={activity.dealId ? "/" : activity.contactId ? "/contacts" : "/home"} key={activity.id}><span className={styles.activityIcon}>{activityIcons[activityCategoryFromApi[activity.category]]}</span><span><strong>{activity.title}</strong><small>{activity.contactName || (activity.dealNumber ? `Сделка #${activity.dealNumber}` : "Системное событие")}{activity.description ? ` · ${activity.description}` : ""}</small></span><time>{activityTime(activity.occurredAt)}</time></Link>) : <div className={styles.activityEmpty}>Событий пока нет.</div>}
               </div>
             </section>
           </div>
@@ -182,7 +211,7 @@ export function Dashboard() {
       </main>
 
       {completingTask && <CompleteTaskModal task={completingTask} onComplete={(result) => { void completeTask(result); }} onClose={() => setCompletingTaskId(null)} />}
-      {selectedTask && <TaskDetailsModal task={selectedTask} contacts={contacts} deals={taskDeals} assignee={{ id: user.id, name: user.name }} onSave={updateTask} onClose={() => setSelectedTaskId(null)} />}
+      {selectedTask && <TaskDetailsModal task={selectedTask} contacts={contacts} deals={taskDeals} assignee={{ id: user.id, name: user.name }} onSave={saveTask} onClose={() => setSelectedTaskId(null)} />}
     </section>
   );
 }

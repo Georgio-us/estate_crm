@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { useCurrentUser } from "@/components/auth/AuthContext";
+import { useTasks } from "@/components/tasks/TasksContext";
 import styles from "./layout.module.css";
 
 const primaryItems = [
@@ -34,6 +35,8 @@ export function Sidebar({ collapsed, mobileOpen, onMobileClose, onToggle }: Side
   const router = useRouter();
   const [loggingOut, setLoggingOut] = useState(false);
   const user = useCurrentUser();
+  const { tasks } = useTasks();
+  const activeTaskCount = tasks.filter((task) => task.period !== "completed").length;
   const roleLabel = user.organization.role === "ADMIN"
     ? "Администратор"
     : user.organization.role === "LEAD"
@@ -82,7 +85,7 @@ export function Sidebar({ collapsed, mobileOpen, onMobileClose, onToggle }: Side
             >
               <span className={styles.navIcon}>{icon}</span>
               <span>{label}</span>
-              {label === "Задачи" && <span className={styles.navBadge}>6</span>}
+              {label === "Задачи" && activeTaskCount > 0 && <span className={styles.navBadge}>{activeTaskCount}</span>}
             </Link>
           ))}
         </div>
