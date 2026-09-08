@@ -647,6 +647,8 @@
   font-size: var(--font-size-caption);
 }
 
+.composerError { padding: 0 14px 6px; color: #a33b3b; font-size: var(--font-size-caption); }
+
 .composerFooter { display: flex; min-height: 35px; align-items: center; justify-content: space-between; gap: 12px; padding: 0 9px 8px 12px; }
 .composerFooter button { border: 0; background: transparent; color: var(--text-muted); cursor: pointer; }
 

@@ -142,6 +142,7 @@
 .composer { position: absolute; z-index: 3; right: 19px; bottom: 17px; left: 19px; min-height: 112px; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: #fff; box-shadow: var(--shadow-panel); }
 .composer > span { display: block; height: 33px; padding: 10px 13px 0; border-bottom: 1px solid var(--border); font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); }
 .composer textarea { width: 100%; min-height: 44px; padding: 9px 13px 3px; resize: none; border: 0; outline: 0; color: var(--text); font-size: var(--font-size-body-sm); }
+.noteError { margin: 0; padding: 0 13px 5px; color: #a33b3b; font-size: var(--font-size-caption); }
 .composer > div { display: flex; min-height: 33px; align-items: center; justify-content: space-between; padding: 0 8px 7px 11px; }
 .composer button { border: 0; background: transparent; color: var(--text-muted); cursor: pointer; }
 .composer .saveButton { height: 26px; padding: 0 10px; border-radius: var(--radius-sm); background: var(--primary); color: #fff; font-size: var(--font-size-caption); }

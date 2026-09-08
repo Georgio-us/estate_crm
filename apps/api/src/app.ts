@@ -6,6 +6,7 @@ import type { HealthErrorResponse, HealthResponse } from "@estate-crm/contracts"
 import type { DatabaseConnection } from "@estate-crm/database";
 
 import type { ApiConfig } from "./config.js";
+import { registerActivityRoutes } from "./activities/routes.js";
 import { registerAuthRoutes } from "./auth/routes.js";
 import { registerContactRoutes } from "./contacts/routes.js";
 import { registerPipelineRoutes } from "./pipeline/routes.js";
@@ -53,6 +54,7 @@ export async function buildApp(
   await registerAuthRoutes(app, config, database);
   await registerContactRoutes(app, database);
   await registerPipelineRoutes(app, database);
+  await registerActivityRoutes(app, database);
 
   app.setErrorHandler((error, request, reply) => {
     if (typeof error === "object" && error !== null && "validation" in error && error.validation) {

@@ -171,3 +171,24 @@ export interface MoveDealRequest {
   stageId: string;
   position?: number;
 }
+
+export type ActivityCategory = "NOTE" | "TASK" | "CHANGE" | "SOURCE" | "OBJECT";
+
+export interface ActivityEventRecord {
+  id: string;
+  contactId: string | null;
+  dealId: string | null;
+  category: ActivityCategory;
+  title: string;
+  description: string | null;
+  author: ContactAssignee | null;
+  occurredAt: string;
+}
+
+export interface ActivityListResponse {
+  activities: ActivityEventRecord[];
+}
+
+export interface CreateNoteRequest {
+  text: string;
+}

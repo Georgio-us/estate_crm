@@ -93,6 +93,7 @@ test("deal creation links an existing contact inside the current organization", 
           };
         },
       },
+      activityEvent: { async create() {} },
     },
     async ping() {},
     async disconnect() {},
@@ -149,6 +150,7 @@ test("updating a deal title does not mutate the linked contact", async () => {
           };
         },
       },
+      activityEvent: { async create() {} },
       contact: {
         async update() {
           contactUpdates += 1;

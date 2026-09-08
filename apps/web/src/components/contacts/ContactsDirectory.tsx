@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useCurrentUser } from "@/components/auth/AuthContext";
-import { mockActivities } from "@/data/mock-activities";
+import { mapApiActivity, type ApiActivity } from "@/lib/activity";
 import type { ActivityEvent, Contact, Deal } from "@/types/crm";
 import { ContactDrawer } from "./ContactDrawer";
 import { NewContactModal, type NewContactDraft } from "./NewContactModal";
@@ -83,12 +83,19 @@ async function requestContacts(): Promise<{ contacts: Contact[]; dealsById: Map<
   return { contacts: payload.contacts.map(mapApiContact), dealsById };
 }
 
+async function requestContactActivities(contactId: string): Promise<ActivityEvent[]> {
+  const response = await fetch(`/api/crm/contacts/${contactId}/activities`, { cache: "no-store" });
+  if (!response.ok) throw new Error("Не удалось загрузить историю контакта.");
+  const payload = await response.json() as { activities: ApiActivity[] };
+  return payload.activities.map(mapApiActivity);
+}
+
 export function ContactsDirectory() {
   const user = useCurrentUser();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [dealsById, setDealsById] = useState<Map<string, RelatedDeal>>(() => new Map());
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
-  const [contactNotes, setContactNotes] = useState<Record<string, ActivityEvent[]>>({});
+  const [contactActivities, setContactActivities] = useState<Record<string, ActivityEvent[]>>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [search, setSearch] = useState("");
@@ -105,6 +112,16 @@ export function ContactsDirectory() {
     return () => { active = false; };
   }, []);
 
+  useEffect(() => {
+    if (!selectedId) return;
+    const contactId = selectedId;
+    let active = true;
+    void requestContactActivities(contactId).then((items) => {
+      if (active) setContactActivities((current) => ({ ...current, [contactId]: items }));
+    }, () => undefined);
+    return () => { active = false; };
+  }, [selectedId]);
+
   async function retryContacts() {
     setLoadState("loading");
     try {
@@ -119,9 +136,7 @@ export function ContactsDirectory() {
 
   const selectedContact = contacts.find((contact) => contact.id === selectedId);
   const selectedDeals = selectedContact?.dealIds.map((id) => dealsById.get(id)).filter((item): item is RelatedDeal => Boolean(item)) || [];
-  const selectedActivities = selectedContact
-    ? [...(contactNotes[selectedContact.id] || []), ...selectedContact.dealIds.flatMap((id) => mockActivities[id] || [])]
-    : [];
+  const selectedActivities = selectedContact ? contactActivities[selectedContact.id] || [] : [];
 
   const visibleContacts = useMemo(() => {
     const query = search.trim().toLocaleLowerCase("ru");
@@ -186,11 +201,19 @@ export function ContactsDirectory() {
     return saved;
   }
 
-  function addContactNote(text: string) {
-    if (!selectedContact) return;
-    const event: ActivityEvent = { id: `contact-note-${Date.now()}`, dealId: "", category: "note", title: "Добавлено примечание", description: text, author: "Георгий", occurredAt: new Intl.DateTimeFormat("ru-RU", { hour: "2-digit", minute: "2-digit" }).format(new Date()) };
-    setContactNotes((current) => ({ ...current, [selectedContact.id]: [event, ...(current[selectedContact.id] || [])] }));
-    setContacts((current) => current.map((contact) => contact.id === selectedContact.id ? { ...contact, lastContact: "Только что" } : contact));
+  async function addContactNote(text: string) {
+    if (!selectedContact) throw new Error("Контакт больше не открыт.");
+    const contactId = selectedContact.id;
+    const response = await fetch(`/api/crm/contacts/${contactId}/notes`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text }),
+    });
+    const payload = await response.json() as { activity?: ApiActivity; message?: string };
+    if (!response.ok || !payload.activity) throw new Error(payload.message || "Не удалось сохранить примечание.");
+    const activity = mapApiActivity(payload.activity);
+    setContactActivities((current) => ({ ...current, [contactId]: [activity, ...(current[contactId] || [])] }));
+    setContacts((current) => current.map((contact) => contact.id === contactId ? { ...contact, lastContact: "Только что" } : contact));
   }
 
   return (

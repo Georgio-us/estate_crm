@@ -9,7 +9,7 @@ interface DealDrawerProps {
   assignees: Array<{ id: string; name: string }>;
   activities: ActivityEvent[];
   onSave: (deal: Deal, stageId: string) => Promise<{ deal: Deal; stageId: string }>;
-  onAddNote: (text: string) => void;
+  onAddNote: (text: string) => Promise<void>;
   onAddTask: (title: string, dueAt?: string) => void;
   onCompleteTask: (result: string) => void;
   onClose: () => void;
@@ -50,6 +50,8 @@ export function DealDrawer({
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
   const [isCompletingTask, setIsCompletingTask] = useState(false);
   const [taskResult, setTaskResult] = useState("");
+  const [composerError, setComposerError] = useState("");
+  const [isComposerSubmitting, setIsComposerSubmitting] = useState(false);
   const [draft, setDraft] = useState(deal);
   const [draftStageId, setDraftStageId] = useState(stageId);
   const [isSaving, setIsSaving] = useState(false);
@@ -97,12 +99,20 @@ export function DealDrawer({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
-  function submitComposer() {
+  async function submitComposer() {
     const text = composerText.trim();
-    if (!text) return;
+    if (!text || isComposerSubmitting) return;
 
     if (composerMode === "note") {
-      onAddNote(text);
+      setIsComposerSubmitting(true);
+      setComposerError("");
+      try {
+        await onAddNote(text);
+      } catch (cause) {
+        setComposerError(cause instanceof Error ? cause.message : "Не удалось сохранить примечание.");
+        setIsComposerSubmitting(false);
+        return;
+      }
     } else {
       onAddTask(text, taskDueAt === "Без срока" ? undefined : taskDueAt);
     }
@@ -110,6 +120,7 @@ export function DealDrawer({
     setComposerText("");
     setTaskDueAt("Без срока");
     setIsDueMenuOpen(false);
+    setIsComposerSubmitting(false);
   }
 
   function completeCurrentTask() {
@@ -241,7 +252,8 @@ export function DealDrawer({
                 <button className={composerMode === "note" ? styles.composerTabActive : ""} type="button" onClick={() => setComposerMode("note")}>Примечание</button>
                 <button className={composerMode === "task" ? styles.composerTabActive : ""} type="button" onClick={() => setComposerMode("task")}>Задача</button>
               </div>
-              <textarea value={composerText} onChange={(event) => setComposerText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); submitComposer(); } }} placeholder={composerMode === "note" ? "Добавить примечание к сделке…" : "Что необходимо сделать?"} aria-label={composerMode === "note" ? "Новое примечание" : "Новая задача"} />
+              <textarea value={composerText} onChange={(event) => setComposerText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void submitComposer(); } }} placeholder={composerMode === "note" ? "Добавить примечание к сделке…" : "Что необходимо сделать?"} aria-label={composerMode === "note" ? "Новое примечание" : "Новая задача"} />
+              {composerError && <div className={styles.composerError} role="alert">{composerError}</div>}
               <div className={styles.composerFooter}>
                 {composerMode === "task" ? (
                   <div className={styles.duePicker}>
@@ -257,7 +269,7 @@ export function DealDrawer({
                 ) : (
                   <button type="button" aria-label="Прикрепить файл">＋</button>
                 )}
-                <button className={styles.saveNoteButton} type="button" disabled={!composerText.trim()} onClick={submitComposer}>{composerMode === "note" ? "Сохранить" : "Создать задачу"}</button>
+                <button className={styles.saveNoteButton} type="button" disabled={!composerText.trim() || isComposerSubmitting} onClick={() => { void submitComposer(); }}>{isComposerSubmitting ? "Сохраняем…" : composerMode === "note" ? "Сохранить" : "Создать задачу"}</button>
               </div>
             </div>
           </div>

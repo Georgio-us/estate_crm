@@ -5,8 +5,10 @@ import styles from "./contacts.module.css";
 
 const icons = { note: "≡", task: "✓", change: "↔", source: "↗", object: "⌂" };
 
-export function ContactDrawer({ contact, deals, activities, assignees, onSave, onAddNote, onClose }: { contact: Contact; deals: RelatedDeal[]; activities: ActivityEvent[]; assignees: Array<{ id: string; name: string }>; onSave: (contact: Contact) => Promise<Contact>; onAddNote: (text: string) => void; onClose: () => void }) {
+export function ContactDrawer({ contact, deals, activities, assignees, onSave, onAddNote, onClose }: { contact: Contact; deals: RelatedDeal[]; activities: ActivityEvent[]; assignees: Array<{ id: string; name: string }>; onSave: (contact: Contact) => Promise<Contact>; onAddNote: (text: string) => Promise<void>; onClose: () => void }) {
   const [note, setNote] = useState("");
+  const [noteError, setNoteError] = useState("");
+  const [isNoteSaving, setIsNoteSaving] = useState(false);
   const [draft, setDraft] = useState(contact);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
@@ -25,7 +27,19 @@ export function ContactDrawer({ contact, deals, activities, assignees, onSave, o
     catch (cause) { setSaveError(cause instanceof Error ? cause.message : "Не удалось сохранить контакт."); }
     finally { setIsSaving(false); }
   }
-  function submitNote() { if (!note.trim()) return; onAddNote(note.trim()); setNote(""); }
+  async function submitNote() {
+    if (!note.trim() || isNoteSaving) return;
+    setIsNoteSaving(true);
+    setNoteError("");
+    try {
+      await onAddNote(note.trim());
+      setNote("");
+    } catch (cause) {
+      setNoteError(cause instanceof Error ? cause.message : "Не удалось сохранить примечание.");
+    } finally {
+      setIsNoteSaving(false);
+    }
+  }
 
   return (
     <div className={styles.drawerLayer}>
@@ -46,7 +60,7 @@ export function ContactDrawer({ contact, deals, activities, assignees, onSave, o
           <div className={styles.activityPane}>
             <div className={styles.activityHeader}><div><h3>История взаимодействия</h3><span>{activities.length} событий по контакту</span></div><button type="button">＋ Задача</button></div>
             <div className={styles.feed}><div className={styles.dateDivider}><span>История контакта</span></div>{activities.length ? <div className={styles.timeline}>{activities.map((event) => <article className={styles.event} key={event.id}><span className={styles.eventIcon}>{icons[event.category]}</span><div><strong>{event.title}</strong>{event.description && <p>{event.description}</p>}{event.author && <small>{event.author}</small>}</div><time>{event.occurredAt}</time></article>)}</div> : <div className={styles.emptyHistory}>История появится после первого действия</div>}</div>
-            <div className={styles.composer}><span>Примечание</span><textarea value={note} onChange={(event) => setNote(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); submitNote(); } }} placeholder="Добавить примечание о контакте…" /><div><button type="button">＋</button><button className={styles.saveButton} type="button" disabled={!note.trim()} onClick={submitNote}>Сохранить</button></div></div>
+            <div className={styles.composer}><span>Примечание</span><textarea value={note} onChange={(event) => setNote(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void submitNote(); } }} placeholder="Добавить примечание о контакте…" />{noteError && <p className={styles.noteError} role="alert">{noteError}</p>}<div><button type="button">＋</button><button className={styles.saveButton} type="button" disabled={!note.trim() || isNoteSaving} onClick={() => { void submitNote(); }}>{isNoteSaving ? "Сохраняем…" : "Сохранить"}</button></div></div>
           </div>
         </div>
       </aside>

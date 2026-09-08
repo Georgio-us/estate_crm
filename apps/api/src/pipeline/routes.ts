@@ -214,6 +214,18 @@ export async function registerPipelineRoutes(
       },
     });
 
+    await database.client.activityEvent.create({
+      data: {
+        organizationId: user.organization.id,
+        contactId: contact.id,
+        dealId: deal.id,
+        authorId: user.id,
+        category: "SOURCE",
+        title: "Сделка создана",
+        description: request.body.source === "META" ? "Источник Meta" : request.body.source === "WEBSITE" ? "Источник: сайт" : "Добавлена вручную",
+      },
+    });
+
     return reply.status(201).send({ deal: mapDeal(deal), stageId: stage.id });
   });
 
@@ -289,6 +301,18 @@ export async function registerPipelineRoutes(
       },
     });
 
+    await database.client.activityEvent.create({
+      data: {
+        organizationId: user.organization.id,
+        contactId: existing.contactId,
+        dealId: existing.id,
+        authorId: user.id,
+        category: "CHANGE",
+        title: "Изменения сохранены",
+        description: request.body.stageId && request.body.stageId !== existing.stageId ? "Обновлены параметры и этап сделки" : "Обновлены параметры сделки",
+      },
+    });
+
     return { deal: mapDeal(updated), stageId: updated.stageId };
   });
 
@@ -317,6 +341,17 @@ export async function registerPipelineRoutes(
       include: {
         contact: { select: { id: true, name: true, phone: true } },
         assignee: { select: { id: true, name: true } },
+      },
+    });
+    await database.client.activityEvent.create({
+      data: {
+        organizationId: user.organization.id,
+        contactId: deal.contactId,
+        dealId: deal.id,
+        authorId: user.id,
+        category: "CHANGE",
+        title: "Этап изменён",
+        description: `Сделка перенесена в «${stage.title}»`,
       },
     });
     return { deal: mapDeal(updated), stageId: stage.id };

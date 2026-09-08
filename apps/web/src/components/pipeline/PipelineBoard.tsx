@@ -16,6 +16,7 @@ import {
 import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { useRouter } from "next/navigation";
 import { useCurrentUser } from "@/components/auth/AuthContext";
+import { mapApiActivity, type ApiActivity } from "@/lib/activity";
 import type { ActivityEvent, Deal, PipelineStage } from "@/types/crm";
 import { DealDrawer } from "./DealDrawer";
 import { DealCardPreview } from "./DealCard";
@@ -87,6 +88,13 @@ async function requestContactOptions(): Promise<ContactOption[]> {
   return payload.contacts;
 }
 
+async function requestDealActivities(dealId: string): Promise<ActivityEvent[]> {
+  const response = await fetch(`/api/crm/deals/${dealId}/activities`, { cache: "no-store" });
+  if (!response.ok) throw new Error("Не удалось загрузить историю сделки.");
+  const payload = await response.json() as { activities: ApiActivity[] };
+  return payload.activities.map(mapApiActivity);
+}
+
 export function PipelineBoard() {
   const router = useRouter();
   const user = useCurrentUser();
@@ -121,6 +129,16 @@ export function PipelineBoard() {
     );
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    if (!selected?.dealId) return;
+    const dealId = selected.dealId;
+    let active = true;
+    void requestDealActivities(dealId).then((items) => {
+      if (active) setActivities((current) => ({ ...current, [dealId]: items }));
+    }, () => undefined);
+    return () => { active = false; };
+  }, [selected?.dealId]);
 
   async function reloadPipeline() {
     try {
@@ -263,16 +281,20 @@ export function PipelineBoard() {
     return { deal: savedDeal, stageId: payload.stageId };
   }
 
-  function addNote(text: string) {
-    if (!selected) return;
-
-    appendActivity({
-      dealId: selected.dealId,
-      category: "note",
-      title: "Добавлено примечание",
-      description: text,
-      author: user.name,
+  async function addNote(text: string) {
+    if (!selected) throw new Error("Сделка больше не открыта.");
+    const response = await fetch(`/api/crm/deals/${selected.dealId}/notes`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ text }),
     });
+    const payload = await response.json() as { activity?: ApiActivity; message?: string };
+    if (!response.ok || !payload.activity) throw new Error(payload.message || "Не удалось сохранить примечание.");
+    const activity = mapApiActivity(payload.activity);
+    setActivities((current) => ({
+      ...current,
+      [selected.dealId]: [activity, ...(current[selected.dealId] || [])],
+    }));
   }
 
   function addTask(title: string, dueAt?: string) {
