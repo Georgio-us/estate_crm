@@ -11,7 +11,10 @@ interface PipelineColumnProps {
 }
 
 export function PipelineColumn({ stage, onOpenDeal, onAddDeal }: PipelineColumnProps) {
-  const { setNodeRef, isOver } = useDroppable({ id: `stage:${stage.id}` });
+  const { setNodeRef, isOver } = useDroppable({
+    id: `stage:${stage.id}`,
+    data: { type: "stage", stageId: stage.id },
+  });
 
   return (
     <div className={`${styles.column} ${isOver ? styles.columnOver : ""}`} ref={setNodeRef}>
@@ -29,7 +32,7 @@ export function PipelineColumn({ stage, onOpenDeal, onAddDeal }: PipelineColumnP
       <SortableContext items={stage.deals.map((deal) => deal.id)} strategy={verticalListSortingStrategy}>
         <div className={styles.cardList}>
           {stage.deals.map((deal) => (
-            <DealCard deal={deal} key={deal.id} onOpen={() => onOpenDeal(deal.id)} />
+            <DealCard deal={deal} stageId={stage.id} key={deal.id} onOpen={() => onOpenDeal(deal.id)} />
           ))}
           <button className={styles.quickAdd} type="button" onClick={onAddDeal}>＋ Добавить сделку</button>
         </div>

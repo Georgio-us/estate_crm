@@ -9,6 +9,7 @@ import {
   MeasuringStrategy,
   MouseSensor,
   pointerWithin,
+  rectIntersection,
   TouchSensor,
   useSensor,
   useSensors,
@@ -37,10 +38,27 @@ const operationToApi = { Покупка: "PURCHASE", Аренда: "RENT", Пр�
 const pipelineCollisionDetection: CollisionDetection = (args) => {
   const pointerCollisions = pointerWithin(args);
   if (pointerCollisions.length) {
-    const cardCollision = pointerCollisions.find(({ id }) => !String(id).startsWith("stage:"));
-    return cardCollision ? [cardCollision] : [pointerCollisions[0]!];
+    const collisionMeta = (id: string | number) => (
+      args.droppableContainers.find((container) => container.id === id)?.data.current as
+        | { type?: "stage" | "deal"; stageId?: string }
+        | undefined
+    );
+    const stageCollision = pointerCollisions.find(({ id }) => collisionMeta(id)?.type === "stage");
+
+    if (stageCollision) {
+      const stageId = collisionMeta(stageCollision.id)?.stageId;
+      const cardCollision = pointerCollisions.find(({ id }) => {
+        const meta = collisionMeta(id);
+        return meta?.type === "deal" && meta.stageId === stageId;
+      });
+      return cardCollision ? [cardCollision] : [stageCollision];
+    }
+
+    return [pointerCollisions[0]!];
   }
-  return closestCorners(args);
+
+  const intersections = rectIntersection(args);
+  return intersections.length ? intersections : closestCorners(args);
 };
 
 interface ApiDeal {

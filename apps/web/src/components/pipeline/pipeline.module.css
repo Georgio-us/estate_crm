@@ -361,17 +361,16 @@
   min-height: calc(100vh - var(--topbar-height) - 90px);
   gap: 12px;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
   padding: 14px 16px 28px;
   background: var(--background);
-  scroll-snap-type: x proximity;
 }
 
 .column {
   width: 292px;
-  min-width: 292px;
+  flex: 0 0 292px;
   align-self: stretch;
   border-radius: var(--radius-md);
-  scroll-snap-align: start;
   transition: background-color 120ms ease;
 }
 

@@ -5,6 +5,7 @@ import styles from "./pipeline.module.css";
 
 interface DealCardProps {
   deal: Deal;
+  stageId: string;
   onOpen: () => void;
 }
 
@@ -14,7 +15,7 @@ const sourceLabels: Record<Deal["source"], string> = {
   Manual: "Не указан",
 };
 
-export function DealCard({ deal, onOpen }: DealCardProps) {
+export function DealCard({ deal, stageId, onOpen }: DealCardProps) {
   const {
     attributes,
     listeners,
@@ -22,7 +23,10 @@ export function DealCard({ deal, onOpen }: DealCardProps) {
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: deal.id });
+  } = useSortable({
+    id: deal.id,
+    data: { type: "deal", stageId },
+  });
 
   return (
     <article
