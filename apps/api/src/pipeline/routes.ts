@@ -51,6 +51,7 @@ function mapDeal(deal: {
   updatedAt: Date;
   contact: { id: string; name: string; phone: string | null };
   relatedContacts?: Array<{ contact: { id: string; name: string; phone: string | null } }>;
+  tasks?: Array<{ id: string; title: string; dueDate: Date | null; dueTime: string | null }>;
   assignee: { id: string; name: string } | null;
   title: string;
   comment: string | null;
@@ -58,6 +59,7 @@ function mapDeal(deal: {
   return {
     ...deal,
     relatedContacts: deal.relatedContacts?.map((link) => link.contact) ?? [],
+    nextTask: deal.tasks?.[0] ? { ...deal.tasks[0], dueDate: deal.tasks[0].dueDate?.toISOString().slice(0, 10) ?? null } : null,
     createdAt: deal.createdAt.toISOString(),
     updatedAt: deal.updatedAt.toISOString(),
   };
@@ -99,6 +101,7 @@ export async function registerPipelineRoutes(
             contact: { select: { id: true, name: true, phone: true } },
             relatedContacts: { include: { contact: { select: { id: true, name: true, phone: true } } } },
             assignee: { select: { id: true, name: true } },
+            tasks: { where: { status: "ACTIVE" }, orderBy: [{ dueDate: "asc" }, { dueTime: "asc" }], take: 1, select: { id: true, title: true, dueDate: true, dueTime: true } },
           },
         },
       },
@@ -224,6 +227,7 @@ export async function registerPipelineRoutes(
         contact: { select: { id: true, name: true, phone: true } },
         relatedContacts: { include: { contact: { select: { id: true, name: true, phone: true } } } },
         assignee: { select: { id: true, name: true } },
+        tasks: { where: { status: "ACTIVE" }, orderBy: [{ dueDate: "asc" }, { dueTime: "asc" }], take: 1, select: { id: true, title: true, dueDate: true, dueTime: true } },
       },
     });
 
@@ -314,6 +318,7 @@ export async function registerPipelineRoutes(
         contact: { select: { id: true, name: true, phone: true } },
         relatedContacts: { include: { contact: { select: { id: true, name: true, phone: true } } } },
         assignee: { select: { id: true, name: true } },
+        tasks: { where: { status: "ACTIVE" }, orderBy: [{ dueDate: "asc" }, { dueTime: "asc" }], take: 1, select: { id: true, title: true, dueDate: true, dueTime: true } },
       },
     });
 
@@ -412,6 +417,7 @@ export async function registerPipelineRoutes(
         contact: { select: { id: true, name: true, phone: true } },
         assignee: { select: { id: true, name: true } },
         relatedContacts: { include: { contact: { select: { id: true, name: true, phone: true } } } },
+        tasks: { where: { status: "ACTIVE" }, orderBy: [{ dueDate: "asc" }, { dueTime: "asc" }], take: 1, select: { id: true, title: true, dueDate: true, dueTime: true } },
       },
     });
     return { deal: mapDeal(updated), stageId: updated.stageId };
@@ -457,6 +463,7 @@ export async function registerPipelineRoutes(
         contact: { select: { id: true, name: true, phone: true } },
         assignee: { select: { id: true, name: true } },
         relatedContacts: { include: { contact: { select: { id: true, name: true, phone: true } } } },
+        tasks: { where: { status: "ACTIVE" }, orderBy: [{ dueDate: "asc" }, { dueTime: "asc" }], take: 1, select: { id: true, title: true, dueDate: true, dueTime: true } },
       },
     });
     return { deal: mapDeal(updated), stageId: updated.stageId };
@@ -488,6 +495,7 @@ export async function registerPipelineRoutes(
         contact: { select: { id: true, name: true, phone: true } },
         relatedContacts: { include: { contact: { select: { id: true, name: true, phone: true } } } },
         assignee: { select: { id: true, name: true } },
+        tasks: { where: { status: "ACTIVE" }, orderBy: [{ dueDate: "asc" }, { dueTime: "asc" }], take: 1, select: { id: true, title: true, dueDate: true, dueTime: true } },
       },
     });
     await database.client.activityEvent.create({

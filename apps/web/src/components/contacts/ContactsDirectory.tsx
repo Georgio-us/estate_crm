@@ -5,6 +5,8 @@ import { useCurrentUser } from "@/components/auth/AuthContext";
 import { mapApiActivity, type ApiActivity } from "@/lib/activity";
 import type { ActivityEvent, Contact, Deal } from "@/types/crm";
 import { NewDealModal, type NewDealDraft } from "@/components/pipeline/NewDealModal";
+import { NewTaskModal } from "@/components/tasks/NewTaskModal";
+import { useTasks } from "@/components/tasks/TasksContext";
 import { ContactDrawer } from "./ContactDrawer";
 import { NewContactModal, type NewContactDraft } from "./NewContactModal";
 import styles from "./contacts.module.css";
@@ -30,6 +32,7 @@ interface ApiContact {
   assignee: { id: string; name: string } | null;
   dealIds?: string[];
   relatedContacts?: Array<{ id: string; name: string; phone: string | null; label: string | null }>;
+  nextTask?: { id: string; title: string; dueDate: string | null; dueTime: string | null } | null;
   deals?: Array<{ id: string; number: number; title: string; request: string; budget: string | null; stage: { id: string; title: string; color: string } }>;
   comment: string | null;
   createdAt: string;
@@ -49,6 +52,7 @@ function mapApiContact(contact: ApiContact): Contact {
     dealIds: contact.dealIds || [],
     relatedContacts: contact.relatedContacts || [],
     lastContact: "Нет взаимодействий",
+    nextTask: contact.nextTask ? `${contact.nextTask.title}${contact.nextTask.dueTime ? ` · ${contact.nextTask.dueTime}` : ""}` : undefined,
     comment: contact.comment || undefined,
     createdAt: new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", year: "numeric" }).format(new Date(contact.createdAt)),
   };
@@ -96,6 +100,7 @@ async function requestContactActivities(contactId: string): Promise<ActivityEven
 
 export function ContactsDirectory() {
   const user = useCurrentUser();
+  const { contacts: taskContacts, deals: taskDeals, createTask, reloadTasks } = useTasks();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [dealsById, setDealsById] = useState<Map<string, RelatedDeal>>(() => new Map());
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
@@ -104,6 +109,7 @@ export function ContactsDirectory() {
   const [isCreating, setIsCreating] = useState(false);
   const [dealContactId, setDealContactId] = useState<string | null>(null);
   const [dealStages, setDealStages] = useState<Array<{ id: string; title: string }>>([]);
+  const [taskContactId, setTaskContactId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [assignee, setAssignee] = useState("all");
   const [source, setSource] = useState("all");
@@ -186,6 +192,7 @@ export function ContactsDirectory() {
     if (!response.ok || !payload.contact) throw new Error(payload.message || "Не удалось создать контакт.");
     const contact = mapApiContact(payload.contact);
     setContacts((current) => [contact, ...current]);
+    await reloadTasks();
     setIsCreating(false);
     setSelectedId(contact.id);
   }
@@ -284,6 +291,7 @@ export function ContactsDirectory() {
     if (!response.ok) throw new Error(payload.message || "Не удалось создать сделку.");
     const contactId = draft.contactId;
     await refreshContacts(contactId);
+    await reloadTasks();
     setDealContactId(null);
   }
 
@@ -338,9 +346,10 @@ export function ContactsDirectory() {
         </section>
       </div>
 
-      {selectedContact && <ContactDrawer key={selectedContact.id} contact={selectedContact} contacts={contacts} deals={selectedDeals} activities={selectedActivities} assignees={[{ id: user.id, name: user.name }]} onSave={saveContact} onAddNote={addContactNote} onLinkContact={linkRelatedContact} onUnlinkContact={unlinkRelatedContact} onCreateDeal={() => { void openDealCreation(selectedContact.id).catch(() => undefined); }} onClose={() => setSelectedId(null)} />}
+      {selectedContact && <ContactDrawer key={selectedContact.id} contact={selectedContact} contacts={contacts} deals={selectedDeals} activities={selectedActivities} assignees={[{ id: user.id, name: user.name }]} onSave={saveContact} onAddNote={addContactNote} onLinkContact={linkRelatedContact} onUnlinkContact={unlinkRelatedContact} onCreateDeal={() => { void openDealCreation(selectedContact.id).catch(() => undefined); }} onCreateTask={() => setTaskContactId(selectedContact.id)} onClose={() => setSelectedId(null)} />}
       {isCreating && <NewContactModal onCreate={createContact} onClose={() => setIsCreating(false)} assignees={[{ id: user.id, name: user.name }]} />}
       {dealContactId && dealStages[0] && <NewDealModal initialContactId={dealContactId} initialStageId={dealStages[0].id} stages={dealStages} contacts={contacts.map((item) => ({ id: item.id, name: item.name, phone: item.phone || null, source: item.source, dealCount: item.dealIds.length }))} assignees={[{ id: user.id, name: user.name }]} onCreate={createDeal} onClose={() => setDealContactId(null)} />}
+      {taskContactId && <NewTaskModal initialContactId={taskContactId} contacts={taskContacts} deals={taskDeals} assignee={{ id: user.id, name: user.name }} onCreate={async (draft) => { await createTask(draft); const items = await requestContactActivities(taskContactId); setContactActivities((current) => ({ ...current, [taskContactId]: items })); }} onClose={() => setTaskContactId(null)} />}
     </section>
   );
 }

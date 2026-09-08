@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { useCurrentUser } from "@/components/auth/AuthContext";
+import { localDateKey } from "@/lib/tasks";
 import type { CrmTask, TaskKind, TaskPeriod } from "@/types/crm";
 import { CompleteTaskModal } from "./CompleteTaskModal";
 import { NewTaskModal, type NewTaskDraft } from "./NewTaskModal";
@@ -21,7 +23,8 @@ const periodLabels: Record<TaskPeriod, string> = {
 const kindIcons: Record<TaskKind, string> = { Звонок: "☎", Встреча: "□", Сообщение: "↗", Другое: "✓" };
 
 export function TasksCenter() {
-  const { tasks, setTasks } = useTasks();
+  const user = useCurrentUser();
+  const { tasks, contacts, deals, loadState, createTask, updateTask, completeTask: persistCompleteTask, reloadTasks } = useTasks();
   const [period, setPeriod] = useState<PeriodFilter>("active");
   const [assignee, setAssignee] = useState("all");
   const [kind, setKind] = useState<"all" | TaskKind>("all");
@@ -54,26 +57,14 @@ export function TasksCenter() {
     return order.map((key) => ({ period: key, tasks: visibleTasks.filter((task) => task.period === key) })).filter((group) => group.tasks.length);
   }, [period, visibleTasks]);
 
-  function completeTask(result: string) {
+  async function completeTask(result: string) {
     if (!completingTask) return;
-    setTasks((current) => current.map((task) => task.id === completingTask.id ? { ...task, period: "completed", result: result || "Выполнено", completedAt: "Только что" } : task));
+    await persistCompleteTask(completingTask.id, result);
     setCompletingId(null);
   }
 
-  function createTask(draft: NewTaskDraft) {
-    const task: CrmTask = {
-      id: `task-${Date.now()}`,
-      title: draft.title.trim(),
-      kind: draft.kind,
-      period: draft.period,
-      dueDate: draft.period === "today" ? "2026-09-05" : "2026-09-06",
-      dueLabel: periodLabels[draft.period],
-      dueTime: draft.dueTime || undefined,
-      assignee: draft.assignee,
-      contactName: draft.contactName.trim() || undefined,
-      dealTitle: draft.dealTitle.trim() || undefined,
-    };
-    setTasks((current) => [task, ...current]);
+  async function createNewTask(draft: NewTaskDraft) {
+    await createTask(draft);
     setIsCreating(false);
     setPeriod("active");
   }
@@ -89,7 +80,7 @@ export function TasksCenter() {
       </header>
 
       <div className={styles.content}>
-        <div className={styles.heading}><div><span className={styles.eyebrow}>Рабочий день</span><h2>Мои задачи</h2><p>Все запланированные действия по клиентам и сделкам</p></div><div className={styles.today}><span>Сегодня</span><strong>5 сентября</strong></div></div>
+        <div className={styles.heading}><div><span className={styles.eyebrow}>Рабочий день</span><h2>Мои задачи</h2><p>Все запланированные действия по клиентам и сделкам</p></div><div className={styles.today}><span>Сегодня</span><strong>{new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" }).format(new Date())}</strong></div></div>
 
         <div className={styles.summary}>
           <SummaryButton label="Активные" count={counts.active} active={period === "active"} onClick={() => setPeriod("active")} />
@@ -107,13 +98,13 @@ export function TasksCenter() {
         </div>
 
         <div className={styles.taskList}>
-          {groupedTasks.length ? groupedTasks.map((group) => <section className={`${styles.group} ${styles[`group_${group.period}`]}`} key={group.period}><div className={styles.groupHeader}><span className={`${styles.groupDot} ${styles[`dot_${group.period}`]}`} /><h3>{periodLabels[group.period]}</h3><span>{group.tasks.length}</span></div>{group.tasks.map((task) => <TaskRow task={task} onOpen={() => setSelectedTaskId(task.id)} onComplete={() => setCompletingId(task.id)} key={task.id} />)}</section>) : <div className={styles.empty}><span>✓</span><h3>Задач не найдено</h3><p>Для выбранных параметров список пуст.</p></div>}
+          {loadState === "loading" ? <div className={styles.empty}><span>…</span><h3>Загружаем задачи</h3><p>Получаем актуальный план из CRM.</p></div> : loadState === "error" ? <div className={styles.empty}><span>!</span><h3>Не удалось загрузить задачи</h3><p>Проверьте соединение и попробуйте ещё раз.</p><button type="button" onClick={() => { void reloadTasks(); }}>Повторить</button></div> : groupedTasks.length ? groupedTasks.map((group) => <section className={`${styles.group} ${styles[`group_${group.period}`]}`} key={group.period}><div className={styles.groupHeader}><span className={`${styles.groupDot} ${styles[`dot_${group.period}`]}`} /><h3>{periodLabels[group.period]}</h3><span>{group.tasks.length}</span></div>{group.tasks.map((task) => <TaskRow task={task} onOpen={() => setSelectedTaskId(task.id)} onComplete={() => setCompletingId(task.id)} key={task.id} />)}</section>) : <div className={styles.empty}><span>✓</span><h3>Задач не найдено</h3><p>Для выбранных параметров список пуст.</p></div>}
         </div>
       </div>
 
-      {completingTask && <CompleteTaskModal task={completingTask} onComplete={completeTask} onClose={() => setCompletingId(null)} />}
-      {selectedTask && <TaskDetailsModal task={selectedTask} onSave={(updatedTask) => { setTasks((current) => current.map((task) => task.id === updatedTask.id ? updatedTask : task)); setSelectedTaskId(null); }} onClose={() => setSelectedTaskId(null)} />}
-      {isCreating && <NewTaskModal onCreate={createTask} onClose={() => setIsCreating(false)} />}
+      {completingTask && <CompleteTaskModal task={completingTask} onComplete={(result) => { void completeTask(result); }} onClose={() => setCompletingId(null)} />}
+      {selectedTask && <TaskDetailsModal task={selectedTask} contacts={contacts} deals={deals} assignee={{ id: user.id, name: user.name }} onSave={updateTask} onClose={() => setSelectedTaskId(null)} />}
+      {isCreating && <NewTaskModal initialDate={localDateKey()} contacts={contacts} deals={deals} assignee={{ id: user.id, name: user.name }} onCreate={createNewTask} onClose={() => setIsCreating(false)} />}
     </section>
   );
 }

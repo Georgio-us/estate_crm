@@ -41,8 +41,9 @@ function mapContact(contact: {
   relatedDeals?: Array<{ deal: { id: string; number: number; title: string; request: string; budget: string | null; stage: { id: string; title: string; color: string } } }>;
   relationsAsA?: Array<{ label: string | null; contactB: { id: string; name: string; phone: string | null } }>;
   relationsAsB?: Array<{ label: string | null; contactA: { id: string; name: string; phone: string | null } }>;
+  tasks?: Array<{ id: string; title: string; dueDate: Date | null; dueTime: string | null }>;
 }): ContactRecord {
-  const { deals: primaryDeals, relatedDeals, relationsAsA, relationsAsB, ...record } = contact;
+  const { deals: primaryDeals, relatedDeals, relationsAsA, relationsAsB, tasks, ...record } = contact;
   const deals = Array.from(new Map([
     ...(primaryDeals ?? []),
     ...(relatedDeals?.map((link) => link.deal) ?? []),
@@ -55,6 +56,7 @@ function mapContact(contact: {
       ...(relationsAsA?.map((relation) => ({ ...relation.contactB, label: relation.label })) ?? []),
       ...(relationsAsB?.map((relation) => ({ ...relation.contactA, label: relation.label })) ?? []),
     ],
+    nextTask: tasks?.[0] ? { ...tasks[0], dueDate: tasks[0].dueDate?.toISOString().slice(0, 10) ?? null } : null,
     createdAt: contact.createdAt.toISOString(),
     updatedAt: contact.updatedAt.toISOString(),
   };
@@ -84,7 +86,7 @@ export async function registerContactRoutes(
           ],
         } : {}),
       },
-      include: { assignee: { select: { id: true, name: true } }, deals: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } }, relatedDeals: { include: { deal: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } } } }, relationsAsA: { include: { contactB: { select: { id: true, name: true, phone: true } } } }, relationsAsB: { include: { contactA: { select: { id: true, name: true, phone: true } } } } },
+      include: { assignee: { select: { id: true, name: true } }, deals: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } }, relatedDeals: { include: { deal: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } } } }, relationsAsA: { include: { contactB: { select: { id: true, name: true, phone: true } } } }, relationsAsB: { include: { contactA: { select: { id: true, name: true, phone: true } } } }, tasks: { where: { status: "ACTIVE" }, orderBy: [{ dueDate: "asc" }, { dueTime: "asc" }], take: 1, select: { id: true, title: true, dueDate: true, dueTime: true } } },
       orderBy: { createdAt: "desc" },
       take: 200,
     });
@@ -162,7 +164,7 @@ export async function registerContactRoutes(
         assigneeId: request.body.assigneeId ?? null,
         comment: optionalText(request.body.comment),
       },
-      include: { assignee: { select: { id: true, name: true } }, deals: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } }, relatedDeals: { include: { deal: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } } } }, relationsAsA: { include: { contactB: { select: { id: true, name: true, phone: true } } } }, relationsAsB: { include: { contactA: { select: { id: true, name: true, phone: true } } } } },
+      include: { assignee: { select: { id: true, name: true } }, deals: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } }, relatedDeals: { include: { deal: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } } } }, relationsAsA: { include: { contactB: { select: { id: true, name: true, phone: true } } } }, relationsAsB: { include: { contactA: { select: { id: true, name: true, phone: true } } } }, tasks: { where: { status: "ACTIVE" }, orderBy: [{ dueDate: "asc" }, { dueTime: "asc" }], take: 1, select: { id: true, title: true, dueDate: true, dueTime: true } } },
     });
 
     return reply.status(201).send({ contact: mapContact(contact) });
@@ -230,7 +232,7 @@ export async function registerContactRoutes(
         ...(request.body.assigneeId !== undefined ? { assigneeId: request.body.assigneeId } : {}),
         ...(request.body.comment !== undefined ? { comment: optionalText(request.body.comment) } : {}),
       },
-      include: { assignee: { select: { id: true, name: true } }, deals: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } }, relatedDeals: { include: { deal: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } } } }, relationsAsA: { include: { contactB: { select: { id: true, name: true, phone: true } } } }, relationsAsB: { include: { contactA: { select: { id: true, name: true, phone: true } } } } },
+      include: { assignee: { select: { id: true, name: true } }, deals: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } }, relatedDeals: { include: { deal: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } } } }, relationsAsA: { include: { contactB: { select: { id: true, name: true, phone: true } } } }, relationsAsB: { include: { contactA: { select: { id: true, name: true, phone: true } } } }, tasks: { where: { status: "ACTIVE" }, orderBy: [{ dueDate: "asc" }, { dueTime: "asc" }], take: 1, select: { id: true, title: true, dueDate: true, dueTime: true } } },
     });
 
     if (request.body.source !== undefined && request.body.source !== existing.source) {

@@ -20,6 +20,7 @@ export interface Deal {
   assigneeId?: string;
   assignee: string;
   task?: string;
+  taskId?: string;
   taskState?: "normal" | "due" | "overdue";
   priority?: DealPriority;
 }
@@ -99,6 +100,7 @@ export interface CrmTask {
   dueDate?: string;
   dueLabel: string;
   dueTime?: string;
+  assigneeId?: string;
   assignee: string;
   contactId?: string;
   contactName?: string;

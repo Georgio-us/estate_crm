@@ -3,12 +3,12 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { mockActivities } from "@/data/mock-activities";
-import { mockContacts } from "@/data/mock-contacts";
 import { pipelineStages } from "@/data/mock-pipeline";
 import { mockProperties } from "@/data/mock-properties";
 import { CompleteTaskModal } from "@/components/tasks/CompleteTaskModal";
 import { TaskDetailsModal } from "@/components/tasks/TaskDetailsModal";
 import { useTasks } from "@/components/tasks/TasksContext";
+import { useCurrentUser } from "@/components/auth/AuthContext";
 import type { ActivityCategory, CrmTask } from "@/types/crm";
 import styles from "./dashboard.module.css";
 
@@ -34,7 +34,8 @@ function activityWeight(occurredAt: string) {
 }
 
 export function Dashboard() {
-  const { tasks, setTasks } = useTasks();
+  const user = useCurrentUser();
+  const { tasks, contacts, deals: taskDeals, updateTask, completeTask: persistCompleteTask } = useTasks();
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -56,6 +57,7 @@ export function Dashboard() {
   const priorityTask = focusTasks[0];
   const selectedTask = tasks.find((task) => task.id === selectedTaskId);
   const completingTask = tasks.find((task) => task.id === completingTaskId);
+  const todayLabel = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" }).format(new Date());
 
   const recentActivities = useMemo(() => Object.values(mockActivities)
     .flat()
@@ -66,11 +68,9 @@ export function Dashboard() {
     .sort((first, second) => activityWeight(second.occurredAt) - activityWeight(first.occurredAt))
     .slice(0, 6), [deals]);
 
-  function completeTask(result: string) {
+  async function completeTask(result: string) {
     if (!completingTask) return;
-    setTasks((current) => current.map((task) => task.id === completingTask.id
-      ? { ...task, period: "completed", result: result || "Выполнено", completedAt: "Только что" }
-      : task));
+    await persistCompleteTask(completingTask.id, result);
     setCompletingTaskId(null);
   }
 
@@ -88,7 +88,7 @@ export function Dashboard() {
             <aside className={styles.notificationPanel} aria-label="Последние уведомления">
               <header><div><strong>Уведомления</strong><span>{notificationCount} новых</span></div><button type="button" onClick={() => setNotificationsOpen(false)}>Закрыть</button></header>
               {overdueCount > 0 && <button className={styles.notificationItem} type="button" onClick={() => { if (priorityTask) setSelectedTaskId(priorityTask.id); setNotificationsOpen(false); }}>
-                <i className={styles.notificationDanger}>!</i><span><strong>Просрочена задача</strong><small>Позвонить Ольге Мельник до 14:00</small><time>Сейчас</time></span>
+                <i className={styles.notificationDanger}>!</i><span><strong>Просрочена задача</strong><small>{priorityTask?.title}{priorityTask?.contactName ? ` · ${priorityTask.contactName}` : ""}</small><time>Сейчас</time></span>
               </button>}
               <Link className={styles.notificationItem} href="/" onClick={() => setNotificationsOpen(false)}>
                 <i className={styles.notificationLead}>↗</i><span><strong>Новый лид из Meta</strong><small>Анна Коваленко · ищет квартиру</small><time>10:42</time></span>
@@ -110,7 +110,7 @@ export function Dashboard() {
 
           <section className={styles.command} aria-label="Главное на сегодня">
             <div className={styles.commandMain}>
-              <div className={styles.commandMeta}><span>Сегодня · 5 сентября</span><i>{overdueCount ? "Требует действия" : "Всё по плану"}</i></div>
+              <div className={styles.commandMeta}><span>Сегодня · {todayLabel}</span><i>{overdueCount ? "Требует действия" : "Всё по плану"}</i></div>
               <strong className={styles.commandNumber}>{overdueCount}</strong>
               <h3>{overdueCount ? "просроченная задача" : "просроченных задач"}</h3>
               {priorityTask ? <><p><b>{priorityTask.title}</b> · {priorityTask.contactName || "Без контакта"}</p><button type="button" onClick={() => setSelectedTaskId(priorityTask.id)}>Открыть задачу <span>→</span></button></> : <p>Критичных действий сейчас нет.</p>}
@@ -124,7 +124,7 @@ export function Dashboard() {
 
           <section className={styles.infoStrip} aria-label="Общее состояние CRM">
             <InfoMetric href="/" value={deals.length} label="Активных сделок" />
-            <InfoMetric href="/contacts" value={mockContacts.length} label="Контактов в базе" />
+            <InfoMetric href="/contacts" value={contacts.length} label="Контактов в базе" />
             <InfoMetric href="/objects" value={availableProperties} label="Доступных объектов" />
             <InfoMetric href="/tasks" value={completedToday} label="Задач выполнено" />
           </section>
@@ -181,8 +181,8 @@ export function Dashboard() {
         </section>
       </main>
 
-      {completingTask && <CompleteTaskModal task={completingTask} onComplete={completeTask} onClose={() => setCompletingTaskId(null)} />}
-      {selectedTask && <TaskDetailsModal task={selectedTask} onSave={(updatedTask) => { setTasks((current) => current.map((task) => task.id === updatedTask.id ? updatedTask : task)); setSelectedTaskId(null); }} onClose={() => setSelectedTaskId(null)} />}
+      {completingTask && <CompleteTaskModal task={completingTask} onComplete={(result) => { void completeTask(result); }} onClose={() => setCompletingTaskId(null)} />}
+      {selectedTask && <TaskDetailsModal task={selectedTask} contacts={contacts} deals={taskDeals} assignee={{ id: user.id, name: user.name }} onSave={updateTask} onClose={() => setSelectedTaskId(null)} />}
     </section>
   );
 }

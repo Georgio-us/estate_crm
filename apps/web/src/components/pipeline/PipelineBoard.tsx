@@ -16,6 +16,8 @@ import {
 import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { useRouter } from "next/navigation";
 import { useCurrentUser } from "@/components/auth/AuthContext";
+import { useTasks } from "@/components/tasks/TasksContext";
+import { localDateKey } from "@/lib/tasks";
 import { mapApiActivity, type ApiActivity } from "@/lib/activity";
 import type { ActivityEvent, Deal, PipelineStage } from "@/types/crm";
 import { DealDrawer } from "./DealDrawer";
@@ -34,6 +36,7 @@ interface ApiDeal {
   number: number;
   contact: { id: string; name: string; phone: string | null };
   relatedContacts: Array<{ id: string; name: string; phone: string | null }>;
+  nextTask: { id: string; title: string; dueDate: string | null; dueTime: string | null } | null;
   title: string;
   request: string;
   budget: string | null;
@@ -59,6 +62,9 @@ function mapApiDeal(deal: ApiDeal): Deal {
     contactName: deal.contact.name,
     phone: deal.contact.phone || "",
     relatedContacts: deal.relatedContacts || [],
+    task: deal.nextTask?.title,
+    taskId: deal.nextTask?.id,
+    taskState: deal.nextTask ? (deal.nextTask.dueDate && deal.nextTask.dueDate < localDateKey() ? "overdue" : deal.nextTask.dueDate === localDateKey() ? "due" : "normal") : undefined,
     request: deal.request,
     budget: deal.budget || undefined,
     operation: operationFromApi[deal.operation],
@@ -100,6 +106,7 @@ async function requestDealActivities(dealId: string): Promise<ActivityEvent[]> {
 export function PipelineBoard() {
   const router = useRouter();
   const user = useCurrentUser();
+  const { createTask, completeTask: persistCompleteTask } = useTasks();
   const [pipelineName, setPipelineName] = useState("Продажа недвижимости");
   const [stages, setStages] = useState<PipelineStage[]>([]);
   const [contacts, setContacts] = useState<ContactOption[]>([]);
@@ -336,31 +343,26 @@ export function PipelineBoard() {
     setActivities((current) => ({ ...current, [savedDeal.id]: refreshedActivities }));
   }
 
-  function addTask(title: string, dueAt?: string) {
-    if (!selected) return;
-
-    updateDeal({ task: title, taskState: "normal" });
-    appendActivity({
-      dealId: selected.dealId,
-      category: "task",
-      title: "Поставлена задача",
-      description: dueAt ? `${title} · ${dueAt}` : title,
-      author: user.name,
-    });
+  async function addTask(title: string, dueAt?: string) {
+    if (!selected || !selectedDeal) throw new Error("Сделка больше не открыта.");
+    const now = new Date();
+    const offsets: Record<string, number> = { "Сегодня, 18:00": 0, "Завтра, 10:00": 1, "Через 3 дня": 3, "Через неделю": 7 };
+    const days = dueAt ? offsets[dueAt] ?? 0 : 0;
+    const dueDate = dueAt ? localDateKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() + days)) : undefined;
+    const dueTime = dueAt?.match(/(\d{2}:\d{2})/)?.[1];
+    const task = await createTask({ title, kind: "Звонок", dueDate, dueTime, dealId: selected.dealId, contactId: selectedDeal.contactId, assigneeId: selectedDeal.assigneeId || user.id });
+    updateDeal({ task: title, taskId: task.id, taskState: "normal" });
+    const refreshedActivities = await requestDealActivities(selected.dealId);
+    setActivities((current) => ({ ...current, [selected.dealId]: refreshedActivities }));
   }
 
-  function completeTask(result: string) {
+  async function completeTask(result: string) {
     if (!selected || !selectedDeal?.task) return;
 
-    const completedTask = selectedDeal.task;
-    updateDeal({ task: undefined, taskState: undefined });
-    appendActivity({
-      dealId: selected.dealId,
-      category: "task",
-      title: "Задача выполнена",
-      description: result ? `${completedTask} · ${result}` : completedTask,
-      author: user.name,
-    });
+    if (selectedDeal.taskId) await persistCompleteTask(selectedDeal.taskId, result);
+    updateDeal({ task: undefined, taskId: undefined, taskState: undefined });
+    const refreshedActivities = await requestDealActivities(selected.dealId);
+    setActivities((current) => ({ ...current, [selected.dealId]: refreshedActivities }));
   }
 
   async function createDeal(draft: NewDealDraft) {

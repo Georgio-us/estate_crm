@@ -15,8 +15,8 @@ interface DealDrawerProps {
   onAddNote: (text: string) => Promise<void>;
   onLinkContact: (contactId: string) => Promise<void>;
   onUnlinkContact: (contactId: string) => Promise<void>;
-  onAddTask: (title: string, dueAt?: string) => void;
-  onCompleteTask: (result: string) => void;
+  onAddTask: (title: string, dueAt?: string) => Promise<void>;
+  onCompleteTask: (result: string) => Promise<void>;
   onClose: () => void;
 }
 
@@ -163,7 +163,10 @@ export function DealDrawer({
         return;
       }
     } else {
-      onAddTask(text, taskDueAt === "Без срока" ? undefined : taskDueAt);
+      setIsComposerSubmitting(true);
+      setComposerError("");
+      try { await onAddTask(text, taskDueAt === "Без срока" ? undefined : taskDueAt); }
+      catch (cause) { setComposerError(cause instanceof Error ? cause.message : "Не удалось создать задачу."); setIsComposerSubmitting(false); return; }
     }
 
     setComposerText("");
@@ -172,8 +175,8 @@ export function DealDrawer({
     setIsComposerSubmitting(false);
   }
 
-  function completeCurrentTask() {
-    onCompleteTask(taskResult.trim());
+  async function completeCurrentTask() {
+    await onCompleteTask(taskResult.trim());
     setTaskResult("");
     setIsCompletingTask(false);
   }
@@ -287,8 +290,8 @@ export function DealDrawer({
               {isCompletingTask && deal.task && (
                 <div className={styles.completionForm}>
                   <label htmlFor="task-result">Результат задачи</label>
-                  <textarea id="task-result" value={taskResult} onChange={(event) => setTaskResult(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); completeCurrentTask(); } }} placeholder="Например, договорились о просмотре" />
-                  <div><button type="button" onClick={() => setIsCompletingTask(false)}>Отмена</button><button type="button" onClick={completeCurrentTask}>Подтвердить</button></div>
+                  <textarea id="task-result" value={taskResult} onChange={(event) => setTaskResult(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void completeCurrentTask(); } }} placeholder="Например, договорились о просмотре" />
+                  <div><button type="button" onClick={() => setIsCompletingTask(false)}>Отмена</button><button type="button" onClick={() => { void completeCurrentTask(); }}>Подтвердить</button></div>
                 </div>
               )}
 

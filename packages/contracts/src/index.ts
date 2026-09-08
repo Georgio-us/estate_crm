@@ -70,6 +70,7 @@ export interface ContactRecord {
   dealIds: string[];
   deals: ContactDealSummary[];
   relatedContacts: Array<ContactAssignee & { phone: string | null; label: string | null }>;
+  nextTask: { id: string; title: string; dueDate: string | null; dueTime: string | null } | null;
   comment: string | null;
   createdAt: string;
   updatedAt: string;
@@ -112,6 +113,7 @@ export interface PipelineDealRecord {
   number: number;
   contact: ContactAssignee & { phone: string | null };
   relatedContacts: Array<ContactAssignee & { phone: string | null }>;
+  nextTask: { id: string; title: string; dueDate: string | null; dueTime: string | null } | null;
   title: string;
   request: string;
   budget: string | null;
@@ -181,6 +183,49 @@ export interface UpdateDealRequest {
 export interface MoveDealRequest {
   stageId: string;
   position?: number;
+}
+
+export type TaskKind = "CALL" | "MEETING" | "MESSAGE" | "OTHER";
+export type TaskStatus = "ACTIVE" | "COMPLETED";
+
+export interface TaskRecord {
+  id: string;
+  title: string;
+  kind: TaskKind;
+  status: TaskStatus;
+  dueDate: string | null;
+  dueTime: string | null;
+  result: string | null;
+  completedAt: string | null;
+  contact: ContactAssignee | null;
+  deal: { id: string; number: number; title: string } | null;
+  assignee: ContactAssignee | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TaskListResponse {
+  tasks: TaskRecord[];
+  total: number;
+}
+
+export interface CreateTaskRequest {
+  title: string;
+  kind?: TaskKind;
+  dueDate?: string | null;
+  dueTime?: string | null;
+  contactId?: string | null;
+  dealId?: string | null;
+  assigneeId?: string | null;
+}
+
+export interface UpdateTaskRequest extends CreateTaskRequest {
+  status?: TaskStatus;
+  result?: string | null;
+}
+
+export interface CompleteTaskRequest {
+  result?: string;
 }
 
 export type ActivityCategory = "NOTE" | "TASK" | "CHANGE" | "SOURCE" | "OBJECT";

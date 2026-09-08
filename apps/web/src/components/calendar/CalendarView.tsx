@@ -1,26 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
+import { useCurrentUser } from "@/components/auth/AuthContext";
 import { useTasks } from "@/components/tasks/TasksContext";
+import { NewTaskModal } from "@/components/tasks/NewTaskModal";
 import { TaskDetailsModal } from "@/components/tasks/TaskDetailsModal";
 import { CompleteTaskModal } from "@/components/tasks/CompleteTaskModal";
-import type { CrmTask, TaskKind, TaskPeriod } from "@/types/crm";
+import { localDateKey } from "@/lib/tasks";
+import type { TaskKind } from "@/types/crm";
 import styles from "./calendar.module.css";
 
 type CalendarMode = "month" | "week";
 
-interface CalendarTaskDraft {
-  title: string;
-  kind: TaskKind;
-  date: string;
-  time: string;
-  assignee: string;
-  contactName: string;
-  dealTitle: string;
-}
-
-const TODAY_KEY = "2026-09-05";
+const TODAY_KEY = localDateKey();
 const weekDayNames = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 const monthNames = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
 const kindIcons: Record<TaskKind, string> = { Звонок: "☎", Встреча: "□", Сообщение: "↗", Другое: "✓" };
@@ -62,22 +55,11 @@ function formatFullDate(key: string) {
   return new Intl.DateTimeFormat("ru-RU", { weekday: "long", day: "numeric", month: "long" }).format(dateFromKey(key));
 }
 
-function dueLabel(key: string) {
-  if (key === TODAY_KEY) return "Сегодня";
-  if (key === "2026-09-06") return "Завтра";
-  return new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" }).format(dateFromKey(key));
-}
-
-function periodForDate(key: string): Exclude<TaskPeriod, "completed"> {
-  if (key < TODAY_KEY) return "overdue";
-  if (key === TODAY_KEY) return "today";
-  return "upcoming";
-}
-
 export function CalendarView() {
-  const { tasks, setTasks } = useTasks();
+  const user = useCurrentUser();
+  const { tasks, contacts, deals, createTask, updateTask, completeTask: persistCompleteTask } = useTasks();
   const [mode, setMode] = useState<CalendarMode>("month");
-  const [cursor, setCursor] = useState(() => new Date(2026, 8, 1));
+  const [cursor, setCursor] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState(TODAY_KEY);
   const [search, setSearch] = useState("");
   const [isCreating, setIsCreating] = useState(false);
@@ -110,40 +92,27 @@ export function CalendarView() {
   }
 
   function returnToToday() {
-    setCursor(new Date(2026, 8, 1));
+    setCursor(new Date());
     setSelectedDate(TODAY_KEY);
   }
 
-  function createTask(draft: CalendarTaskDraft) {
-    const task: CrmTask = {
-      id: `calendar-task-${Date.now()}`,
-      title: draft.title.trim(),
-      kind: draft.kind,
-      period: periodForDate(draft.date),
-      dueDate: draft.date,
-      dueLabel: dueLabel(draft.date),
-      dueTime: draft.time || undefined,
-      assignee: draft.assignee,
-      contactName: draft.contactName.trim() || undefined,
-      dealTitle: draft.dealTitle.trim() || undefined,
-    };
-    setTasks((current) => [...current, task]);
-    setSelectedDate(draft.date);
-    const createdDate = dateFromKey(draft.date);
+  async function createCalendarTask(draft: Parameters<typeof createTask>[0]) {
+    await createTask(draft);
+    const date = draft.dueDate || selectedDate;
+    setSelectedDate(date);
+    const createdDate = dateFromKey(date);
     setCursor(new Date(createdDate.getFullYear(), createdDate.getMonth(), 1));
     setIsCreating(false);
   }
 
-  function completeTask(result: string) {
+  async function completeTask(result: string) {
     if (!completingTask) return;
-    setTasks((current) => current.map((task) => task.id === completingTask.id
-      ? { ...task, period: "completed", result: result || "Выполнено", completedAt: "Только что" }
-      : task));
+    await persistCompleteTask(completingTask.id, result);
     setCompletingTaskId(null);
   }
 
-  function saveTask(updatedTask: CrmTask) {
-    setTasks((current) => current.map((task) => task.id === updatedTask.id ? updatedTask : task));
+  async function saveTask(updatedTask: Parameters<typeof updateTask>[0]) {
+    await updateTask(updatedTask);
     const nextDateKey = updatedTask.dueDate || selectedDate;
     const nextDate = dateFromKey(nextDateKey);
     setSelectedDate(nextDateKey);
@@ -208,33 +177,9 @@ export function CalendarView() {
         </div>
       </div>
 
-      {isCreating && <CalendarTaskModal initialDate={selectedDate} onCreate={createTask} onClose={() => setIsCreating(false)} />}
-      {selectedTask && <TaskDetailsModal task={selectedTask} onSave={saveTask} onClose={() => setSelectedTaskId(null)} />}
-      {completingTask && <CompleteTaskModal task={completingTask} onComplete={completeTask} onClose={() => setCompletingTaskId(null)} />}
+      {isCreating && <NewTaskModal initialDate={selectedDate} contacts={contacts} deals={deals} assignee={{ id: user.id, name: user.name }} onCreate={createCalendarTask} onClose={() => setIsCreating(false)} />}
+      {selectedTask && <TaskDetailsModal task={selectedTask} contacts={contacts} deals={deals} assignee={{ id: user.id, name: user.name }} onSave={saveTask} onClose={() => setSelectedTaskId(null)} />}
+      {completingTask && <CompleteTaskModal task={completingTask} onComplete={(result) => { void completeTask(result); }} onClose={() => setCompletingTaskId(null)} />}
     </section>
   );
-}
-
-function CalendarTaskModal({ initialDate, onCreate, onClose }: { initialDate: string; onCreate: (draft: CalendarTaskDraft) => void; onClose: () => void }) {
-  const [draft, setDraft] = useState<CalendarTaskDraft>({ title: "", kind: "Звонок", date: initialDate, time: "", assignee: "Георгий", contactName: "", dealTitle: "" });
-  const update = (patch: Partial<CalendarTaskDraft>) => setDraft((current) => ({ ...current, ...patch }));
-  return (
-    <div className={styles.modalLayer} role="presentation">
-      <button className={styles.backdrop} type="button" aria-label="Закрыть создание задачи" onClick={onClose} />
-      <form className={styles.modal} role="dialog" aria-modal="true" aria-labelledby="calendar-task-title" onSubmit={(event) => { event.preventDefault(); if (draft.title.trim()) onCreate(draft); }}>
-        <header><div><span>Новая задача</span><h2 id="calendar-task-title">Запланировать действие</h2></div><button type="button" aria-label="Закрыть" onClick={onClose}>×</button></header>
-        <div className={styles.modalBody}>
-          <Field label="Что необходимо сделать" required><input autoFocus value={draft.title} onChange={(event) => update({ title: event.target.value })} placeholder="Например, провести показ объекта" /></Field>
-          <div className={styles.formGrid}><Field label="Дата"><input type="date" value={draft.date} onChange={(event) => update({ date: event.target.value })} /></Field><Field label="Время"><input type="time" value={draft.time} onChange={(event) => update({ time: event.target.value })} /></Field><Field label="Тип действия"><select value={draft.kind} onChange={(event) => update({ kind: event.target.value as TaskKind })}><option>Звонок</option><option>Встреча</option><option>Сообщение</option><option>Другое</option></select></Field><Field label="Ответственный"><select value={draft.assignee} onChange={(event) => update({ assignee: event.target.value })}><option>Георгий</option><option>Елена</option><option>Андрей</option></select></Field></div>
-          <Field label="Контакт"><input value={draft.contactName} onChange={(event) => update({ contactName: event.target.value })} placeholder="Имя клиента — необязательно" /></Field>
-          <Field label="Сделка"><input value={draft.dealTitle} onChange={(event) => update({ dealTitle: event.target.value })} placeholder="Связанная сделка — необязательно" /></Field>
-        </div>
-        <footer><span>Задача появится в выбранном дне</span><div><button type="button" onClick={onClose}>Отмена</button><button className={styles.submitButton} type="submit" disabled={!draft.title.trim() || !draft.date}>Создать задачу</button></div></footer>
-      </form>
-    </div>
-  );
-}
-
-function Field({ label, required = false, children }: { label: string; required?: boolean; children: ReactNode }) {
-  return <label className={styles.field}><span>{label}{required && <b>обязательно</b>}</span>{children}</label>;
 }
