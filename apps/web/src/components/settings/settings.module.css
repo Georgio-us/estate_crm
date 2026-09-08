@@ -55,10 +55,17 @@
 .fieldHeader button, .moduleEditor > footer button { padding: 0; border: 0; background: transparent; color: var(--primary); cursor: pointer; }
 .fieldList { border-top: 1px solid var(--border); }
 .fieldList > div { display: grid; min-height: 58px; grid-template-columns: 22px minmax(120px,1fr) 70px 102px; align-items: center; gap: 9px; border-bottom: 1px solid var(--border); }
+.stageFieldList > div { grid-template-columns: 22px minmax(120px,1fr) 42px 74px 102px; }
 .drag { color: #b3b3ae; cursor: grab; }
 .draggingRow { background: #f1f5fc; opacity: .58; }
 .fieldList input { min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text); }
 .fieldType { color: var(--text-subtle); font-size: 10px; }
+.stageColorWrap { position: relative; }
+.stageColorButton { display: block; width: 28px; height: 28px; padding: 0; border: 3px solid #fff; border-radius: 50%; box-shadow: 0 0 0 1px var(--border-strong); cursor: pointer; }
+.colorPalette { position: absolute; z-index: 12; top: 36px; right: 0; display: grid; width: 178px; grid-template-columns: repeat(5, 26px); gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: #fff; box-shadow: var(--shadow-modal); }
+.colorPalette button { width: 26px; height: 26px; padding: 0; border: 3px solid #fff; border-radius: 50%; box-shadow: 0 0 0 1px transparent; cursor: pointer; }
+.colorPalette .selectedColor { box-shadow: 0 0 0 2px #416cc2; }
+.editorState { min-height: 180px; display: grid; place-items: center; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); color: var(--text-muted); text-align: center; }
 .rowActions { display: flex; justify-content: flex-end; gap: 2px; }
 .rowActions button { width: 28px; height: 28px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text-muted); cursor: pointer; }
 .rowActions button:hover { background: #f0f0ee; }
@@ -153,6 +160,9 @@
   .moduleMenu { width: 32px; height: 32px; }
   .fieldHeader > div span { display: none; }
   .fieldList > div { grid-template-columns: 18px minmax(90px,1fr) 70px; }
+  .stageFieldList > div { grid-template-columns: 18px minmax(90px,1fr) 38px 68px; }
+  .stageFieldList .rowActions { grid-column: 2 / -1; }
+  .colorPalette { right: -62px; }
   .rowActions { grid-column: 2 / -1; justify-content: flex-start; padding-bottom: 8px; }
   .moduleEditor > footer span { display: none; }
   .formGrid, .securityCards, .dataActions { grid-template-columns: 1fr; }

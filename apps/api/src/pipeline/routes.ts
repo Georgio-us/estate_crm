@@ -5,8 +5,10 @@ import type {
   CreateDealRequest,
   LinkDealContactRequest,
   MoveDealRequest,
+  PipelineConfigurationResponse,
   PipelineDealRecord,
   PipelineResponse,
+  UpdatePipelineConfigurationRequest,
   UpdateDealLifecycleRequest,
   UpdateDealRequest,
 } from "@estate-crm/contracts";
@@ -138,6 +140,146 @@ export async function registerPipelineRoutes(
           color: stage.color,
           position: stage.position,
           deals: stage.deals.map(mapDeal),
+        })),
+      },
+    };
+  });
+
+  app.get<{
+    Reply: PipelineConfigurationResponse | ApiErrorResponse;
+  }>("/pipeline/configuration", async (request, reply) => {
+    const user = await requireUser(request, reply, database);
+    if (!user) return reply;
+
+    const pipeline = await ensureDefaultPipeline(database, user.organization.id);
+    const stages = await database.client.pipelineStage.findMany({
+      where: { pipelineId: pipeline.id },
+      orderBy: { position: "asc" },
+      include: { _count: { select: { deals: true } } },
+    });
+
+    return {
+      pipeline: {
+        id: pipeline.id,
+        name: pipeline.name,
+        stages: stages.map((stage) => ({
+          id: stage.id,
+          title: stage.title,
+          color: stage.color,
+          position: stage.position,
+          dealCount: stage._count.deals,
+        })),
+      },
+    };
+  });
+
+  app.put<{
+    Body: UpdatePipelineConfigurationRequest;
+    Reply: PipelineConfigurationResponse | ApiErrorResponse;
+  }>("/pipeline/configuration", {
+    schema: {
+      body: {
+        type: "object",
+        additionalProperties: false,
+        required: ["stages"],
+        properties: {
+          stages: {
+            type: "array",
+            minItems: 1,
+            maxItems: 30,
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["title", "color"],
+              properties: {
+                id: { type: "string", format: "uuid" },
+                title: { type: "string", minLength: 1, maxLength: 100 },
+                color: { type: "string", pattern: "^#[0-9a-fA-F]{6}$" },
+              },
+            },
+          },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const user = await requireUser(request, reply, database);
+    if (!user) return reply;
+    if (user.organization.role === "MANAGER") {
+      return reply.status(403).send({ error: "forbidden", message: "Настраивать этапы могут руководитель и администратор." });
+    }
+
+    const pipeline = await ensureDefaultPipeline(database, user.organization.id);
+    const existingStages = await database.client.pipelineStage.findMany({
+      where: { pipelineId: pipeline.id },
+      include: { _count: { select: { deals: true } } },
+    });
+    const existingById = new Map(existingStages.map((stage) => [stage.id, stage]));
+    const submittedIds = request.body.stages.flatMap((stage) => stage.id ? [stage.id] : []);
+
+    if (new Set(submittedIds).size !== submittedIds.length || submittedIds.some((id) => !existingById.has(id))) {
+      return reply.status(400).send({ error: "invalid_stage", message: "Один из этапов не принадлежит этой воронке." });
+    }
+
+    const normalizedStages = request.body.stages.map((stage) => ({ ...stage, title: stage.title.trim() }));
+    if (normalizedStages.some((stage) => !stage.title)) {
+      return reply.status(400).send({ error: "invalid_stage_title", message: "Название этапа не может быть пустым." });
+    }
+
+    const submittedIdSet = new Set(submittedIds);
+    const populatedRemovedStage = existingStages.find((stage) => !submittedIdSet.has(stage.id) && stage._count.deals > 0);
+    if (populatedRemovedStage) {
+      return reply.status(409).send({
+        error: "stage_not_empty",
+        message: `Сначала перенесите сделки из этапа «${populatedRemovedStage.title}», затем его можно удалить.`,
+      });
+    }
+
+    await database.client.$transaction(async (transaction) => {
+      await transaction.pipelineStage.updateMany({
+        where: { pipelineId: pipeline.id },
+        data: { position: { increment: 10_000 } },
+      });
+      await transaction.pipelineStage.deleteMany({
+        where: { pipelineId: pipeline.id, id: { notIn: submittedIds } },
+      });
+
+      const stageIds: string[] = [];
+      for (const [index, stage] of normalizedStages.entries()) {
+        if (stage.id) {
+          await transaction.pipelineStage.update({
+            where: { id: stage.id },
+            data: { title: stage.title, color: stage.color, position: 20_000 + index },
+          });
+          stageIds.push(stage.id);
+        } else {
+          const created = await transaction.pipelineStage.create({
+            data: { pipelineId: pipeline.id, title: stage.title, color: stage.color, position: 20_000 + index },
+          });
+          stageIds.push(created.id);
+        }
+      }
+
+      for (const [position, id] of stageIds.entries()) {
+        await transaction.pipelineStage.update({ where: { id }, data: { position } });
+      }
+    });
+
+    const stages = await database.client.pipelineStage.findMany({
+      where: { pipelineId: pipeline.id },
+      orderBy: { position: "asc" },
+      include: { _count: { select: { deals: true } } },
+    });
+
+    return {
+      pipeline: {
+        id: pipeline.id,
+        name: pipeline.name,
+        stages: stages.map((stage) => ({
+          id: stage.id,
+          title: stage.title,
+          color: stage.color,
+          position: stage.position,
+          dealCount: stage._count.deals,
         })),
       },
     };

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   closestCorners,
   DragOverlay,
@@ -139,6 +139,7 @@ async function requestDealActivities(dealId: string): Promise<ActivityEvent[]> {
 
 export function PipelineBoard() {
   const router = useRouter();
+  const pipelineMenuRef = useRef<HTMLDivElement>(null);
   const user = useCurrentUser();
   const { createTask, completeTask: persistCompleteTask } = useTasks();
   const [pipelineName, setPipelineName] = useState("Продажа недвижимости");
@@ -174,6 +175,15 @@ export function PipelineBoard() {
     );
     return () => { active = false; };
   }, [pipelineView]);
+
+  useEffect(() => {
+    if (!pipelineMenuOpen) return;
+    function closePipelineMenu(event: PointerEvent) {
+      if (!pipelineMenuRef.current?.contains(event.target as Node)) setPipelineMenuOpen(false);
+    }
+    document.addEventListener("pointerdown", closePipelineMenu);
+    return () => document.removeEventListener("pointerdown", closePipelineMenu);
+  }, [pipelineMenuOpen]);
 
   useEffect(() => {
     if (!selected?.dealId) return;
@@ -583,12 +593,12 @@ export function PipelineBoard() {
 
       <div className={styles.toolbar}>
         <div>
-          <div className={styles.titleRow}>
+          <div className={styles.titleRow} ref={pipelineMenuRef}>
             <h2>{pipelineName}</h2>
             <button className={styles.titleMenu} type="button" aria-label="Настройки воронки" aria-expanded={pipelineMenuOpen} onClick={() => { setPipelineMenuOpen((value) => !value); setNotificationsOpen(false); }}>
               •••
             </button>
-            {pipelineMenuOpen && <div className={styles.pipelineMenu}><button type="button" onClick={() => router.push("/settings")}>Настроить этапы <span>→</span></button><button type="button" onClick={exportDeals}>Экспортировать CSV <span>↓</span></button></div>}
+            {pipelineMenuOpen && <div className={styles.pipelineMenu}><button type="button" onClick={() => { setPipelineMenuOpen(false); router.push("/settings"); }}>Настроить этапы <span>→</span></button><button type="button" onClick={() => { setPipelineMenuOpen(false); exportDeals(); }}>Экспортировать CSV <span>↓</span></button></div>}
           </div>
           <p>{visibleDealsCount === dealsCount ? `${dealsCount} ${pipelineView === "active" ? "активных" : "закрытых"} сделок` : `${visibleDealsCount} из ${dealsCount} сделок`}</p>
         </div>

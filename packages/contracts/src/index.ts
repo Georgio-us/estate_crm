@@ -152,6 +152,30 @@ export interface PipelineResponse {
   };
 }
 
+export interface PipelineStageConfiguration {
+  id: string;
+  title: string;
+  color: string;
+  position: number;
+  dealCount: number;
+}
+
+export interface PipelineConfigurationResponse {
+  pipeline: {
+    id: string;
+    name: string;
+    stages: PipelineStageConfiguration[];
+  };
+}
+
+export interface UpdatePipelineConfigurationRequest {
+  stages: Array<{
+    id?: string;
+    title: string;
+    color: string;
+  }>;
+}
+
 export interface CreateDealRequest {
   stageId: string;
   contactId?: string;

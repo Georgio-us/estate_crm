@@ -62,6 +62,98 @@ test("pipeline is loaded for the authenticated organization", async () => {
   await app.close();
 });
 
+test("pipeline configuration saves stage names, colors and order", async () => {
+  const secondStageId = "1241b821-d062-4669-a919-b744901568e9";
+  const createdStageId = "2241b821-d062-4669-a919-b744901568e9";
+  const updates: Array<{ id: string; data: Record<string, unknown> }> = [];
+  let findCalls = 0;
+  const database = {
+    client: {
+      session: { async findUnique() { return session(); } },
+      pipeline: { async findFirst() { return { id: pipelineId, name: "Продажа недвижимости", createdAt: new Date() }; } },
+      pipelineStage: {
+        async findMany() {
+          findCalls += 1;
+          if (findCalls === 1) return [
+            { id: stageId, title: "Неразобранные", color: "#d6a835", position: 0, _count: { deals: 0 } },
+            { id: secondStageId, title: "Новый лид", color: "#d98245", position: 1, _count: { deals: 0 } },
+          ];
+          return [
+            { id: secondStageId, title: "Первичный контакт", color: "#5d8fc9", position: 0, _count: { deals: 0 } },
+            { id: createdStageId, title: "Переговоры", color: "#4a9d75", position: 1, _count: { deals: 0 } },
+          ];
+        },
+      },
+      async $transaction(callback: (transaction: unknown) => Promise<void>) {
+        await callback({
+          pipelineStage: {
+            async updateMany() {},
+            async deleteMany() {},
+            async update({ where, data }: { where: { id: string }; data: Record<string, unknown> }) { updates.push({ id: where.id, data }); },
+            async create() { return { id: createdStageId }; },
+          },
+        });
+      },
+    },
+    async ping() {},
+    async disconnect() {},
+  } as unknown as DatabaseConnection;
+
+  const app = await buildApp(config, database);
+  const response = await app.inject({
+    method: "PUT",
+    url: "/pipeline/configuration",
+    headers: { cookie: "estate_crm_session=test-token" },
+    payload: {
+      stages: [
+        { id: secondStageId, title: "Первичный контакт", color: "#5d8fc9" },
+        { title: "Переговоры", color: "#4a9d75" },
+      ],
+    },
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(response.json().pipeline.stages.map((stage: { title: string }) => stage.title), ["Первичный контакт", "Переговоры"]);
+  assert.equal(updates.at(-2)?.data.position, 0);
+  assert.equal(updates.at(-1)?.data.position, 1);
+  await app.close();
+});
+
+test("pipeline configuration protects a populated stage from deletion", async () => {
+  const populatedStageId = "1241b821-d062-4669-a919-b744901568e9";
+  let transactions = 0;
+  const database = {
+    client: {
+      session: { async findUnique() { return session(); } },
+      pipeline: { async findFirst() { return { id: pipelineId, name: "Продажа недвижимости", createdAt: new Date() }; } },
+      pipelineStage: {
+        async findMany() {
+          return [
+            { id: stageId, title: "Неразобранные", color: "#d6a835", position: 0, _count: { deals: 0 } },
+            { id: populatedStageId, title: "В работе", color: "#8b6cc2", position: 1, _count: { deals: 3 } },
+          ];
+        },
+      },
+      async $transaction() { transactions += 1; },
+    },
+    async ping() {},
+    async disconnect() {},
+  } as unknown as DatabaseConnection;
+
+  const app = await buildApp(config, database);
+  const response = await app.inject({
+    method: "PUT",
+    url: "/pipeline/configuration",
+    headers: { cookie: "estate_crm_session=test-token" },
+    payload: { stages: [{ id: stageId, title: "Неразобранные", color: "#d6a835" }] },
+  });
+
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.json().error, "stage_not_empty");
+  assert.equal(transactions, 0);
+  await app.close();
+});
+
 test("deal creation links an existing contact inside the current organization", async () => {
   let createdData: Record<string, unknown> = {};
   const now = new Date("2026-09-07T18:00:00.000Z");

@@ -1,12 +1,19 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import styles from "./settings.module.css";
 
 type Section = "crm" | "workspace" | "access" | "notifications" | "security" | "data" | "profile";
 type ModuleId = "home" | "pipeline" | "contacts" | "objects" | "tasks" | "calendar" | "integrations" | "team";
 type CrmModule = { id: ModuleId; name: string; icon: string; description: string; label: string; fields: string[] };
+type PipelineStageDraft = { id?: string; key: string; title: string; color: string; dealCount: number };
+
+const stageColors = ["#d6a835", "#d98245", "#d35f63", "#5d8fc9", "#4f9dd5", "#8b6cc2", "#4a9d75", "#55b89b", "#b76ac8", "#76767a"];
+
+function stageKey(id?: string) {
+  return id || `new-${crypto.randomUUID()}`;
+}
 
 const navigation: { group: string; items: { id: Section; label: string; icon: string }[] }[] = [
   { group: "Рабочее пространство", items: [{ id: "crm", label: "Структура CRM", icon: "▦" }, { id: "workspace", label: "Основные настройки", icon: "◇" }, { id: "access", label: "Доступы", icon: "♙" }, { id: "notifications", label: "Уведомления", icon: "◉" }] },
@@ -30,9 +37,29 @@ export function SettingsCenter() {
   const [modules, setModules] = useState<CrmModule[]>(initialModules);
   const [savedModules, setSavedModules] = useState<CrmModule[]>(initialModules);
   const [moduleId, setModuleId] = useState<ModuleId>("pipeline");
+  const [pipelineStages, setPipelineStages] = useState<PipelineStageDraft[]>([]);
+  const [savedPipelineStages, setSavedPipelineStages] = useState<PipelineStageDraft[]>([]);
+  const [pipelineLoadState, setPipelineLoadState] = useState<"loading" | "ready" | "error">("loading");
+  const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState("");
   const currentModule = useMemo(() => modules.find((item) => item.id === moduleId)!, [moduleId, modules]);
-  const hasChanges = JSON.stringify(modules) !== JSON.stringify(savedModules);
+  const hasChanges = JSON.stringify(modules) !== JSON.stringify(savedModules) || JSON.stringify(pipelineStages) !== JSON.stringify(savedPipelineStages);
+
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/crm/pipeline/configuration", { cache: "no-store" }).then(async (response) => {
+      const payload = await response.json() as { pipeline?: { stages: Array<{ id: string; title: string; color: string; dealCount: number }> }; message?: string };
+      if (!response.ok || !payload.pipeline) throw new Error(payload.message || "Не удалось загрузить этапы.");
+      if (!active) return;
+      const stages = payload.pipeline.stages.map((stage) => ({ ...stage, key: stageKey(stage.id) }));
+      setPipelineStages(stages);
+      setSavedPipelineStages(stages);
+      setModules((current) => current.map((module) => module.id === "pipeline" ? { ...module, fields: stages.map((stage) => stage.title) } : module));
+      setSavedModules((current) => current.map((module) => module.id === "pipeline" ? { ...module, fields: stages.map((stage) => stage.title) } : module));
+      setPipelineLoadState("ready");
+    }).catch(() => { if (active) setPipelineLoadState("error"); });
+    return () => { active = false; };
+  }, []);
 
   function notify(message: string) {
     setNotice(message);
@@ -63,18 +90,46 @@ export function SettingsCenter() {
     updateModule({ fields });
   }
 
-  function saveModules() {
-    setSavedModules(modules);
-    notify("Изменения структуры CRM сохранены");
+  function cancelChanges() {
+    setModules(savedModules);
+    setPipelineStages(savedPipelineStages);
+  }
+
+  async function saveModules() {
+    if (pipelineStages.some((stage) => !stage.title.trim())) {
+      notify("Укажите название каждого этапа");
+      return;
+    }
+    setSaving(true);
+    try {
+      const response = await fetch("/api/crm/pipeline/configuration", {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ stages: pipelineStages.map(({ id, title, color }) => ({ id, title: title.trim(), color })) }),
+      });
+      const payload = await response.json() as { pipeline?: { stages: Array<{ id: string; title: string; color: string; dealCount: number }> }; message?: string };
+      if (!response.ok || !payload.pipeline) throw new Error(payload.message || "Не удалось сохранить этапы.");
+      const stages = payload.pipeline.stages.map((stage) => ({ ...stage, key: stageKey(stage.id) }));
+      const nextModules = modules.map((module) => module.id === "pipeline" ? { ...module, fields: stages.map((stage) => stage.title) } : module);
+      setPipelineStages(stages);
+      setSavedPipelineStages(stages);
+      setModules(nextModules);
+      setSavedModules(nextModules);
+      notify("Этапы воронки сохранены");
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Не удалось сохранить изменения");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return <section className={styles.page}>
-    <header className={styles.topbar}><div><span>Администрирование</span><h1>Настройки</h1></div>{section === "crm" && hasChanges && <div className={styles.headerActions}><button type="button" aria-label="Сбросить изменения" onClick={() => setModules(savedModules)}><span>Отменить</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7H4v-5M4 7a9 9 0 1 1-1 7" /></svg></button><button className={styles.saveButton} type="button" aria-label="Сохранить изменения" onClick={saveModules}><span>Сохранить изменения</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h12l2 2v16H5zM8 3v6h8V3M8 21v-7h8v7" /></svg></button></div>}</header>
+    <header className={styles.topbar}><div><span>Администрирование</span><h1>Настройки</h1></div>{section === "crm" && hasChanges && <div className={styles.headerActions}><button type="button" disabled={saving} aria-label="Сбросить изменения" onClick={cancelChanges}><span>Отменить</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7H4v-5M4 7a9 9 0 1 1-1 7" /></svg></button><button className={styles.saveButton} type="button" disabled={saving} aria-label="Сохранить изменения" onClick={() => { void saveModules(); }}><span>{saving ? "Сохраняем…" : "Сохранить изменения"}</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h12l2 2v16H5zM8 3v6h8V3M8 21v-7h8v7" /></svg></button></div>}</header>
 
     <div className={styles.settingsLayout}>
       <aside className={styles.settingsNav}>{navigation.map((group) => <section key={group.group}><span>{group.group}</span>{group.items.map((item) => <button className={section === item.id ? styles.activeNav : ""} type="button" onClick={() => setSection(item.id)} key={item.id}><i>{item.icon}</i>{item.label}</button>)}</section>)}</aside>
       <div className={styles.content}>
-        {section === "crm" && <CrmSettings modules={modules} currentModule={currentModule} moduleId={moduleId} setModuleId={setModuleId} updateModule={updateModule} addField={addField} updateField={updateField} removeField={removeField} moveField={moveField} />}
+        {section === "crm" && <CrmSettings modules={modules} currentModule={currentModule} moduleId={moduleId} setModuleId={setModuleId} updateModule={updateModule} addField={addField} updateField={updateField} removeField={removeField} moveField={moveField} pipelineStages={pipelineStages} setPipelineStages={setPipelineStages} pipelineLoadState={pipelineLoadState} />}
         {section === "workspace" && <WorkspaceSettings onNotify={notify} />}
         {section === "access" && <AccessSettings onNotify={notify} />}
         {section === "notifications" && <NotificationsSettings onNotify={notify} />}
@@ -91,8 +146,9 @@ function PageIntro({ eyebrow, title, description }: { eyebrow: string; title: st
   return <header className={styles.pageIntro}><span>{eyebrow}</span><h2>{title}</h2><p>{description}</p></header>;
 }
 
-function CrmSettings({ modules, currentModule, moduleId, setModuleId, updateModule, addField, updateField, removeField, moveField }: { modules: CrmModule[]; currentModule: CrmModule; moduleId: ModuleId; setModuleId: (id: ModuleId) => void; updateModule: (patch: Partial<CrmModule>) => void; addField: () => void; updateField: (index: number, value: string) => void; removeField: (index: number) => void; moveField: (index: number, direction: -1 | 1) => void }) {
+function CrmSettings({ modules, currentModule, moduleId, setModuleId, updateModule, addField, updateField, removeField, moveField, pipelineStages, setPipelineStages, pipelineLoadState }: { modules: CrmModule[]; currentModule: CrmModule; moduleId: ModuleId; setModuleId: (id: ModuleId) => void; updateModule: (patch: Partial<CrmModule>) => void; addField: () => void; updateField: (index: number, value: string) => void; removeField: (index: number) => void; moveField: (index: number, direction: -1 | 1) => void; pipelineStages: PipelineStageDraft[]; setPipelineStages: (stages: PipelineStageDraft[] | ((current: PipelineStageDraft[]) => PipelineStageDraft[])) => void; pipelineLoadState: "loading" | "ready" | "error" }) {
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [colorPickerKey, setColorPickerKey] = useState<string | null>(null);
   const router = useRouter();
 
   function dropField(targetIndex: number) {
@@ -104,15 +160,49 @@ function CrmSettings({ modules, currentModule, moduleId, setModuleId, updateModu
     setDraggedIndex(null);
   }
 
+  function updatePipelineStage(key: string, patch: Partial<PipelineStageDraft>) {
+    setPipelineStages((current) => current.map((stage) => stage.key === key ? { ...stage, ...patch } : stage));
+  }
+
+  function addPipelineStage() {
+    setPipelineStages((current) => [...current, { key: stageKey(), title: "Новый этап", color: stageColors[current.length % stageColors.length]!, dealCount: 0 }]);
+  }
+
+  function movePipelineStage(index: number, direction: -1 | 1) {
+    const nextIndex = index + direction;
+    if (nextIndex < 0 || nextIndex >= pipelineStages.length) return;
+    const stages = [...pipelineStages];
+    [stages[index], stages[nextIndex]] = [stages[nextIndex]!, stages[index]!];
+    setPipelineStages(stages);
+  }
+
+  function dropPipelineStage(targetIndex: number) {
+    if (draggedIndex === null || draggedIndex === targetIndex) return setDraggedIndex(null);
+    const stages = [...pipelineStages];
+    const [moved] = stages.splice(draggedIndex, 1);
+    if (moved) stages.splice(targetIndex, 0, moved);
+    setPipelineStages(stages);
+    setDraggedIndex(null);
+  }
+
   return <main><PageIntro eyebrow="Конфигурация" title="Структура CRM" description="Настройте названия, поля и правила модулей текущего рабочего пространства." />
     <section className={styles.crmWorkspace}>
       <aside className={styles.moduleList}><header><strong>Модули</strong><span>{modules.length} базовых разделов</span></header>{modules.map((item) => <button className={moduleId === item.id ? styles.activeModule : ""} type="button" onClick={() => setModuleId(item.id)} key={item.id}><i>{item.icon}</i><span><strong>{item.name}</strong><small>{item.description}</small></span><b>›</b></button>)}<button className={styles.addCustomModule} type="button" onClick={() => router.push("/subscription?tab=extensions")}><i>＋</i><span><strong>Добавить кастомный модуль</strong><small>Новая сущность или раздел под процесс компании</small></span><b>↗</b></button></aside>
       <section className={styles.moduleEditor}>
-        <header><div className={styles.moduleTitle}><i>{currentModule.icon}</i><span><small>Базовый модуль CRM</small><input aria-label="Название модуля" value={currentModule.name} onChange={(event) => updateModule({ name: event.target.value })} /></span></div><button className={styles.moduleMenu} type="button" aria-label="Расширенные настройки" title="Расширенные настройки">•••</button></header>
+        <header><div className={styles.moduleTitle}><i>{currentModule.icon}</i><span><small>Базовый модуль CRM</small><input aria-label="Название модуля" value={currentModule.name} onChange={(event) => updateModule({ name: event.target.value })} /></span></div>{moduleId !== "pipeline" && <button className={styles.moduleMenu} type="button" aria-label="Расширенные настройки" title="Расширенные настройки">•••</button>}</header>
         <label className={styles.descriptionField}><span>Описание</span><input value={currentModule.description} onChange={(event) => updateModule({ description: event.target.value })} /></label>
-        <div className={styles.fieldHeader}><div><strong>{currentModule.label}</strong><span>Порядок используется во всех формах и карточках.</span></div><button type="button" onClick={addField}>＋ Добавить</button></div>
-        <div className={styles.fieldList}>{currentModule.fields.map((field, index) => <div className={draggedIndex === index ? styles.draggingRow : ""} onDragOver={(event) => event.preventDefault()} onDrop={() => dropField(index)} key={`${moduleId}-${index}`}><span className={styles.drag} draggable onDragStart={() => setDraggedIndex(index)} onDragEnd={() => setDraggedIndex(null)} title="Перетащить">⠿</span><input aria-label={`${currentModule.label}: ${index + 1}`} value={field} onChange={(event) => updateField(index, event.target.value)} /><span className={styles.fieldType}>{moduleId === "pipeline" ? "Этап" : moduleId === "contacts" || moduleId === "objects" ? "Поле" : "Правило"}</span><div className={styles.rowActions}><button type="button" disabled={index === 0} aria-label="Переместить выше" onClick={() => moveField(index, -1)}>↑</button><button type="button" disabled={index === currentModule.fields.length - 1} aria-label="Переместить ниже" onClick={() => moveField(index, 1)}>↓</button><button className={styles.removeButton} type="button" aria-label="Удалить" onClick={() => removeField(index)}>×</button></div></div>)}</div>
-        <footer><span>Изменения применятся ко всему рабочему пространству.</span><button type="button" onClick={addField}>Добавить {moduleId === "pipeline" ? "этап" : "элемент"}</button></footer>
+        <div className={styles.fieldHeader}><div><strong>{currentModule.label}</strong><span>Порядок используется во всех формах и карточках.</span></div><button type="button" disabled={moduleId === "pipeline" && pipelineLoadState !== "ready"} onClick={moduleId === "pipeline" ? addPipelineStage : addField}>＋ Добавить</button></div>
+        {moduleId === "pipeline" ? pipelineLoadState === "loading" ? <div className={styles.editorState}>Загружаем этапы воронки…</div> : pipelineLoadState === "error" ? <div className={styles.editorState}>Не удалось загрузить этапы. Обновите страницу.</div> : <div className={`${styles.fieldList} ${styles.stageFieldList}`}>{pipelineStages.map((stage, index) => <div className={draggedIndex === index ? styles.draggingRow : ""} onDragOver={(event) => event.preventDefault()} onDrop={() => dropPipelineStage(index)} key={stage.key}>
+          <span className={styles.drag} draggable onDragStart={() => setDraggedIndex(index)} onDragEnd={() => setDraggedIndex(null)} title="Перетащить">⠿</span>
+          <input aria-label={`Название этапа ${index + 1}`} value={stage.title} onChange={(event) => updatePipelineStage(stage.key, { title: event.target.value })} />
+          <div className={styles.stageColorWrap}>
+            <button className={styles.stageColorButton} type="button" aria-label={`Цвет этапа ${stage.title}`} aria-expanded={colorPickerKey === stage.key} style={{ backgroundColor: stage.color }} onClick={() => setColorPickerKey((current) => current === stage.key ? null : stage.key)} />
+            {colorPickerKey === stage.key && <div className={styles.colorPalette} role="group" aria-label="Выберите цвет этапа">{stageColors.map((color) => <button className={stage.color === color ? styles.selectedColor : ""} type="button" aria-label={`Выбрать цвет ${color}`} style={{ backgroundColor: color }} onClick={() => { updatePipelineStage(stage.key, { color }); setColorPickerKey(null); }} key={color} />)}</div>}
+          </div>
+          <span className={styles.fieldType}>{stage.dealCount ? `${stage.dealCount} сделок` : "Этап"}</span>
+          <div className={styles.rowActions}><button type="button" disabled={index === 0} aria-label="Переместить выше" onClick={() => movePipelineStage(index, -1)}>↑</button><button type="button" disabled={index === pipelineStages.length - 1} aria-label="Переместить ниже" onClick={() => movePipelineStage(index, 1)}>↓</button><button className={styles.removeButton} type="button" disabled={pipelineStages.length === 1 || stage.dealCount > 0} title={stage.dealCount > 0 ? "Сначала перенесите сделки из этого этапа" : undefined} aria-label="Удалить" onClick={() => setPipelineStages((current) => current.filter((item) => item.key !== stage.key))}>×</button></div>
+        </div>)}</div> : <div className={styles.fieldList}>{currentModule.fields.map((field, index) => <div className={draggedIndex === index ? styles.draggingRow : ""} onDragOver={(event) => event.preventDefault()} onDrop={() => dropField(index)} key={`${moduleId}-${index}`}><span className={styles.drag} draggable onDragStart={() => setDraggedIndex(index)} onDragEnd={() => setDraggedIndex(null)} title="Перетащить">⠿</span><input aria-label={`${currentModule.label}: ${index + 1}`} value={field} onChange={(event) => updateField(index, event.target.value)} /><span className={styles.fieldType}>{moduleId === "contacts" || moduleId === "objects" ? "Поле" : "Правило"}</span><div className={styles.rowActions}><button type="button" disabled={index === 0} aria-label="Переместить выше" onClick={() => moveField(index, -1)}>↑</button><button type="button" disabled={index === currentModule.fields.length - 1} aria-label="Переместить ниже" onClick={() => moveField(index, 1)}>↓</button><button className={styles.removeButton} type="button" aria-label="Удалить" onClick={() => removeField(index)}>×</button></div></div>)}</div>}
+        <footer><span>{moduleId === "pipeline" ? "Нажмите «Сохранить изменения», чтобы применить этапы к воронке." : "Изменения применятся ко всему рабочему пространству."}</span>{moduleId !== "pipeline" && <button type="button" onClick={addField}>Добавить элемент</button>}</footer>
       </section>
     </section>
   </main>;
