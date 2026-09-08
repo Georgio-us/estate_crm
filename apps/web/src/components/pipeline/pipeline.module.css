@@ -679,6 +679,106 @@
 .emptyDeals { display: grid; min-height: 420px; place-content: center; justify-items: center; gap: 5px; background: #f8f8f6; }
 .emptyDeals span { color: var(--text-muted); }
 
+.transferLayer {
+  position: fixed;
+  z-index: 110;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.transferBackdrop {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(28, 28, 26, 0.32);
+  cursor: default;
+}
+
+.transferModal {
+  position: relative;
+  width: min(680px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: #fff;
+  box-shadow: 0 28px 80px rgba(28, 28, 26, 0.2);
+}
+
+.transferModal > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 25px 27px 22px;
+  border-bottom: 1px solid var(--border);
+}
+
+.transferModal > header span {
+  color: var(--text-subtle);
+  font-size: 10px;
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.transferModal > header h3 { margin: 7px 0 4px; font-size: 25px; line-height: 1.15; }
+.transferModal > header p { margin: 0; color: var(--text-muted); font-size: var(--font-size-body-sm); }
+.transferModal > header > button { width: 34px; height: 34px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text-muted); cursor: pointer; font-size: 28px; line-height: 1; }
+.transferModal > header > button:hover { background: #f3f3f0; color: var(--text); }
+
+.transferSection {
+  display: grid;
+  grid-template-columns: minmax(180px, .8fr) minmax(280px, 1.2fr);
+  gap: 26px;
+  padding: 24px 27px;
+  border-bottom: 1px solid var(--border);
+}
+
+.transferSection > div:first-child { display: grid; align-content: start; gap: 7px; }
+.transferSection > div:first-child > strong { font-size: var(--font-size-body); }
+.transferSection > div:first-child > span { color: var(--text-muted); font-size: var(--font-size-caption); line-height: 1.45; }
+
+.transferActions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.transferActions button {
+  display: grid;
+  min-height: 76px;
+  align-content: center;
+  gap: 4px;
+  padding: 13px 15px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  background: #fff;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+
+.transferActions button:hover:not(:disabled) { border-color: #9eb3db; background: #f5f8fe; }
+.transferActions button:disabled { cursor: wait; opacity: .55; }
+.transferActions button b { font-size: var(--font-size-body-sm); }
+.transferActions button span { color: var(--text-muted); font-size: var(--font-size-caption); }
+.hiddenFileInput { display: none; }
+
+.transferResult {
+  display: grid;
+  gap: 6px;
+  padding: 18px 27px 21px;
+  background: #f7f9fc;
+  color: var(--text);
+  font-size: var(--font-size-caption);
+}
+
+.transferResult strong { font-size: var(--font-size-body-sm); }
+.transferResult span { color: #a24b4b; }
+
 @media (max-width: 760px) {
   .topbar {
     gap: 10px;
@@ -744,4 +844,9 @@
   .listRow > span:nth-child(4) { display: none; }
   .listTask { grid-column: 1; }
   .listRow > b, .restoreButton { grid-column: 2; grid-row: 1; }
+  .transferLayer { padding: 12px; }
+  .transferModal { max-height: calc(100vh - 24px); }
+  .transferModal > header { padding: 21px 20px 18px; }
+  .transferSection { grid-template-columns: 1fr; gap: 15px; padding: 20px; }
+  .transferResult { padding: 16px 20px 19px; }
 }

@@ -21,12 +21,14 @@ import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { useRouter } from "next/navigation";
 import { useCurrentUser } from "@/components/auth/AuthContext";
 import { useTasks } from "@/components/tasks/TasksContext";
+import { normalizePhone } from "@/lib/phone";
 import { localDateKey } from "@/lib/tasks";
 import { mapApiActivity, type ApiActivity } from "@/lib/activity";
 import type { ActivityEvent, Deal, DealStatus, PipelineStage } from "@/types/crm";
 import { DealDrawer } from "./DealDrawer";
 import { DealCardPreview } from "./DealCard";
 import { NewDealModal, type NewDealDraft } from "./NewDealModal";
+import { PipelineDataTransfer, type ImportedDealRow } from "./PipelineDataTransfer";
 import { PipelineColumn } from "./PipelineColumn";
 import styles from "./pipeline.module.css";
 
@@ -34,6 +36,31 @@ const sourceFromApi = { META: "Meta", WEBSITE: "Website", MANUAL: "Manual" } as 
 const sourceToApi = { Meta: "META", Website: "WEBSITE", Manual: "MANUAL" } as const;
 const operationFromApi = { PURCHASE: "Покупка", RENT: "Аренда", SALE: "Продажа" } as const;
 const operationToApi = { Покупка: "PURCHASE", Аренда: "RENT", Продажа: "SALE" } as const;
+
+const transferHeaders = ["ID сделки", "Номер", "Название сделки", "ID контакта", "Контакт", "Телефон", "Запрос", "ID этапа", "Этап", "ID ответственного", "Ответственный", "Источник", "Бюджет", "Операция", "Тип объекта", "Район", "Комнаты", "Комментарий", "Статус"];
+
+function importedValue(row: ImportedDealRow, ...headers: string[]): string | undefined {
+  const entries = Object.entries(row);
+  for (const header of headers) {
+    const match = entries.find(([key]) => key.trim().toLocaleLowerCase("ru-RU") === header.toLocaleLowerCase("ru-RU"));
+    if (match) return match[1].replace(/^'(?=[=+@-])/, "").trim();
+  }
+  return undefined;
+}
+
+function importedSource(value: string | undefined): keyof typeof sourceFromApi {
+  const normalized = value?.trim().toLocaleLowerCase("ru-RU");
+  if (normalized === "meta") return "META";
+  if (normalized === "website" || normalized === "сайт") return "WEBSITE";
+  return "MANUAL";
+}
+
+function importedOperation(value: string | undefined): keyof typeof operationFromApi {
+  const normalized = value?.trim().toLocaleLowerCase("ru-RU");
+  if (normalized === "rent" || normalized === "аренда") return "RENT";
+  if (normalized === "sale" || normalized === "продажа") return "SALE";
+  return "PURCHASE";
+}
 
 const pipelineCollisionDetection: CollisionDetection = (args) => {
   const pointerCollisions = pointerWithin(args);
@@ -113,7 +140,7 @@ function mapApiDeal(deal: ApiDeal): Deal {
   };
 }
 
-async function requestPipeline(view: "active" | "closed" = "active"): Promise<{ name: string; stages: PipelineStage[] }> {
+async function requestPipeline(view: "active" | "closed" | "all" = "active"): Promise<{ name: string; stages: PipelineStage[] }> {
   const response = await fetch(`/api/crm/pipeline?view=${view}`, { cache: "no-store" });
   if (!response.ok) throw new Error("Не удалось загрузить воронку.");
   const payload = await response.json() as { pipeline: { name: string; stages: ApiStage[] } };
@@ -158,6 +185,7 @@ export function PipelineBoard() {
   const [taskFilter, setTaskFilter] = useState("Все");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [pipelineMenuOpen, setPipelineMenuOpen] = useState(false);
+  const [transferOpen, setTransferOpen] = useState(false);
   const [pipelineView, setPipelineView] = useState<"active" | "closed">("active");
   const [notice, setNotice] = useState("");
 
@@ -557,16 +585,142 @@ export function PipelineBoard() {
     setTaskFilter("Все");
   }
 
-  function exportDeals() {
-    const rows = [["Номер", "Название сделки", "Контакт", "Телефон", "Запрос", "Этап", "Ответственный", "Источник"], ...stages.flatMap((stage) => stage.deals.map((deal) => [String(deal.number), deal.title || deal.request, deal.contactName, deal.phone, deal.request, stage.title, deal.assignee, deal.source]))];
-    const csv = rows.map((row) => row.map((cell) => `"${cell.replaceAll('"', '""')}"`).join(",")).join("\n");
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8" }));
-    link.download = "deals.csv";
-    link.click();
-    URL.revokeObjectURL(link.href);
-    setPipelineMenuOpen(false);
+  async function importDeals(rows: ImportedDealRow[]) {
+    const summary = { created: 0, updated: 0, skipped: 0, errors: [] as string[] };
+    const [allPipeline, contactOptions] = await Promise.all([requestPipeline("all"), requestContactOptions()]);
+    const allDeals = allPipeline.stages.flatMap((stage) => stage.deals.map((deal) => ({ deal, stageId: stage.id })));
+    const dealsById = new Map(allDeals.map(({ deal }) => [deal.id, deal]));
+    const stagesById = new Map(allPipeline.stages.map((stage) => [stage.id, stage]));
+    const stagesByTitle = new Map(allPipeline.stages.map((stage) => [stage.title.trim().toLocaleLowerCase("ru-RU"), stage]));
+    const contactsById = new Map(contactOptions.map((contact) => [contact.id, contact]));
+    const contactsByPhone = new Map(contactOptions.filter((contact) => contact.phone).map((contact) => [normalizePhone(contact.phone || ""), contact]));
+    const knownDealKeys = new Set(allDeals.map(({ deal, stageId }) => `${stageId}|${normalizePhone(deal.phone)}|${(deal.title || deal.request || deal.contactName).trim().toLocaleLowerCase("ru-RU")}`));
+
+    for (const [index, row] of rows.entries()) {
+      try {
+        const stageIdValue = importedValue(row, "ID этапа", "Stage ID");
+        const stageTitle = importedValue(row, "Этап", "Stage");
+        const stage = (stageIdValue ? stagesById.get(stageIdValue) : undefined) || (stageTitle ? stagesByTitle.get(stageTitle.toLocaleLowerCase("ru-RU")) : undefined);
+        if (!stage) throw new Error(`этап «${stageTitle || stageIdValue || "не указан"}» не найден`);
+
+        const dealId = importedValue(row, "ID сделки", "Deal ID");
+        const contactName = importedValue(row, "Контакт", "Contact") || "";
+        const phone = importedValue(row, "Телефон", "Phone") || "";
+        const title = importedValue(row, "Название сделки", "Deal title", "Название") || importedValue(row, "Запрос", "Request") || contactName;
+        const request = importedValue(row, "Запрос", "Request");
+        const budget = importedValue(row, "Бюджет", "Budget");
+        const propertyType = importedValue(row, "Тип объекта", "Property type");
+        const district = importedValue(row, "Район", "District");
+        const rooms = importedValue(row, "Комнаты", "Rooms");
+        const comment = importedValue(row, "Комментарий", "Comment");
+        const sourceValue = importedValue(row, "Источник", "Source");
+        const operationValue = importedValue(row, "Операция", "Operation");
+        const source = importedSource(sourceValue);
+        const operation = importedOperation(operationValue);
+        const assigneeId = importedValue(row, "ID ответственного", "Assignee ID");
+
+        if (dealId) {
+          const existing = dealsById.get(dealId);
+          const response = await fetch(`/api/crm/deals/${dealId}`, {
+            method: "PATCH",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              stageId: stage.id,
+              ...(title ? { title } : {}),
+              ...(request !== undefined ? { request } : {}),
+              ...(budget !== undefined ? { budget: budget || null } : {}),
+              ...(propertyType !== undefined ? { propertyType: propertyType || null } : {}),
+              ...(district !== undefined ? { district: district || null } : {}),
+              ...(rooms !== undefined ? { rooms: rooms || null } : {}),
+              ...(comment !== undefined ? { comment: comment || null } : {}),
+              ...(assigneeId !== undefined ? { assigneeId: assigneeId || null } : {}),
+              ...(sourceValue !== undefined ? { source } : {}),
+              ...(operationValue !== undefined ? { operation } : {}),
+            }),
+          });
+          const payload = await response.json() as { deal?: ApiDeal; message?: string };
+          if (!response.ok || !payload.deal) throw new Error(payload.message || (existing ? "не удалось обновить сделку" : "сделка с таким ID не найдена"));
+          dealsById.set(dealId, mapApiDeal(payload.deal));
+          summary.updated += 1;
+          continue;
+        }
+
+        if (!contactName) throw new Error("не указан контакт");
+        const normalizedPhone = normalizePhone(phone);
+        if (!normalizedPhone) throw new Error("не указан телефон");
+        const contactIdValue = importedValue(row, "ID контакта", "Contact ID");
+        const contact = (contactIdValue ? contactsById.get(contactIdValue) : undefined) || contactsByPhone.get(normalizedPhone);
+        const duplicateKey = `${stage.id}|${normalizedPhone}|${title.trim().toLocaleLowerCase("ru-RU")}`;
+        if (knownDealKeys.has(duplicateKey)) {
+          summary.skipped += 1;
+          continue;
+        }
+
+        const response = await fetch("/api/crm/deals", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            stageId: stage.id,
+            contactId: contact?.id,
+            contactName: contact ? undefined : contactName,
+            phone: contact ? undefined : phone,
+            assigneeId: assigneeId || null,
+            title: title || contactName,
+            request: request || "",
+            budget: budget || undefined,
+            propertyType: propertyType || undefined,
+            district: district || undefined,
+            rooms: rooms || undefined,
+            comment: comment || undefined,
+            source,
+            operation,
+          }),
+        });
+        const payload = await response.json() as { deal?: ApiDeal; message?: string };
+        if (!response.ok || !payload.deal) throw new Error(payload.message || "не удалось создать сделку");
+        const createdDeal = mapApiDeal(payload.deal);
+        knownDealKeys.add(duplicateKey);
+        if (!contact) {
+          const createdContact = { id: createdDeal.contactId!, name: createdDeal.contactName, phone: createdDeal.phone, source: createdDeal.source };
+          contactsById.set(createdContact.id, createdContact);
+          contactsByPhone.set(normalizedPhone, createdContact);
+        }
+        summary.created += 1;
+      } catch (error) {
+        summary.skipped += 1;
+        summary.errors.push(`Строка ${index + 2}: ${error instanceof Error ? error.message : "неизвестная ошибка"}`);
+      }
+    }
+
+    const [refreshedPipeline, refreshedContacts] = await Promise.all([requestPipeline(pipelineView), requestContactOptions()]);
+    setPipelineName(refreshedPipeline.name);
+    setStages(refreshedPipeline.stages);
+    setContacts(refreshedContacts);
+    setLoadState("ready");
+    return summary;
   }
+
+  const transferRows = [transferHeaders, ...stages.flatMap((stage) => stage.deals.map((deal) => [
+    deal.id,
+    String(deal.number),
+    deal.title || deal.request || deal.contactName,
+    deal.contactId || "",
+    deal.contactName,
+    deal.phone,
+    deal.request,
+    stage.id,
+    stage.title,
+    deal.assigneeId || "",
+    deal.assignee,
+    deal.source === "Website" ? "Сайт" : deal.source === "Manual" ? "Не указан" : "Meta",
+    deal.budget || "",
+    deal.operation || "Покупка",
+    deal.propertyType || "",
+    deal.district || "",
+    deal.rooms || "",
+    deal.comment || "",
+    deal.status === "WON" ? "Успешно" : deal.status === "LOST" ? "Неуспешно" : deal.status === "ARCHIVED" ? "Архив" : "Активна",
+  ]))];
 
   return (
     <section className={styles.page}>
@@ -598,7 +752,7 @@ export function PipelineBoard() {
             <button className={styles.titleMenu} type="button" aria-label="Настройки воронки" aria-expanded={pipelineMenuOpen} onClick={() => { setPipelineMenuOpen((value) => !value); setNotificationsOpen(false); }}>
               •••
             </button>
-            {pipelineMenuOpen && <div className={styles.pipelineMenu}><button type="button" onClick={() => { setPipelineMenuOpen(false); router.push("/settings"); }}>Настроить этапы <span>→</span></button><button type="button" onClick={() => { setPipelineMenuOpen(false); exportDeals(); }}>Экспортировать CSV <span>↓</span></button></div>}
+            {pipelineMenuOpen && <div className={styles.pipelineMenu}><button type="button" onClick={() => { setPipelineMenuOpen(false); router.push("/settings"); }}>Настроить этапы <span>→</span></button><button type="button" onClick={() => { setPipelineMenuOpen(false); setTransferOpen(true); }}>Импорт и экспорт <span>⇅</span></button></div>}
           </div>
           <p>{visibleDealsCount === dealsCount ? `${dealsCount} ${pipelineView === "active" ? "активных" : "закрытых"} сделок` : `${visibleDealsCount} из ${dealsCount} сделок`}</p>
         </div>
@@ -663,6 +817,15 @@ export function PipelineBoard() {
           onLifecycle={(status) => runDealLifecycle(selectedDeal.id, status)}
           onOpenContact={(contactId) => router.push(`/contacts?contact=${contactId}`)}
           onClose={() => setSelected(null)}
+        />
+      )}
+
+      {transferOpen && (
+        <PipelineDataTransfer
+          rows={transferRows}
+          viewLabel={`${dealsCount} ${pipelineView === "active" ? "активных" : "закрытых"} сделок`}
+          onImport={importDeals}
+          onClose={() => setTransferOpen(false)}
         />
       )}
       {notice && <div className={styles.notice} role="status">{notice}</div>}
