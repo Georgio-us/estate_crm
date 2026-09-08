@@ -631,7 +631,7 @@
 .listView > header,
 .listRow {
   display: grid;
-  grid-template-columns: minmax(230px, 1.05fr) minmax(260px, 1.35fr) minmax(150px, .7fr) minmax(120px, .6fr) minmax(180px, .8fr) 14px;
+  grid-template-columns: minmax(230px, 1.05fr) minmax(260px, 1.35fr) minmax(150px, .7fr) minmax(120px, .6fr) minmax(180px, .8fr) 36px;
   align-items: center;
   gap: 18px;
 }
@@ -672,7 +672,9 @@
 .lifecycleWON { background: #e8f5ed; color: #357554; }
 .lifecycleLOST { background: #f8eaea; color: #a24b4b; }
 .lifecycleARCHIVED { background: #ececea; color: #666661; }
-.restoreButton { min-height: 30px; padding: 0 9px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: #fff; color: var(--primary); cursor: pointer; }
+.restoreButton { display: grid; width: 32px; height: 32px; place-items: center; padding: 0; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: #fff; color: var(--primary); cursor: pointer; }
+.restoreButton:hover { border-color: #9eb3db; background: #f4f7fd; }
+.restoreButton svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .notice { position: fixed; z-index: 90; right: 24px; bottom: 24px; max-width: min(380px, calc(100vw - 32px)); padding: 12px 15px; border: 1px solid #cbd5e7; border-radius: var(--radius-md); background: #fff; color: var(--text); box-shadow: 0 16px 40px rgba(28, 28, 26, 0.16); font-size: var(--font-size-body-sm); }
 .emptyDeals { display: grid; min-height: 420px; place-content: center; justify-items: center; gap: 5px; background: #f8f8f6; }
 .emptyDeals span { color: var(--text-muted); }
