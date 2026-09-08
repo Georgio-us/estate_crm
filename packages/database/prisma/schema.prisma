@@ -51,6 +51,34 @@ enum TaskStatus {
   COMPLETED
 }
 
+enum PropertyCategory {
+  APARTMENT
+  HOUSE
+  LAND
+  COMMERCIAL
+}
+
+enum PropertyMarket {
+  PRIMARY
+  SECONDARY
+}
+
+enum PropertyOperation {
+  SALE
+  RENT
+}
+
+enum PropertyStatus {
+  AVAILABLE
+  RESERVED
+  SOLD
+}
+
+enum Currency {
+  USD
+  EUR
+}
+
 model Organization {
   id               String            @id @default(uuid()) @db.Uuid
   name             String
@@ -66,6 +94,7 @@ model Organization {
   activities       ActivityEvent[]
   contactRelations ContactRelation[]
   tasks            Task[]
+  properties       Property[]
 
   @@map("organizations")
 }
@@ -258,6 +287,37 @@ model Task {
   @@index([dealId])
   @@index([assigneeId])
   @@map("tasks")
+}
+
+model Property {
+  id             String            @id @default(uuid()) @db.Uuid
+  number         Int               @default(autoincrement())
+  organizationId String            @map("organization_id") @db.Uuid
+  title          String
+  address        String?
+  district       String?
+  category       PropertyCategory
+  market         PropertyMarket
+  operation      PropertyOperation @default(SALE)
+  status         PropertyStatus    @default(AVAILABLE)
+  price          Float             @default(0)
+  currency       Currency          @default(USD)
+  rooms          String?
+  area           Float             @default(0)
+  floor          Int?
+  totalFloors    Int?              @map("total_floors")
+  landArea       Float?            @map("land_area")
+  project        String?
+  developer      String?
+  description    String?
+  imageUrl       String?           @map("image_url")
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, number])
+  @@index([organizationId, status, updatedAt])
+  @@map("properties")
 }
 
 model Session {

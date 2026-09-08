@@ -228,6 +228,65 @@ export interface CompleteTaskRequest {
   result?: string;
 }
 
+export type PropertyCategory = "APARTMENT" | "HOUSE" | "LAND" | "COMMERCIAL";
+export type PropertyMarket = "PRIMARY" | "SECONDARY";
+export type PropertyOperation = "SALE" | "RENT";
+export type PropertyStatus = "AVAILABLE" | "RESERVED" | "SOLD";
+export type Currency = "USD" | "EUR";
+
+export interface PropertyRecord {
+  id: string;
+  code: string;
+  title: string;
+  address: string | null;
+  district: string | null;
+  category: PropertyCategory;
+  market: PropertyMarket;
+  operation: PropertyOperation;
+  status: PropertyStatus;
+  price: number;
+  currency: Currency;
+  rooms: string | null;
+  area: number;
+  floor: number | null;
+  totalFloors: number | null;
+  landArea: number | null;
+  project: string | null;
+  developer: string | null;
+  description: string | null;
+  imageUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PropertyListResponse {
+  properties: PropertyRecord[];
+  total: number;
+}
+
+export interface CreatePropertyRequest {
+  title: string;
+  address?: string | null;
+  district?: string | null;
+  category: PropertyCategory;
+  market: PropertyMarket;
+  operation?: PropertyOperation;
+  status?: PropertyStatus;
+  price?: number;
+  currency?: Currency;
+  rooms?: string | null;
+  area?: number;
+  floor?: number | null;
+  totalFloors?: number | null;
+  landArea?: number | null;
+  project?: string | null;
+  developer?: string | null;
+  description?: string | null;
+  imageUrl?: string | null;
+}
+
+export type UpdatePropertyRequest = Partial<CreatePropertyRequest>;
+
 export type ActivityCategory = "NOTE" | "TASK" | "CHANGE" | "SOURCE" | "OBJECT";
 
 export interface ActivityEventRecord {

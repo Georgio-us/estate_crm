@@ -7,8 +7,10 @@ export interface NewPropertyDraft {
   operation: "Продажа" | "Аренда"; price: string; rooms: string; area: string; project: string; developer: string; description: string;
 }
 
-export function NewPropertyModal({ onCreate, onClose }: { onCreate: (draft: NewPropertyDraft) => void; onClose: () => void }) {
+export function NewPropertyModal({ onCreate, onClose }: { onCreate: (draft: NewPropertyDraft) => Promise<void>; onClose: () => void }) {
   const [draft, setDraft] = useState<NewPropertyDraft>({ title: "", address: "", district: "Приморский", category: "Квартира", market: "Вторичный", operation: "Продажа", price: "", rooms: "", area: "", project: "", developer: "", description: "" });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
   const update = (patch: Partial<NewPropertyDraft>) => setDraft((current) => ({ ...current, ...patch }));
 
   return (
@@ -16,7 +18,7 @@ export function NewPropertyModal({ onCreate, onClose }: { onCreate: (draft: NewP
       <button className={styles.drawerBackdrop} type="button" onClick={onClose} aria-label="Закрыть создание объекта" />
       <form
         className={styles.modal}
-        onSubmit={(event) => { event.preventDefault(); if (draft.title.trim()) onCreate({ ...draft, title: draft.title.trim() }); }}
+        onSubmit={(event) => { event.preventDefault(); if (!draft.title.trim() || saving) return; setSaving(true); setError(""); void onCreate({ ...draft, title: draft.title.trim() }).catch((cause: unknown) => { setError(cause instanceof Error ? cause.message : "Не удалось создать объект."); setSaving(false); }); }}
         onKeyDown={(event) => {
           const target = event.target as HTMLElement;
           if (event.key === "Enter" && target.tagName !== "TEXTAREA" && target.getAttribute("type") !== "submit") event.preventDefault();
@@ -38,7 +40,7 @@ export function NewPropertyModal({ onCreate, onClose }: { onCreate: (draft: NewP
           {draft.market === "Первичный" && <div className={styles.formGrid}><Field label="Жилой комплекс"><input value={draft.project} onChange={(event) => update({ project: event.target.value })} placeholder="Название ЖК" /></Field><Field label="Застройщик"><input value={draft.developer} onChange={(event) => update({ developer: event.target.value })} placeholder="Компания" /></Field></div>}
           <Field label="Описание"><textarea value={draft.description} onChange={(event) => update({ description: event.target.value })} placeholder="Краткое описание объекта" /></Field>
         </div>
-        <footer><span>Обязательным остаётся только название</span><div><button type="button" onClick={onClose}>Отмена</button><button className={styles.primaryButton} type="submit" disabled={!draft.title.trim()}>Создать объект</button></div></footer>
+        <footer><span>{error || "Обязательным остаётся только название"}</span><div><button type="button" onClick={onClose}>Отмена</button><button className={styles.primaryButton} type="submit" disabled={!draft.title.trim() || saving}>{saving ? "Сохраняем…" : "Создать объект"}</button></div></footer>
       </form>
     </div>
   );

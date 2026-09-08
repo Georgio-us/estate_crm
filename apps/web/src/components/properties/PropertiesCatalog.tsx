@@ -1,7 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { mockProperties } from "@/data/mock-properties";
+import { useEffect, useMemo, useState } from "react";
 import type { PropertyCategory, PropertyListing, PropertyMarket, PropertyStatus } from "@/types/crm";
 import { NewPropertyModal, type NewPropertyDraft } from "./NewPropertyModal";
 import { PropertyDrawer } from "./PropertyDrawer";
@@ -9,8 +8,53 @@ import styles from "./properties.module.css";
 
 type ViewMode = "gallery" | "table";
 
+interface ApiProperty {
+  id: string; code: string; title: string; address: string | null; district: string | null;
+  category: "APARTMENT" | "HOUSE" | "LAND" | "COMMERCIAL"; market: "PRIMARY" | "SECONDARY";
+  operation: "SALE" | "RENT"; status: "AVAILABLE" | "RESERVED" | "SOLD"; price: number;
+  currency: "USD" | "EUR"; rooms: string | null; area: number; floor: number | null;
+  totalFloors: number | null; landArea: number | null; project: string | null; developer: string | null;
+  description: string | null; imageUrl: string | null; updatedAt: string;
+}
+
+const categoryFromApi = { APARTMENT: "Квартира", HOUSE: "Дом", LAND: "Участок", COMMERCIAL: "Коммерция" } as const;
+const categoryToApi = { Квартира: "APARTMENT", Дом: "HOUSE", Участок: "LAND", Коммерция: "COMMERCIAL" } as const;
+const marketFromApi = { PRIMARY: "Первичный", SECONDARY: "Вторичный" } as const;
+const marketToApi = { Первичный: "PRIMARY", Вторичный: "SECONDARY" } as const;
+const operationFromApi = { SALE: "Продажа", RENT: "Аренда" } as const;
+const operationToApi = { Продажа: "SALE", Аренда: "RENT" } as const;
+const statusFromApi = { AVAILABLE: "Доступен", RESERVED: "Резерв", SOLD: "Продан" } as const;
+const statusToApi = { Доступен: "AVAILABLE", Резерв: "RESERVED", Продан: "SOLD" } as const;
+const fallbackImage = "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&w=1200&q=80";
+
+function mapApiProperty(property: ApiProperty): PropertyListing {
+  return {
+    id: property.id, code: property.code, title: property.title, address: property.address || "Адрес не указан",
+    district: property.district || "Не указан", category: categoryFromApi[property.category], market: marketFromApi[property.market],
+    operation: operationFromApi[property.operation], status: statusFromApi[property.status], price: property.price,
+    currency: property.currency, rooms: property.rooms || undefined, area: property.area, floor: property.floor || undefined,
+    totalFloors: property.totalFloors || undefined, landArea: property.landArea || undefined, project: property.project || undefined,
+    developer: property.developer || undefined, description: property.description || "Описание ещё не добавлено.",
+    imageUrl: property.imageUrl || fallbackImage,
+    updatedAt: new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }).format(new Date(property.updatedAt)),
+  };
+}
+
+function propertyPayload(property: PropertyListing | NewPropertyDraft) {
+  return {
+    title: property.title, address: property.address || null, district: property.district || null,
+    category: categoryToApi[property.category], market: marketToApi[property.market], operation: operationToApi[property.operation],
+    ...( "status" in property ? { status: statusToApi[property.status] } : {}),
+    price: Number(property.price) || 0, currency: "currency" in property ? property.currency : "USD",
+    rooms: property.rooms || null, area: Number(property.area) || 0,
+    ...( "floor" in property ? { floor: property.floor || null, totalFloors: property.totalFloors || null, landArea: property.landArea || null, imageUrl: property.imageUrl || null } : {}),
+    project: property.project || null, developer: property.developer || null, description: property.description || null,
+  };
+}
+
 export function PropertiesCatalog() {
-  const [properties, setProperties] = useState(mockProperties);
+  const [properties, setProperties] = useState<PropertyListing[]>([]);
+  const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [view, setView] = useState<ViewMode>("gallery");
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<"all" | PropertyCategory>("all");
@@ -18,6 +62,27 @@ export function PropertiesCatalog() {
   const [status, setStatus] = useState<"all" | PropertyStatus>("all");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+
+  async function loadProperties() {
+    setLoadState("loading");
+    try {
+      const response = await fetch("/api/crm/properties", { cache: "no-store" });
+      const payload = await response.json() as { properties?: ApiProperty[] };
+      if (!response.ok || !payload.properties) throw new Error();
+      setProperties(payload.properties.map(mapApiProperty));
+      setLoadState("ready");
+    } catch { setLoadState("error"); }
+  }
+
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/crm/properties", { cache: "no-store" }).then(async (response) => {
+      const payload = await response.json() as { properties?: ApiProperty[] };
+      if (!response.ok || !payload.properties) throw new Error();
+      if (active) { setProperties(payload.properties.map(mapApiProperty)); setLoadState("ready"); }
+    }, () => { if (active) setLoadState("error"); }).catch(() => { if (active) setLoadState("error"); });
+    return () => { active = false; };
+  }, []);
 
   const selectedProperty = properties.find((property) => property.id === selectedId);
   const visibleProperties = useMemo(() => {
@@ -34,31 +99,22 @@ export function PropertiesCatalog() {
 
   const hasFilters = Boolean(search || category !== "all" || market !== "all" || status !== "all");
 
-  function createProperty(draft: NewPropertyDraft) {
-    const property: PropertyListing = {
-      id: `property-${Date.now()}`,
-      code: `OD-${2300 + properties.length}`,
-      title: draft.title,
-      address: draft.address,
-      district: draft.district,
-      category: draft.category,
-      market: draft.market,
-      operation: draft.operation,
-      status: "Доступен",
-      price: Number(draft.price) || 0,
-      currency: "USD",
-      rooms: draft.rooms || undefined,
-      area: Number(draft.area) || 0,
-      project: draft.project || undefined,
-      developer: draft.developer || undefined,
-      description: draft.description || "Описание ещё не добавлено.",
-      imageUrl: "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&w=1200&q=80",
-      updatedAt: "Только что",
-    };
-
+  async function createProperty(draft: NewPropertyDraft) {
+    const response = await fetch("/api/crm/properties", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(propertyPayload(draft)) });
+    const payload = await response.json() as { property?: ApiProperty; message?: string };
+    if (!response.ok || !payload.property) throw new Error(payload.message || "Не удалось создать объект.");
+    const property = mapApiProperty(payload.property);
     setProperties((current) => [property, ...current]);
     setIsCreating(false);
     setSelectedId(property.id);
+  }
+
+  async function saveProperty(next: PropertyListing) {
+    const response = await fetch(`/api/crm/properties/${next.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(propertyPayload(next)) });
+    const payload = await response.json() as { property?: ApiProperty; message?: string };
+    if (!response.ok || !payload.property) throw new Error(payload.message || "Не удалось сохранить объект.");
+    const property = mapApiProperty(payload.property);
+    setProperties((current) => current.map((item) => item.id === property.id ? property : item));
   }
 
   function resetFilters() {
@@ -102,7 +158,7 @@ export function PropertiesCatalog() {
           {hasFilters && <button className={styles.resetButton} type="button" onClick={resetFilters}>Сбросить</button>}
         </div>
 
-        {visibleProperties.length ? (
+        {loadState === "loading" ? <div className={styles.emptyState}><span>◌</span><h3>Загружаем объекты</h3></div> : loadState === "error" ? <div className={styles.emptyState}><span>!</span><h3>Не удалось загрузить объекты</h3><button type="button" onClick={() => { void loadProperties(); }}>Повторить</button></div> : visibleProperties.length ? (
           view === "gallery" ? (
             <div className={styles.gallery}>
               {visibleProperties.map((property) => <PropertyCard property={property} onOpen={() => setSelectedId(property.id)} key={property.id} />)}
@@ -115,7 +171,7 @@ export function PropertiesCatalog() {
         )}
       </div>
 
-      {selectedProperty && <PropertyDrawer property={selectedProperty} onClose={() => setSelectedId(null)} />}
+      {selectedProperty && <PropertyDrawer property={selectedProperty} onSave={saveProperty} onClose={() => setSelectedId(null)} />}
       {isCreating && <NewPropertyModal onCreate={createProperty} onClose={() => setIsCreating(false)} />}
     </section>
   );

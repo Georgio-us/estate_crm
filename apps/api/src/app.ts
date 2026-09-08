@@ -10,6 +10,7 @@ import { registerActivityRoutes } from "./activities/routes.js";
 import { registerAuthRoutes } from "./auth/routes.js";
 import { registerContactRoutes } from "./contacts/routes.js";
 import { registerPipelineRoutes } from "./pipeline/routes.js";
+import { registerPropertyRoutes } from "./properties/routes.js";
 import { registerTaskRoutes } from "./tasks/routes.js";
 
 export async function buildApp(
@@ -57,6 +58,7 @@ export async function buildApp(
   await registerPipelineRoutes(app, database);
   await registerActivityRoutes(app, database);
   await registerTaskRoutes(app, database);
+  await registerPropertyRoutes(app, database);
 
   app.setErrorHandler((error, request, reply) => {
     if (typeof error === "object" && error !== null && "validation" in error && error.validation) {
