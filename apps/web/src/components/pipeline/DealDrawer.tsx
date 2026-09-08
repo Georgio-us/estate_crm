@@ -22,6 +22,7 @@ const propertyTypes = ["Квартира", "Дом", "Участок", "Комм
 const districts = ["Приморский", "Киевский", "Пересыпский", "Хаджибейский"];
 const roomOptions = ["1", "2", "3", "4+"];
 const dueOptions = ["Без срока", "Сегодня, 18:00", "Завтра, 10:00", "Через 3 дня", "Через неделю"];
+const sourceLabels: Record<Deal["source"], string> = { Meta: "Meta", Website: "Сайт", Manual: "Не указан" };
 
 const activityIcons: Record<ActivityCategory, string> = {
   note: "≡",
@@ -140,7 +141,7 @@ export function DealDrawer({
             <InlineTitleEditor value={draft.title || draft.request} onSave={(value) => updateDraft({ title: value })} />
             <div className={styles.headerMeta}>
               <span>#{deal.number}</span>
-              <span className={styles.sourceTag}>{deal.source}</span>
+              <span className={styles.sourceTag}>{sourceLabels[deal.source]}</span>
               <span>{deal.createdAt || "Недавно"}</span>
             </div>
           </div>
@@ -185,7 +186,7 @@ export function DealDrawer({
                 <button type="button" aria-label="Меню контакта">•••</button>
               </div>
               <PropertyInput label="Телефон" icon="☎" value={deal.phone || ""} readOnly onChange={() => undefined} />
-              <PropertySelect label="Источник" icon="↗" value={draft.source} options={["Meta", "Website", "Manual"]} onChange={(value) => updateDraft({ source: value as Deal["source"] })} />
+              <SourceSelect value={draft.source} onChange={(value) => updateDraft({ source: value })} />
             </section>
 
             <section className={styles.notesSection}>
@@ -285,6 +286,10 @@ function PropertyInput({ label, icon, value, placeholder, readOnly = false, onCh
 
 function PropertySelect({ label, icon, value, placeholder, options, onChange }: { label: string; icon: string; value: string; placeholder?: string; options: string[]; onChange: (value: string) => void }) {
   return <label className={styles.propertyRow}><span className={styles.propertyLabel}><i>{icon}</i>{label}</span><select value={value} onChange={(event) => onChange(event.target.value)}>{placeholder && <option value="">{placeholder}</option>}{options.map((option) => <option value={option} key={option}>{option}</option>)}</select></label>;
+}
+
+function SourceSelect({ value, onChange }: { value: Deal["source"]; onChange: (value: Deal["source"]) => void }) {
+  return <label className={styles.propertyRow}><span className={styles.propertyLabel}><i>↗</i>Источник</span><select value={value} onChange={(event) => onChange(event.target.value as Deal["source"])}><option value="Manual">Не указан</option><option value="Meta">Meta</option><option value="Website">Сайт</option></select></label>;
 }
 
 function AssigneeSelect({ value, options, onChange }: { value: string; options: Array<{ id: string; name: string }>; onChange: (value: string) => void }) {

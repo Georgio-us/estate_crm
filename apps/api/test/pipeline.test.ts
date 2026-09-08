@@ -72,7 +72,7 @@ test("deal creation links an existing contact inside the current organization", 
         async findFirst() { return { id: stageId, pipelineId, pipeline: { id: pipelineId, organizationId: user.memberships[0].organization.id } }; },
       },
       contact: {
-        async findFirst() { return { id: contactId, name: "Тестовый контакт", phone: "+380938849214" }; },
+        async findFirst() { return { id: contactId, name: "Тестовый контакт", phone: "+380938849214", source: "MANUAL" as const }; },
       },
       deal: {
         async create({ data }: { data: Record<string, unknown> }) {
@@ -119,13 +119,14 @@ test("updating a deal title does not mutate the linked contact", async () => {
   const dealId = "14a292bd-d84e-447c-b71a-aa185b809b88";
   let updatedData: Record<string, unknown> = {};
   let contactUpdates = 0;
+  let activityDescription = "";
   const now = new Date("2026-09-07T18:00:00.000Z");
   const database = {
     client: {
       session: { async findUnique() { return session(); } },
       deal: {
         async findFirst() {
-          return { id: dealId, pipelineId, organizationId: user.memberships[0].organization.id };
+          return { id: dealId, pipelineId, stageId, contactId, organizationId: user.memberships[0].organization.id, title: "Квартира у моря", request: "Квартира у моря", budget: null, comment: null, operation: "PURCHASE" as const, propertyType: null, district: null, rooms: null, source: "MANUAL" as const, assigneeId: null, stage: { id: stageId, title: "Новый лид" } };
         },
         async update({ data }: { data: Record<string, unknown> }) {
           updatedData = data;
@@ -150,7 +151,7 @@ test("updating a deal title does not mutate the linked contact", async () => {
           };
         },
       },
-      activityEvent: { async create() {} },
+      activityEvent: { async create({ data }: { data: { description: string } }) { activityDescription = data.description; } },
       contact: {
         async update() {
           contactUpdates += 1;
@@ -173,6 +174,7 @@ test("updating a deal title does not mutate the linked contact", async () => {
   assert.equal(updatedData.title, "Клиент не берёт трубку");
   assert.equal(response.json().deal.contact.name, "Тестовый контакт");
   assert.equal(contactUpdates, 0);
+  assert.equal(activityDescription, "Название: «Квартира у моря» → «Клиент не берёт трубку»");
   await app.close();
 });
 
@@ -185,7 +187,7 @@ test("deal creation does not silently reuse a phone from an existing contact", a
         async findFirst() { return { id: stageId, pipelineId, pipeline: { id: pipelineId, organizationId: user.memberships[0].organization.id } }; },
       },
       contact: {
-        async findFirst() { return { id: contactId, name: "Тестовый контакт", phone: "+380938849214" }; },
+        async findFirst() { return { id: contactId, name: "Тестовый контакт", phone: "+380938849214", source: "MANUAL" as const }; },
       },
       deal: {
         async create() { dealCreates += 1; },
@@ -206,5 +208,42 @@ test("deal creation does not silently reuse a phone from an existing contact", a
   assert.equal(response.statusCode, 409);
   assert.equal(response.json().error, "contact_already_exists");
   assert.equal(dealCreates, 0);
+  await app.close();
+});
+
+test("changing a deal source synchronizes the contact and its other deals", async () => {
+  const dealId = "14a292bd-d84e-447c-b71a-aa185b809b88";
+  let contactSource = "";
+  let relatedDealsSource = "";
+  const now = new Date("2026-09-07T18:00:00.000Z");
+  const existing = {
+    id: dealId, pipelineId, stageId, contactId, organizationId: user.memberships[0].organization.id,
+    title: "Квартира у моря", request: "Квартира у моря", budget: null, comment: null,
+    operation: "PURCHASE" as const, propertyType: null, district: null, rooms: null,
+    source: "MANUAL" as const, assigneeId: null, stage: { id: stageId, title: "Новый лид" },
+  };
+  const database = {
+    client: {
+      session: { async findUnique() { return session(); } },
+      deal: {
+        async findFirst() { return existing; },
+        async update({ data }: { data: Record<string, unknown> }) {
+          return { ...existing, ...data, number: 1001, position: 0, createdAt: now, updatedAt: now, contact: { id: contactId, name: "Тестовый контакт", phone: "+380 93 884 92 14" }, assignee: null };
+        },
+        async updateMany({ data }: { data: { source: string } }) { relatedDealsSource = data.source; },
+      },
+      contact: { async update({ data }: { data: { source: string } }) { contactSource = data.source; } },
+      activityEvent: { async create() {} },
+    },
+    async ping() {},
+    async disconnect() {},
+  } as unknown as DatabaseConnection;
+
+  const app = await buildApp(config, database);
+  const response = await app.inject({ method: "PATCH", url: `/deals/${dealId}`, headers: { cookie: "estate_crm_session=test-token" }, payload: { source: "META" } });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(contactSource, "META");
+  assert.equal(relatedDealsSource, "META");
   await app.close();
 });

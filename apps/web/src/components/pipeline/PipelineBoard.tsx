@@ -47,7 +47,7 @@ interface ApiDeal {
 }
 
 interface ApiStage { id: string; title: string; color: string; position: number; deals: ApiDeal[] }
-interface ContactOption { id: string; name: string; phone: string | null }
+interface ContactOption { id: string; name: string; phone: string | null; source: Deal["source"] }
 
 function mapApiDeal(deal: ApiDeal): Deal {
   return {
@@ -84,8 +84,8 @@ async function requestPipeline(): Promise<{ name: string; stages: PipelineStage[
 async function requestContactOptions(): Promise<ContactOption[]> {
   const response = await fetch("/api/crm/contacts", { cache: "no-store" });
   if (!response.ok) throw new Error("Не удалось загрузить контакты.");
-  const payload = await response.json() as { contacts: ContactOption[] };
-  return payload.contacts;
+  const payload = await response.json() as { contacts: Array<Omit<ContactOption, "source"> & { source: keyof typeof sourceFromApi }> };
+  return payload.contacts.map((contact) => ({ ...contact, source: sourceFromApi[contact.source] }));
 }
 
 async function requestDealActivities(dealId: string): Promise<ActivityEvent[]> {
@@ -271,13 +271,8 @@ export function PipelineBoard() {
       return stage.id === payload.stageId ? { ...stage, deals: [savedDeal, ...withoutDeal] } : { ...stage, deals: withoutDeal };
     }));
     setSelected({ dealId: savedDeal.id, stageId: payload.stageId });
-    appendActivity({
-      dealId: savedDeal.id,
-      category: "change",
-      title: "Изменения сохранены",
-      description: "Обновлены параметры сделки",
-      author: user.name,
-    });
+    const refreshedActivities = await requestDealActivities(savedDeal.id);
+    setActivities((current) => ({ ...current, [savedDeal.id]: refreshedActivities }));
     return { deal: savedDeal, stageId: payload.stageId };
   }
 
@@ -359,7 +354,7 @@ export function PipelineBoard() {
         dealId,
         category: "source",
         title: "Сделка создана",
-        description: draft.source === "Manual" ? "Добавлена вручную" : `Источник ${draft.source}`,
+        description: draft.source === "Manual" ? "Источник не указан" : `Источник ${draft.source}`,
         author: user.name,
         occurredAt: currentTime(),
       }],
@@ -367,7 +362,7 @@ export function PipelineBoard() {
     setNewDealStageId(null);
     setSelected({ dealId, stageId: draft.stageId });
     if (!draft.contactId && deal.contactId) {
-      setContacts((current) => current.some((item) => item.id === deal.contactId) ? current : [{ id: deal.contactId!, name: deal.contactName, phone: deal.phone || null }, ...current]);
+      setContacts((current) => current.some((item) => item.id === deal.contactId) ? current : [{ id: deal.contactId!, name: deal.contactName, phone: deal.phone || null, source: deal.source }, ...current]);
     }
   }
 
@@ -490,7 +485,7 @@ export function PipelineBoard() {
         </div>
       </div>
 
-      {filtersOpen && <section className={styles.filterPanel}><label><span>Ответственный</span><select value={assigneeFilter} onChange={(event) => setAssigneeFilter(event.target.value)}>{assignees.map((assignee) => <option key={assignee}>{assignee}</option>)}</select></label><label><span>Источник</span><select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value)}><option>Все</option><option value="Meta">Meta</option><option value="Website">Сайт</option><option value="Manual">Вручную</option></select></label><label><span>Задача</span><select value={taskFilter} onChange={(event) => setTaskFilter(event.target.value)}><option>Все</option><option value="overdue">Просрочена</option><option value="due">На сегодня</option><option value="normal">Запланирована</option><option>Без задачи</option></select></label><div><strong>{visibleDealsCount}</strong><span>найдено</span></div><button type="button" disabled={!activeFilters} onClick={resetFilters}>Сбросить</button></section>}
+      {filtersOpen && <section className={styles.filterPanel}><label><span>Ответственный</span><select value={assigneeFilter} onChange={(event) => setAssigneeFilter(event.target.value)}>{assignees.map((assignee) => <option key={assignee}>{assignee}</option>)}</select></label><label><span>Источник</span><select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value)}><option>Все</option><option value="Meta">Meta</option><option value="Website">Сайт</option><option value="Manual">Не указан</option></select></label><label><span>Задача</span><select value={taskFilter} onChange={(event) => setTaskFilter(event.target.value)}><option>Все</option><option value="overdue">Просрочена</option><option value="due">На сегодня</option><option value="normal">Запланирована</option><option>Без задачи</option></select></label><div><strong>{visibleDealsCount}</strong><span>найдено</span></div><button type="button" disabled={!activeFilters} onClick={resetFilters}>Сбросить</button></section>}
 
       {loadState === "loading" ? <div className={styles.emptyDeals}><strong>Загружаем воронку…</strong><span>Получаем этапы и сделки из CRM.</span></div> : loadState === "error" ? <div className={styles.emptyDeals}><strong>Не удалось загрузить воронку</strong><span>Проверьте соединение и обновите страницу.</span></div> : view === "board" ? <DndContext
         id="pipeline-dnd"

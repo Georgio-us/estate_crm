@@ -14,7 +14,7 @@ export interface RelatedDeal {
   stageColor: string;
 }
 
-const sourceLabels: Record<Deal["source"], string> = { Meta: "Meta", Website: "Сайт", Manual: "Вручную" };
+const sourceLabels: Record<Deal["source"], string> = { Meta: "Meta", Website: "Сайт", Manual: "Не указан" };
 const sourceFromApi = { META: "Meta", WEBSITE: "Website", MANUAL: "Manual" } as const;
 const sourceToApi = { Meta: "META", Website: "WEBSITE", Manual: "MANUAL" } as const;
 
@@ -198,6 +198,8 @@ export function ContactsDirectory() {
       for (const item of payload.contact!.deals || []) next.set(item.id, mapRelatedDeal(payload.contact!, item));
       return next;
     });
+    const refreshedActivities = await requestContactActivities(saved.id);
+    setContactActivities((current) => ({ ...current, [saved.id]: refreshedActivities }));
     return saved;
   }
 
@@ -213,7 +215,6 @@ export function ContactsDirectory() {
     if (!response.ok || !payload.activity) throw new Error(payload.message || "Не удалось сохранить примечание.");
     const activity = mapApiActivity(payload.activity);
     setContactActivities((current) => ({ ...current, [contactId]: [activity, ...(current[contactId] || [])] }));
-    setContacts((current) => current.map((contact) => contact.id === contactId ? { ...contact, lastContact: "Только что" } : contact));
   }
 
   return (
@@ -235,7 +236,7 @@ export function ContactsDirectory() {
         <section className={styles.workspace}>
           <div className={styles.filters}>
             <Filter label="Ответственный" value={assignee} onChange={setAssignee} options={assigneeOptions} />
-            <Filter label="Источник" value={source} onChange={setSource} options={["Meta", "Website", "Manual"]} optionLabels={{ Website: "Сайт", Manual: "Вручную" }} />
+            <Filter label="Источник" value={source} onChange={setSource} options={["Meta", "Website", "Manual"]} optionLabels={{ Website: "Сайт", Manual: "Не указан" }} />
             <Filter label="Сделки" value={dealFilter} onChange={setDealFilter} options={["with", "without"]} optionLabels={{ with: "Есть активные", without: "Без сделок" }} />
             <span className={styles.resultCount}>{visibleContacts.length} из {contacts.length}</span>
             {hasFilters && <button className={styles.resetButton} type="button" onClick={resetFilters}>Сбросить</button>}

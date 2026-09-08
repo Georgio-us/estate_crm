@@ -10,15 +10,19 @@ import type {
 import type { DatabaseConnection } from "@estate-crm/database";
 
 import { requireUser } from "../auth/require-user.js";
+import { parsePhone } from "../lib/phone.js";
 
 function optionalText(value: string | null | undefined): string | null {
   return value?.trim() || null;
 }
 
-function normalizePhone(phone: string | null): string | null {
-  if (!phone) return null;
-  const digits = phone.replace(/\D/g, "");
-  return digits || null;
+const sourceLabels = { META: "Meta", WEBSITE: "Сайт", MANUAL: "Не указан" } as const;
+
+function describeChange(label: string, previous: string | null, next: string | null): string | null {
+  if ((previous ?? "") === (next ?? "")) return null;
+  if (!previous && next) return `${label} добавлен: «${next}»`;
+  if (previous && !next) return `${label} очищен`;
+  return `${label}: «${previous}» → «${next}»`;
 }
 
 function mapContact(contact: {
@@ -86,10 +90,10 @@ export async function registerContactRoutes(
       body: {
         type: "object",
         additionalProperties: false,
-        required: ["name"],
+        required: ["name", "phone"],
         properties: {
           name: { type: "string", minLength: 1, maxLength: 200 },
-          phone: { type: "string", maxLength: 50 },
+          phone: { type: "string", minLength: 1, maxLength: 50 },
           email: { type: "string", format: "email", maxLength: 320 },
           telegram: { type: "string", maxLength: 100 },
           source: { type: "string", enum: ["META", "WEBSITE", "MANUAL"] },
@@ -120,13 +124,25 @@ export async function registerContactRoutes(
       }
     }
 
-    const phone = optionalText(request.body.phone);
+    const parsedPhone = parsePhone(request.body.phone);
+    if (!parsedPhone) {
+      return reply.status(400).send({ error: "invalid_phone", message: "Введите корректный номер телефона." });
+    }
+    const duplicate = await database.client.contact.findFirst({
+      where: { organizationId: user.organization.id, normalizedPhone: parsedPhone.normalized },
+    });
+    if (duplicate) {
+      return reply.status(409).send({
+        error: "contact_already_exists",
+        message: `Контакт «${duplicate.name}» с таким телефоном уже существует.`,
+      });
+    }
     const contact = await database.client.contact.create({
       data: {
         organizationId: user.organization.id,
         name: request.body.name.trim(),
-        phone,
-        normalizedPhone: normalizePhone(phone),
+        phone: parsedPhone.formatted,
+        normalizedPhone: parsedPhone.normalized,
         email: optionalText(request.body.email)?.toLowerCase() ?? null,
         telegram: optionalText(request.body.telegram),
         source: request.body.source ?? "MANUAL",
@@ -152,7 +168,7 @@ export async function registerContactRoutes(
         minProperties: 1,
         properties: {
           name: { type: "string", minLength: 1, maxLength: 200 },
-          phone: { anyOf: [{ type: "string", maxLength: 50 }, { type: "null" }] },
+          phone: { type: "string", minLength: 1, maxLength: 50 },
           email: { anyOf: [{ type: "string", format: "email", maxLength: 320 }, { type: "null" }] },
           telegram: { anyOf: [{ type: "string", maxLength: 100 }, { type: "null" }] },
           source: { type: "string", enum: ["META", "WEBSITE", "MANUAL"] },
@@ -179,12 +195,22 @@ export async function registerContactRoutes(
       }
     }
 
-    const phone = request.body.phone === undefined ? undefined : optionalText(request.body.phone);
+    const parsedPhone = request.body.phone === undefined ? undefined : parsePhone(request.body.phone);
+    if (request.body.phone !== undefined && !parsedPhone) {
+      return reply.status(400).send({ error: "invalid_phone", message: "Введите корректный номер телефона." });
+    }
+    const nextName = request.body.name?.trim() ?? existing.name;
+    const nextPhone = parsedPhone?.formatted ?? existing.phone;
+    const nextEmail = request.body.email === undefined ? existing.email : optionalText(request.body.email)?.toLowerCase() ?? null;
+    const nextTelegram = request.body.telegram === undefined ? existing.telegram : optionalText(request.body.telegram);
+    const nextSource = request.body.source ?? existing.source;
+    const nextAssigneeId = request.body.assigneeId === undefined ? existing.assigneeId : request.body.assigneeId;
+    const nextComment = request.body.comment === undefined ? existing.comment : optionalText(request.body.comment);
     const contact = await database.client.contact.update({
       where: { id: existing.id },
       data: {
         ...(request.body.name !== undefined ? { name: request.body.name.trim() } : {}),
-        ...(phone !== undefined ? { phone, normalizedPhone: normalizePhone(phone) } : {}),
+        ...(parsedPhone ? { phone: parsedPhone.formatted, normalizedPhone: parsedPhone.normalized } : {}),
         ...(request.body.email !== undefined ? { email: optionalText(request.body.email)?.toLowerCase() ?? null } : {}),
         ...(request.body.telegram !== undefined ? { telegram: optionalText(request.body.telegram) } : {}),
         ...(request.body.source !== undefined ? { source: request.body.source } : {}),
@@ -193,6 +219,36 @@ export async function registerContactRoutes(
       },
       include: { assignee: { select: { id: true, name: true } }, deals: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } } },
     });
+
+    if (request.body.source !== undefined && request.body.source !== existing.source) {
+      await database.client.deal.updateMany({
+        where: { organizationId: user.organization.id, contactId: existing.id },
+        data: { source: request.body.source },
+      });
+    }
+
+    const changes = [
+      describeChange("Имя", existing.name, nextName),
+      describeChange("Телефон", existing.phone, nextPhone),
+      describeChange("Email", existing.email, nextEmail),
+      describeChange("Telegram", existing.telegram, nextTelegram),
+      existing.source === nextSource ? null : `Источник: «${sourceLabels[existing.source]}» → «${sourceLabels[nextSource]}»`,
+      existing.assigneeId === nextAssigneeId ? null : "Ответственный изменён",
+      describeChange("Комментарий", existing.comment, nextComment),
+    ].filter((change): change is string => Boolean(change));
+
+    if (changes.length > 0) {
+      await database.client.activityEvent.create({
+        data: {
+          organizationId: user.organization.id,
+          contactId: existing.id,
+          authorId: user.id,
+          category: "CHANGE",
+          title: "Контакт обновлён",
+          description: changes.join("; "),
+        },
+      });
+    }
 
     return { contact: mapContact(contact) };
   });

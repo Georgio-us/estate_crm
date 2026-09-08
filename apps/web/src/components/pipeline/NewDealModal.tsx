@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Deal } from "@/types/crm";
+import { formatPhoneInput, isValidPhone, normalizePhone } from "@/lib/phone";
 import styles from "./new-deal-modal.module.css";
 
 export interface NewDealDraft {
@@ -21,14 +22,10 @@ export interface NewDealDraft {
 interface NewDealModalProps {
   initialStageId: string;
   stages: Array<{ id: string; title: string }>;
-  contacts: Array<{ id: string; name: string; phone: string | null }>;
+  contacts: Array<{ id: string; name: string; phone: string | null; source?: Deal["source"] }>;
   assignees: Array<{ id: string; name: string }>;
   onCreate: (draft: NewDealDraft) => Promise<void>;
   onClose: () => void;
-}
-
-function normalizePhone(value: string): string {
-  return value.replace(/\D/g, "");
 }
 
 export function NewDealModal({ initialStageId, stages, contacts, assignees, onCreate, onClose }: NewDealModalProps) {
@@ -38,6 +35,7 @@ export function NewDealModal({ initialStageId, stages, contacts, assignees, onCr
   const [stageId, setStageId] = useState(initialStageId);
   const [assigneeId, setAssigneeId] = useState("");
   const [title, setTitle] = useState("");
+  const [source, setSource] = useState<Deal["source"]>("Manual");
   const [operation, setOperation] = useState<Deal["operation"]>("Покупка");
   const [propertyType, setPropertyType] = useState("");
   const [budget, setBudget] = useState("");
@@ -63,6 +61,10 @@ export function NewDealModal({ initialStageId, stages, contacts, assignees, onCr
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!contactName.trim()) return;
+    if (!contactId && !isValidPhone(phone)) {
+      setError("Введите корректный номер телефона.");
+      return;
+    }
     if (matchingContact) {
       setError(`Контакт «${matchingContact.name}» с таким телефоном уже существует. Сначала выберите его из базы.`);
       return;
@@ -77,7 +79,7 @@ export function NewDealModal({ initialStageId, stages, contacts, assignees, onCr
         stageId,
         assigneeId: assigneeId || undefined,
         title: title.trim() || undefined,
-        source: "Manual",
+        source,
         operation,
         propertyType: propertyType.trim() || undefined,
         budget: budget.trim() || undefined,
@@ -97,6 +99,7 @@ export function NewDealModal({ initialStageId, stages, contacts, assignees, onCr
     const contact = contacts.find((item) => item.id === id);
     setContactName(contact?.name || "");
     setPhone(contact?.phone || "");
+    setSource(contact?.source || "Manual");
   }
 
   return (
@@ -134,8 +137,8 @@ export function NewDealModal({ initialStageId, stages, contacts, assignees, onCr
           </label>
 
           <label>
-            <span>Телефон <small>необязательно</small></span>
-            <input value={phone} readOnly={Boolean(contactId)} onChange={(event) => { setPhone(event.target.value); setError(""); }} placeholder="+38 000 000 00 00" />
+            <span>Телефон {!contactId && <b>обязательно</b>}</span>
+            <input type="tel" value={phone} readOnly={Boolean(contactId)} onChange={(event) => { setPhone(formatPhoneInput(event.target.value)); setError(""); }} placeholder="+380 93 888 49 21" />
           </label>
           {matchingContact && <div className={styles.existingContact}><span>Найден существующий контакт: <strong>{matchingContact.name}</strong></span><button type="button" onClick={() => selectContact(matchingContact.id)}>Выбрать контакт</button></div>}
 
@@ -166,7 +169,11 @@ export function NewDealModal({ initialStageId, stages, contacts, assignees, onCr
               <div className={styles.twoColumns}>
                 <label>
                   <span>Источник</span>
-                  <input value="Вручную" readOnly aria-label="Источник: вручную" />
+                  <select value={source} disabled={Boolean(contactId)} onChange={(event) => setSource(event.target.value as Deal["source"])}>
+                    <option value="Manual">Не указан</option>
+                    <option value="Meta">Meta</option>
+                    <option value="Website">Сайт</option>
+                  </select>
                 </label>
                 <label>
                   <span>Операция</span>
@@ -222,7 +229,7 @@ export function NewDealModal({ initialStageId, stages, contacts, assignees, onCr
           <span>Остальные данные можно заполнить позже</span>
           <div>
             <button type="button" onClick={onClose} disabled={isSubmitting}>Отмена</button>
-            <button className={styles.createButton} type="submit" disabled={!contactName.trim() || isSubmitting}>{isSubmitting ? "Создаём…" : "Создать сделку"}</button>
+            <button className={styles.createButton} type="submit" disabled={!contactName.trim() || (!contactId && !isValidPhone(phone)) || isSubmitting}>{isSubmitting ? "Создаём…" : "Создать сделку"}</button>
           </div>
         </footer>
       </form>

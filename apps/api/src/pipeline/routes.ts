@@ -11,6 +11,7 @@ import type {
 import type { DatabaseConnection } from "@estate-crm/database";
 
 import { requireUser } from "../auth/require-user.js";
+import { parsePhone } from "../lib/phone.js";
 
 const defaultStages = [
   { title: "Неразобранные", color: "#d6a835", position: 0 },
@@ -24,10 +25,14 @@ function optionalText(value: string | undefined): string | null {
   return value?.trim() || null;
 }
 
-function normalizePhone(phone: string | null): string | null {
-  if (!phone) return null;
-  const digits = phone.replace(/\D/g, "");
-  return digits || null;
+const sourceLabels = { META: "Meta", WEBSITE: "Сайт", MANUAL: "Не указан" } as const;
+const operationLabels = { PURCHASE: "Покупка", RENT: "Аренда", SALE: "Продажа" } as const;
+
+function describeChange(label: string, previous: string | null, next: string | null): string | null {
+  if ((previous ?? "") === (next ?? "")) return null;
+  if (!previous && next) return `${label} добавлен: «${next}»`;
+  if (previous && !next) return `${label} очищен`;
+  return `${label}: «${previous}» → «${next}»`;
 }
 
 function mapDeal(deal: {
@@ -135,7 +140,7 @@ export async function registerPipelineRoutes(
           source: { type: "string", enum: ["META", "WEBSITE", "MANUAL"] },
           comment: { type: "string", maxLength: 5_000 },
         },
-        anyOf: [{ required: ["contactId"] }, { required: ["contactName"] }],
+        anyOf: [{ required: ["contactId"] }, { required: ["contactName", "phone"] }],
       },
     },
   }, async (request, reply) => {
@@ -166,11 +171,13 @@ export async function registerPipelineRoutes(
     }
 
     if (!contact) {
-      const phone = optionalText(request.body.phone);
-      const normalizedPhone = normalizePhone(phone);
-      contact = normalizedPhone ? await database.client.contact.findFirst({
-        where: { organizationId: user.organization.id, normalizedPhone },
-      }) : null;
+      const parsedPhone = parsePhone(request.body.phone);
+      if (!parsedPhone) {
+        return reply.status(400).send({ error: "invalid_phone", message: "Введите корректный номер телефона." });
+      }
+      contact = await database.client.contact.findFirst({
+        where: { organizationId: user.organization.id, normalizedPhone: parsedPhone.normalized },
+      });
       if (contact) {
         return reply.status(409).send({
           error: "contact_already_exists",
@@ -182,8 +189,8 @@ export async function registerPipelineRoutes(
           data: {
             organizationId: user.organization.id,
             name: request.body.contactName!.trim(),
-            phone,
-            normalizedPhone,
+            phone: parsedPhone.formatted,
+            normalizedPhone: parsedPhone.normalized,
             source: request.body.source ?? "MANUAL",
             assigneeId: request.body.assigneeId ?? null,
           },
@@ -191,6 +198,7 @@ export async function registerPipelineRoutes(
       }
     }
 
+    const dealSource = request.body.contactId ? contact.source : request.body.source ?? "MANUAL";
     const deal = await database.client.deal.create({
       data: {
         organizationId: user.organization.id,
@@ -206,7 +214,7 @@ export async function registerPipelineRoutes(
         propertyType: optionalText(request.body.propertyType),
         district: optionalText(request.body.district),
         rooms: optionalText(request.body.rooms),
-        source: request.body.source ?? "MANUAL",
+        source: dealSource,
       },
       include: {
         contact: { select: { id: true, name: true, phone: true } },
@@ -222,7 +230,7 @@ export async function registerPipelineRoutes(
         authorId: user.id,
         category: "SOURCE",
         title: "Сделка создана",
-        description: request.body.source === "META" ? "Источник Meta" : request.body.source === "WEBSITE" ? "Источник: сайт" : "Добавлена вручную",
+        description: `Источник: ${sourceLabels[dealSource]}`,
       },
     });
 
@@ -261,14 +269,16 @@ export async function registerPipelineRoutes(
 
     const existing = await database.client.deal.findFirst({
       where: { id: request.params.dealId, organizationId: user.organization.id },
+      include: { stage: { select: { id: true, title: true } } },
     });
     if (!existing) return reply.status(404).send({ error: "deal_not_found", message: "Сделка не найдена." });
 
+    let nextStage: { id: string; title: string } | null = null;
     if (request.body.stageId) {
-      const stage = await database.client.pipelineStage.findFirst({
+      nextStage = await database.client.pipelineStage.findFirst({
         where: { id: request.body.stageId, pipelineId: existing.pipelineId },
       });
-      if (!stage) return reply.status(400).send({ error: "invalid_stage", message: "Этап воронки не найден." });
+      if (!nextStage) return reply.status(400).send({ error: "invalid_stage", message: "Этап воронки не найден." });
     }
 
     if (request.body.assigneeId) {
@@ -301,15 +311,43 @@ export async function registerPipelineRoutes(
       },
     });
 
-    await database.client.activityEvent.create({
+    if (request.body.source !== undefined && request.body.source !== existing.source) {
+      await database.client.contact.update({ where: { id: existing.contactId }, data: { source: request.body.source } });
+      await database.client.deal.updateMany({
+        where: { organizationId: user.organization.id, contactId: existing.contactId, id: { not: existing.id } },
+        data: { source: request.body.source },
+      });
+    }
+
+    const nextRequest = request.body.request === undefined ? existing.request : optionalText(request.body.request) ?? "";
+    const nextBudget = request.body.budget === undefined ? existing.budget : optionalText(request.body.budget ?? undefined);
+    const nextPropertyType = request.body.propertyType === undefined ? existing.propertyType : optionalText(request.body.propertyType ?? undefined);
+    const nextDistrict = request.body.district === undefined ? existing.district : optionalText(request.body.district ?? undefined);
+    const nextRooms = request.body.rooms === undefined ? existing.rooms : optionalText(request.body.rooms ?? undefined);
+    const nextComment = request.body.comment === undefined ? existing.comment : optionalText(request.body.comment ?? undefined);
+    const changes = [
+      describeChange("Название", existing.title, request.body.title?.trim() ?? existing.title),
+      describeChange("Запрос клиента", existing.request, nextRequest),
+      describeChange("Бюджет", existing.budget, nextBudget),
+      existing.operation === (request.body.operation ?? existing.operation) ? null : `Операция: «${operationLabels[existing.operation]}» → «${operationLabels[request.body.operation!]}»`,
+      describeChange("Тип объекта", existing.propertyType, nextPropertyType),
+      describeChange("Район", existing.district, nextDistrict),
+      describeChange("Комнаты", existing.rooms, nextRooms),
+      existing.source === (request.body.source ?? existing.source) ? null : `Источник: «${sourceLabels[existing.source]}» → «${sourceLabels[request.body.source!]}»`,
+      existing.assigneeId === (request.body.assigneeId === undefined ? existing.assigneeId : request.body.assigneeId) ? null : "Ответственный изменён",
+      describeChange("Комментарий", existing.comment, nextComment),
+      nextStage && nextStage.id !== existing.stageId ? `Этап: «${existing.stage.title}» → «${nextStage.title}»` : null,
+    ].filter((change): change is string => Boolean(change));
+
+    if (changes.length > 0) await database.client.activityEvent.create({
       data: {
         organizationId: user.organization.id,
         contactId: existing.contactId,
         dealId: existing.id,
         authorId: user.id,
         category: "CHANGE",
-        title: "Изменения сохранены",
-        description: request.body.stageId && request.body.stageId !== existing.stageId ? "Обновлены параметры и этап сделки" : "Обновлены параметры сделки",
+        title: "Сделка обновлена",
+        description: changes.join("; "),
       },
     });
 

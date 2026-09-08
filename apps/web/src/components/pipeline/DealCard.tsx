@@ -11,7 +11,7 @@ interface DealCardProps {
 const sourceLabels: Record<Deal["source"], string> = {
   Meta: "Meta",
   Website: "Сайт",
-  Manual: "Вручную",
+  Manual: "Не указан",
 };
 
 export function DealCard({ deal, onOpen }: DealCardProps) {

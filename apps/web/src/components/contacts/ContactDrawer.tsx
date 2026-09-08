@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { ActivityEvent, Contact } from "@/types/crm";
+import { formatPhoneInput, isValidPhone } from "@/lib/phone";
 import type { RelatedDeal } from "./ContactsDirectory";
 import styles from "./contacts.module.css";
 
@@ -15,12 +16,13 @@ export function ContactDrawer({ contact, deals, activities, assignees, onSave, o
   const editable = (value: Contact) => ({ name: value.name, phone: value.phone, email: value.email, telegram: value.telegram, source: value.source, assigneeId: value.assigneeId, comment: value.comment });
   const isDirty = JSON.stringify(editable(draft)) !== JSON.stringify(editable(contact));
   const emailIsValid = !draft.email || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email);
-  const validationError = !emailIsValid ? "Введите корректный email-адрес." : "";
+  const phoneIsValid = isValidPhone(draft.phone || "");
+  const validationError = !phoneIsValid ? "Введите корректный номер телефона." : !emailIsValid ? "Введите корректный email-адрес." : "";
 
   function update(patch: Partial<Contact>) { setDraft((current) => ({ ...current, ...patch })); }
   function discard() { setDraft(contact); setSaveError(""); }
   async function save() {
-    if (!isDirty || isSaving || !draft.name.trim() || !emailIsValid) return;
+    if (!isDirty || isSaving || !draft.name.trim() || !emailIsValid || !phoneIsValid) return;
     setIsSaving(true);
     setSaveError("");
     try { setDraft(await onSave({ ...draft, name: draft.name.trim() })); }
@@ -51,11 +53,11 @@ export function ContactDrawer({ contact, deals, activities, assignees, onSave, o
         </header>
         <div className={styles.drawerWorkspace}>
           <div className={styles.detailsPane}>
-            <section><h3>Контактные данные</h3><FactInput label="Телефон" value={draft.phone || ""} placeholder="Не указан" onChange={(value) => update({ phone: value })} onCommit={() => { void save(); }} /><FactInput label="Telegram" value={draft.telegram || ""} placeholder="Не указан" onChange={(value) => update({ telegram: value || undefined })} onCommit={() => { void save(); }} /><FactInput label="Email" value={draft.email || ""} placeholder="Не указан" type="email" invalid={!emailIsValid} onChange={(value) => update({ email: value || undefined })} onCommit={() => { void save(); }} /></section>
-            <section><h3>CRM</h3><FactSelect label="Ответственный" value={draft.assigneeId || ""} options={[{ value: "", label: "Не назначен" }, ...assignees.map((item) => ({ value: item.id, label: item.name }))]} onChange={(value) => update({ assigneeId: value || undefined, assignee: assignees.find((item) => item.id === value)?.name || "Не назначен" })} /><FactSelect label="Источник" value={draft.source} options={[{ value: "Meta", label: "Meta" }, { value: "Website", label: "Сайт" }, { value: "Manual", label: "Вручную" }]} onChange={(value) => update({ source: value as Contact["source"] })} /><Fact label="Последний контакт" value={contact.lastContact} /></section>
+            <section><h3>Контактные данные</h3><FactInput label="Телефон" value={draft.phone || ""} placeholder="Обязательное поле" type="tel" invalid={!phoneIsValid} onChange={(value) => update({ phone: formatPhoneInput(value) })} onCommit={() => { void save(); }} /><FactInput label="Telegram" value={draft.telegram || ""} placeholder="Не указан" onChange={(value) => update({ telegram: value || undefined })} onCommit={() => { void save(); }} /><FactInput label="Email" value={draft.email || ""} placeholder="Не указан" type="email" invalid={!emailIsValid} onChange={(value) => update({ email: value || undefined })} onCommit={() => { void save(); }} /></section>
+            <section><h3>CRM</h3><FactSelect label="Ответственный" value={draft.assigneeId || ""} options={[{ value: "", label: "Не назначен" }, ...assignees.map((item) => ({ value: item.id, label: item.name }))]} onChange={(value) => update({ assigneeId: value || undefined, assignee: assignees.find((item) => item.id === value)?.name || "Не назначен" })} /><FactSelect label="Источник" value={draft.source} options={[{ value: "Manual", label: "Не указан" }, { value: "Meta", label: "Meta" }, { value: "Website", label: "Сайт" }]} onChange={(value) => update({ source: value as Contact["source"] })} /><Fact label="Последний контакт" value={contact.lastContact} /></section>
             <section><h3>Комментарий</h3><textarea className={styles.contactCommentInput} value={draft.comment || ""} onChange={(event) => update({ comment: event.target.value || undefined })} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void save(); } }} placeholder="Добавить комментарий" /><small className={styles.keyboardHint}>Enter — сохранить · Shift+Enter — новая строка</small></section>
             <section className={styles.dealsSection}><div className={styles.sectionTitle}><h3>Связанные сделки</h3><span>{deals.length}</span></div>{deals.length ? deals.map(({ deal, stageTitle, stageColor }) => <article className={styles.dealRow} key={deal.id}><span className={styles.dealColor} style={{ background: stageColor }} /><div><strong>{deal.title || deal.request}</strong><small>Сделка #{deal.number} · {stageTitle}</small></div><span>{deal.budget || "Без бюджета"}</span></article>) : <div className={styles.noDeals}>У контакта пока нет сделок<button type="button">＋ Создать сделку</button></div>}</section>
-            {isDirty && <div className={styles.contactSaveBar}><span>{validationError || saveError || "Есть несохранённые изменения"}</span><button type="button" onClick={discard} disabled={isSaving}>Отменить</button><button type="button" onClick={() => { void save(); }} disabled={isSaving || !draft.name.trim() || !emailIsValid}>{isSaving ? "Сохраняем…" : "Сохранить"}</button></div>}
+            {isDirty && <div className={styles.contactSaveBar}><span>{validationError || saveError || "Есть несохранённые изменения"}</span><button type="button" onClick={discard} disabled={isSaving}>Отменить</button><button type="button" onClick={() => { void save(); }} disabled={isSaving || !draft.name.trim() || !emailIsValid || !phoneIsValid}>{isSaving ? "Сохраняем…" : "Сохранить"}</button></div>}
           </div>
           <div className={styles.activityPane}>
             <div className={styles.activityHeader}><div><h3>История взаимодействия</h3><span>{activities.length} событий по контакту</span></div><button type="button">＋ Задача</button></div>
