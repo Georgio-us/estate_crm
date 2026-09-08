@@ -120,7 +120,7 @@ function TaskRow({ task, onOpen, onComplete }: { task: CrmTask; onOpen: () => vo
       <button className={styles.checkButton} type="button" aria-label={isCompleted ? "Задача выполнена" : `Выполнить: ${task.title}`} disabled={isCompleted} onClick={onComplete}>{isCompleted ? "✓" : ""}</button>
       <span className={styles.kindIcon}>{kindIcons[task.kind]}</span>
       <button className={styles.taskMain} type="button" onClick={onOpen}><strong>{task.title}</strong><span>{task.kind}{task.result && ` · ${task.result}`}</span></button>
-      <div className={styles.relation}>{task.contactName ? <Link href="/contacts">{task.contactName}</Link> : <span>Без контакта</span>}{task.dealNumber && <Link href="/">Сделка #{task.dealNumber}</Link>}</div>
+      <div className={styles.relation}>{task.contactName ? <Link href={`/contacts?contact=${task.contactId}`}>{task.contactName}</Link> : <span>Без контакта</span>}{task.dealNumber && task.dealId && <Link href={`/?deal=${task.dealId}&task=${task.id}`}>Открыть сделку #{task.dealNumber}</Link>}</div>
       <span className={styles.taskAssignee}><i>{task.assignee.slice(0, 1)}</i>{task.assignee}</span>
       <time className={task.period === "overdue" ? styles.overdueTime : ""}>{task.completedAt || <>{task.dueLabel}{task.dueTime && <b>{task.dueTime}</b>}</>}</time>
       {!isCompleted && <button className={styles.completeButton} type="button" onClick={onComplete}>Выполнить</button>}

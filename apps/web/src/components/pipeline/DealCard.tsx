@@ -18,6 +18,15 @@ const sourceLabels: Record<Deal["source"], string> = {
   Manual: "Не указан",
 };
 
+function taskCountLabel(count: number) {
+  const mod100 = count % 100;
+  const mod10 = count % 10;
+  if (mod100 >= 11 && mod100 <= 14) return `${count} задач`;
+  if (mod10 === 1) return `${count} задача`;
+  if (mod10 >= 2 && mod10 <= 4) return `${count} задачи`;
+  return `${count} задач`;
+}
+
 export function DealCard({ deal, stageId, onOpen, onAddTask, onLifecycle }: DealCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -104,7 +113,8 @@ function DealCardContent({ deal, menuOpen = false, busy = false, onMenuToggle, o
         </span>
         {deal.task ? (
           <span className={`${styles.task} ${deal.taskState ? styles[deal.taskState] : ""}`}>
-            {deal.task}
+            <b>{deal.taskCount && deal.taskCount > 1 ? taskCountLabel(deal.taskCount) : deal.taskDueLabel}</b>
+            <span>{deal.task}</span>
           </span>
         ) : (
           <span className={styles.noTask}>Нет задачи</span>

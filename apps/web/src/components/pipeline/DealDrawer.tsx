@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
-import type { ActivityCategory, ActivityEvent, Deal, DealStatus } from "@/types/crm";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { localDateKey } from "@/lib/tasks";
+import type { ActivityCategory, ActivityEvent, CrmTask, Deal, DealStatus } from "@/types/crm";
 import { isValidPhone } from "@/lib/phone";
 import styles from "./deal-drawer.module.css";
 
@@ -9,14 +10,16 @@ interface DealDrawerProps {
   stages: Array<{ id: string; title: string }>;
   assignees: Array<{ id: string; name: string }>;
   activities: ActivityEvent[];
+  tasks: CrmTask[];
+  highlightedTaskId?: string;
   contacts: Array<{ id: string; name: string; phone: string | null }>;
   onSave: (deal: Deal, stageId: string) => Promise<{ deal: Deal; stageId: string }>;
   onUpdateContactPhone: (phone: string) => Promise<string>;
   onAddNote: (text: string) => Promise<void>;
   onLinkContact: (contactId: string) => Promise<void>;
   onUnlinkContact: (contactId: string) => Promise<void>;
-  onAddTask: (title: string, dueAt?: string) => Promise<void>;
-  onCompleteTask: (result: string) => Promise<void>;
+  onAddTask: (draft: { title: string; dueDate?: string; dueTime?: string }) => Promise<void>;
+  onCompleteTask: (taskId: string, result: string) => Promise<void>;
   onLifecycle: (status: DealStatus) => Promise<void>;
   onOpenContact: (contactId: string) => void;
   initialComposerMode?: ComposerMode;
@@ -29,7 +32,6 @@ type ActivityFilter = "all" | ActivityCategory;
 const propertyTypes = ["Квартира", "Дом", "Участок", "Коммерческая недвижимость"];
 const districts = ["Приморский", "Киевский", "Пересыпский", "Хаджибейский"];
 const roomOptions = ["1", "2", "3", "4+"];
-const dueOptions = ["Без срока", "Сегодня, 18:00", "Завтра, 10:00", "Через 3 дня", "Через неделю"];
 const sourceLabels: Record<Deal["source"], string> = { Meta: "Meta", Website: "Сайт", Manual: "Не указан" };
 
 const activityIcons: Record<ActivityCategory, string> = {
@@ -46,6 +48,8 @@ export function DealDrawer({
   stages,
   assignees,
   activities,
+  tasks,
+  highlightedTaskId,
   contacts,
   onSave,
   onUpdateContactPhone,
@@ -61,10 +65,10 @@ export function DealDrawer({
 }: DealDrawerProps) {
   const [composerMode, setComposerMode] = useState<ComposerMode>(initialComposerMode);
   const [composerText, setComposerText] = useState("");
-  const [taskDueAt, setTaskDueAt] = useState("Без срока");
-  const [isDueMenuOpen, setIsDueMenuOpen] = useState(false);
+  const [taskDueDate, setTaskDueDate] = useState("");
+  const [taskDueTime, setTaskDueTime] = useState("");
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
-  const [isCompletingTask, setIsCompletingTask] = useState(false);
+  const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
   const [taskResult, setTaskResult] = useState("");
   const [composerError, setComposerError] = useState("");
   const [isComposerSubmitting, setIsComposerSubmitting] = useState(false);
@@ -79,6 +83,7 @@ export function DealDrawer({
   const [dealMenuOpen, setDealMenuOpen] = useState(false);
   const [contactMenuOpen, setContactMenuOpen] = useState(false);
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
 
   const comparable = (value: Deal) => ({ title: value.title, phone: value.phone, assigneeId: value.assigneeId, budget: value.budget, operation: value.operation, propertyType: value.propertyType, district: value.district, rooms: value.rooms, request: value.request, comment: value.comment, source: value.source });
   const isDirty = draftStageId !== stageId || JSON.stringify(comparable(draft)) !== JSON.stringify(comparable(deal));
@@ -168,6 +173,26 @@ export function DealDrawer({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
+  useEffect(() => {
+    if (composerMode === "task") composerRef.current?.focus();
+  }, [composerMode]);
+
+  useEffect(() => {
+    if (!highlightedTaskId) return;
+    window.setTimeout(() => document.getElementById(`deal-task-${highlightedTaskId}`)?.scrollIntoView({ block: "center", behavior: "smooth" }), 120);
+  }, [highlightedTaskId, tasks.length]);
+
+  function activateTaskComposer() {
+    setComposerMode("task");
+    window.setTimeout(() => composerRef.current?.focus(), 0);
+  }
+
+  function applyQuickDue(days: number, time = "") {
+    const now = new Date();
+    setTaskDueDate(localDateKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() + days)));
+    setTaskDueTime(time);
+  }
+
   async function submitComposer() {
     const text = composerText.trim();
     if (!text || isComposerSubmitting) return;
@@ -185,20 +210,21 @@ export function DealDrawer({
     } else {
       setIsComposerSubmitting(true);
       setComposerError("");
-      try { await onAddTask(text, taskDueAt === "Без срока" ? undefined : taskDueAt); }
+      try { await onAddTask({ title: text, dueDate: taskDueDate || undefined, dueTime: taskDueTime || undefined }); }
       catch (cause) { setComposerError(cause instanceof Error ? cause.message : "Не удалось создать задачу."); setIsComposerSubmitting(false); return; }
     }
 
     setComposerText("");
-    setTaskDueAt("Без срока");
-    setIsDueMenuOpen(false);
+    setTaskDueDate("");
+    setTaskDueTime("");
     setIsComposerSubmitting(false);
   }
 
   async function completeCurrentTask() {
-    await onCompleteTask(taskResult.trim());
+    if (!completingTaskId) return;
+    await onCompleteTask(completingTaskId, taskResult.trim());
     setTaskResult("");
-    setIsCompletingTask(false);
+    setCompletingTaskId(null);
   }
 
   return (
@@ -221,7 +247,7 @@ export function DealDrawer({
             <button type="button" aria-label="Меню сделки" aria-expanded={dealMenuOpen} onClick={() => setDealMenuOpen((value) => !value)}>•••</button>
             {dealMenuOpen && <div className={styles.entityMenu}>
               {(deal.status ?? "ACTIVE") === "ACTIVE" ? <>
-                <button type="button" onClick={() => { setDealMenuOpen(false); setComposerMode("task"); }}>Поставить задачу</button>
+                <button type="button" onClick={() => { setDealMenuOpen(false); activateTaskComposer(); }}>Поставить задачу</button>
                 <span />
                 <button type="button" disabled={lifecycleBusy} onClick={() => { void changeLifecycle("WON"); }}>Завершить успешно</button>
                 <button type="button" disabled={lifecycleBusy} onClick={() => { void changeLifecycle("LOST"); }}>Закрыть неуспешно</button>
@@ -294,7 +320,7 @@ export function DealDrawer({
             <div className={styles.activityToolbar}>
               <div><h2>Работа со сделкой</h2><span>{activities.length} событий в истории</span></div>
               <div className={styles.activityButtons}>
-                <button type="button" onClick={() => setComposerMode("task")}>＋ Задача</button>
+                <button type="button" onClick={activateTaskComposer}>＋ Задача</button>
                 <select aria-label="Фильтр истории" value={activityFilter} onChange={(event) => setActivityFilter(event.target.value as ActivityFilter)}>
                   <option value="all">Все события</option>
                   <option value="note">Примечания</option>
@@ -309,24 +335,30 @@ export function DealDrawer({
             <div className={styles.activityFeed}>
               <div className={styles.dateDivider}><span>Сегодня</span></div>
 
-              {deal.task ? (
-                <article className={`${styles.activityCard} ${deal.taskState === "overdue" ? styles.overdueCard : ""}`}>
-                  <span className={styles.activityIcon}>✓</span>
-                  <div><p>{deal.task}</p><span>{deal.assignee} · ближайшее действие</span></div>
-                  <button type="button" onClick={() => setIsCompletingTask(true)}>Выполнить</button>
-                </article>
+              {tasks.length ? (
+                <section className={styles.activeTasks} aria-label="Активные задачи сделки">
+                  <header><div><strong>Активные задачи</strong><span>{tasks.length}</span></div><button type="button" onClick={activateTaskComposer}>＋ Добавить</button></header>
+                  {tasks.map((task) => (
+                    <div className={styles.taskUnit} key={task.id}>
+                      <article id={`deal-task-${task.id}`} className={`${styles.activityCard} ${task.period === "overdue" ? styles.overdueCard : ""} ${highlightedTaskId === task.id ? styles.highlightedTask : ""}`}>
+                        <span className={styles.activityIcon}>✓</span>
+                        <div><p>{task.title}</p><span className={styles[`taskDue_${task.period}`]}>{task.dueLabel}{task.dueTime ? `, ${task.dueTime}` : ""} · {task.assignee}</span></div>
+                        <button type="button" onClick={() => { setCompletingTaskId(task.id); setTaskResult(""); }}>Выполнить</button>
+                      </article>
+                      {completingTaskId === task.id && (
+                        <div className={styles.completionForm}>
+                          <label htmlFor={`task-result-${task.id}`}>Результат задачи</label>
+                          <textarea id={`task-result-${task.id}`} autoFocus value={taskResult} onChange={(event) => setTaskResult(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void completeCurrentTask(); } }} placeholder="Например, договорились о просмотре" />
+                          <div><button type="button" onClick={() => setCompletingTaskId(null)}>Отмена</button><button type="button" onClick={() => { void completeCurrentTask(); }}>Подтвердить</button></div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </section>
               ) : (
                 <article className={styles.taskPrompt}>
-                  <span>○</span><p>Нет запланированных задач</p><button type="button" onClick={() => setComposerMode("task")}>Добавить</button>
+                  <span>○</span><p>Нет запланированных задач</p><button type="button" onClick={activateTaskComposer}>Добавить</button>
                 </article>
-              )}
-
-              {isCompletingTask && deal.task && (
-                <div className={styles.completionForm}>
-                  <label htmlFor="task-result">Результат задачи</label>
-                  <textarea id="task-result" value={taskResult} onChange={(event) => setTaskResult(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void completeCurrentTask(); } }} placeholder="Например, договорились о просмотре" />
-                  <div><button type="button" onClick={() => setIsCompletingTask(false)}>Отмена</button><button type="button" onClick={() => { void completeCurrentTask(); }}>Подтвердить</button></div>
-                </div>
               )}
 
               <div className={styles.thread}>
@@ -338,28 +370,22 @@ export function DealDrawer({
               </div>
             </div>
 
-            <div className={styles.composer}>
+            <div className={`${styles.composer} ${composerMode === "task" ? styles.composerTask : ""}`}>
               <div className={styles.composerTabs}>
                 <button className={composerMode === "note" ? styles.composerTabActive : ""} type="button" onClick={() => setComposerMode("note")}>Примечание</button>
-                <button className={composerMode === "task" ? styles.composerTabActive : ""} type="button" onClick={() => setComposerMode("task")}>Задача</button>
+                <button className={composerMode === "task" ? styles.composerTabActive : ""} type="button" onClick={activateTaskComposer}>Задача</button>
               </div>
-              <textarea value={composerText} onChange={(event) => setComposerText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void submitComposer(); } }} placeholder={composerMode === "note" ? "Добавить примечание к сделке…" : "Что необходимо сделать?"} aria-label={composerMode === "note" ? "Новое примечание" : "Новая задача"} />
+              <textarea ref={composerRef} value={composerText} onChange={(event) => setComposerText(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void submitComposer(); } }} placeholder={composerMode === "note" ? "Добавить примечание к сделке…" : "Что необходимо сделать?"} aria-label={composerMode === "note" ? "Новое примечание" : "Новая задача"} />
               {composerError && <div className={styles.composerError} role="alert">{composerError}</div>}
+              {composerMode === "task" && <div className={styles.taskSchedule}>
+                <div className={styles.quickDates}><button type="button" onClick={() => { setTaskDueDate(""); setTaskDueTime(""); }}>Без срока</button><button type="button" onClick={() => applyQuickDue(0, "18:00")}>Сегодня</button><button type="button" onClick={() => applyQuickDue(1, "10:00")}>Завтра</button><button type="button" onClick={() => applyQuickDue(3)}>Через 3 дня</button></div>
+                <label><span>Дата</span><input type="date" value={taskDueDate} onChange={(event) => setTaskDueDate(event.target.value)} /></label>
+                <label><span>Время</span><input type="time" value={taskDueTime} onChange={(event) => setTaskDueTime(event.target.value)} /></label>
+              </div>}
               <div className={styles.composerFooter}>
-                {composerMode === "task" ? (
-                  <div className={styles.duePicker}>
-                    <button className={styles.dueButton} type="button" aria-expanded={isDueMenuOpen} onClick={() => setIsDueMenuOpen((current) => !current)}>◷ {taskDueAt}</button>
-                    {isDueMenuOpen && (
-                      <div className={styles.dueMenu} role="menu" aria-label="Срок задачи">
-                        {dueOptions.map((option) => (
-                          <button className={option === taskDueAt ? styles.dueOptionActive : ""} type="button" role="menuitem" key={option} onClick={() => { setTaskDueAt(option); setIsDueMenuOpen(false); }}>{option}</button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ) : (
+                {composerMode === "note" ? (
                   <button type="button" aria-label="Прикрепить файл">＋</button>
-                )}
+                ) : <span className={styles.scheduleSummary}>{taskDueDate ? `◷ ${taskDueDate}${taskDueTime ? `, ${taskDueTime}` : ""}` : "◷ Без срока"}</span>}
                 <button className={styles.saveNoteButton} type="button" disabled={!composerText.trim() || isComposerSubmitting} onClick={() => { void submitComposer(); }}>{isComposerSubmitting ? "Сохраняем…" : composerMode === "note" ? "Сохранить" : "Создать задачу"}</button>
               </div>
             </div>

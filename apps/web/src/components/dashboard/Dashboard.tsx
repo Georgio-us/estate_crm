@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { CompleteTaskModal } from "@/components/tasks/CompleteTaskModal";
 import { TaskDetailsModal } from "@/components/tasks/TaskDetailsModal";
@@ -43,6 +44,7 @@ function activityTime(value: string) {
 }
 
 export function Dashboard() {
+  const router = useRouter();
   const user = useCurrentUser();
   const { tasks, contacts, deals: taskDeals, updateTask, completeTask: persistCompleteTask } = useTasks();
   const [dashboard, setDashboard] = useState<DashboardData>(emptyDashboard);
@@ -102,6 +104,11 @@ export function Dashboard() {
     return saved;
   }
 
+  function openTask(task: CrmTask) {
+    if (task.dealId) router.push(`/?deal=${task.dealId}&task=${task.id}`);
+    else setSelectedTaskId(task.id);
+  }
+
   return (
     <section className={styles.page}>
       <header className={styles.topbar}>
@@ -115,7 +122,7 @@ export function Dashboard() {
             <button className={styles.notificationBackdrop} type="button" aria-label="Закрыть уведомления" onClick={() => setNotificationsOpen(false)} />
             <aside className={styles.notificationPanel} aria-label="Последние уведомления">
               <header><div><strong>Уведомления</strong><span>{notificationCount} новых</span></div><button type="button" onClick={() => setNotificationsOpen(false)}>Закрыть</button></header>
-              {overdueCount > 0 && <button className={styles.notificationItem} type="button" onClick={() => { if (priorityTask) setSelectedTaskId(priorityTask.id); setNotificationsOpen(false); }}>
+              {overdueCount > 0 && <button className={styles.notificationItem} type="button" onClick={() => { if (priorityTask) openTask(priorityTask); setNotificationsOpen(false); }}>
                 <i className={styles.notificationDanger}>!</i><span><strong>Просрочена задача</strong><small>{priorityTask?.title}{priorityTask?.contactName ? ` · ${priorityTask.contactName}` : ""}</small><time>Сейчас</time></span>
               </button>}
               {dashboard.deals.unassigned > 0 && <Link className={styles.notificationItem} href="/" onClick={() => setNotificationsOpen(false)}>
@@ -142,7 +149,7 @@ export function Dashboard() {
               <div className={styles.commandMeta}><span>Сегодня · {todayLabel}</span><i>{overdueCount ? "Требует действия" : "Всё по плану"}</i></div>
               <strong className={styles.commandNumber}>{overdueCount}</strong>
               <h3>{overdueCount ? "просроченная задача" : "просроченных задач"}</h3>
-              {priorityTask ? <><p><b>{priorityTask.title}</b> · {priorityTask.contactName || "Без контакта"}</p><button type="button" onClick={() => setSelectedTaskId(priorityTask.id)}>Открыть задачу <span>→</span></button></> : <p>Критичных действий сейчас нет.</p>}
+              {priorityTask ? <><p><b>{priorityTask.title}</b> · {priorityTask.contactName || "Без контакта"}</p><button type="button" onClick={() => openTask(priorityTask)}>Открыть в сделке <span>→</span></button></> : <p>Критичных действий сейчас нет.</p>}
             </div>
             <div className={styles.commandStats}>
               <Link href="/tasks"><strong>{todayCount}</strong><span>задачи<br />на сегодня</span></Link>
@@ -168,7 +175,7 @@ export function Dashboard() {
                   <article className={styles.taskRow} key={task.id}>
                     <button className={`${styles.taskCheck} ${task.period === "overdue" ? styles.taskCheckOverdue : ""}`} type="button" aria-label={`Выполнить: ${task.title}`} onClick={() => setCompletingTaskId(task.id)} />
                     <span className={styles.taskIcon}>{taskKindIcons[task.kind]}</span>
-                    <button className={styles.taskText} type="button" onClick={() => setSelectedTaskId(task.id)}><strong>{task.title}</strong><span>{task.contactName || "Без контакта"}{task.dealNumber ? ` · Сделка #${task.dealNumber}` : ""}</span></button>
+                    <button className={styles.taskText} type="button" onClick={() => openTask(task)}><strong>{task.title}</strong><span>{task.contactName || "Без контакта"}{task.dealNumber ? ` · Сделка #${task.dealNumber}` : ""}</span></button>
                     <time className={task.period === "overdue" ? styles.overdue : ""}>{task.period === "overdue" ? "Просрочено" : task.dueTime || "Сегодня"}</time>
                   </article>
                 )) : <div className={styles.empty}><span>✓</span><strong>На сегодня всё выполнено</strong><p>Новых задач, требующих внимания, нет.</p></div>}
@@ -203,7 +210,7 @@ export function Dashboard() {
             <section className={styles.panel}>
               <PanelHeader title="Последние события" subtitle="Свежие изменения по сделкам" href="/" linkLabel="В воронку" />
               <div className={styles.activityList}>
-                {recentActivities.length ? recentActivities.map((activity) => <Link className={styles.activity} href={activity.dealId ? "/" : activity.contactId ? "/contacts" : "/home"} key={activity.id}><span className={styles.activityIcon}>{activityIcons[activityCategoryFromApi[activity.category]]}</span><span><strong>{activity.title}</strong><small>{activity.contactName || (activity.dealNumber ? `Сделка #${activity.dealNumber}` : "Системное событие")}{activity.description ? ` · ${activity.description}` : ""}</small></span><time>{activityTime(activity.occurredAt)}</time></Link>) : <div className={styles.activityEmpty}>Событий пока нет.</div>}
+                {recentActivities.length ? recentActivities.map((activity) => <Link className={styles.activity} href={activity.dealId ? `/?deal=${activity.dealId}` : activity.contactId ? `/contacts?contact=${activity.contactId}` : "/home"} key={activity.id}><span className={styles.activityIcon}>{activityIcons[activityCategoryFromApi[activity.category]]}</span><span><strong>{activity.title}</strong><small>{activity.contactName || (activity.dealNumber ? `Сделка #${activity.dealNumber}` : "Системное событие")}{activity.description ? ` · ${activity.description}` : ""}</small></span><time>{activityTime(activity.occurredAt)}</time></Link>) : <div className={styles.activityEmpty}>Событий пока нет.</div>}
               </div>
             </section>
           </div>

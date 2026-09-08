@@ -7,11 +7,16 @@ export function localDateKey(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
-export function taskPeriod(dueDate: string | null | undefined, completed = false): TaskPeriod {
+export function taskPeriod(dueDate: string | null | undefined, completed = false, dueTime?: string | null): TaskPeriod {
   if (completed) return "completed";
   if (!dueDate) return "upcoming";
   const today = localDateKey();
   if (dueDate < today) return "overdue";
+  if (dueDate === today && dueTime) {
+    const now = new Date();
+    const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    if (dueTime < currentTime) return "overdue";
+  }
   if (dueDate === today) return "today";
   return "upcoming";
 }
@@ -49,7 +54,7 @@ export function mapApiTask(task: ApiTask): CrmTask {
     id: task.id,
     title: task.title,
     kind: kindFromApi[task.kind],
-    period: taskPeriod(task.dueDate, task.status === "COMPLETED"),
+    period: taskPeriod(task.dueDate, task.status === "COMPLETED", task.dueTime),
     dueDate: task.dueDate || undefined,
     dueLabel: taskDueLabel(task.dueDate),
     dueTime: task.dueTime || undefined,

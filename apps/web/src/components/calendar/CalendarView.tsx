@@ -169,7 +169,7 @@ export function CalendarView() {
                 <article className={`${styles.agendaItem} ${task.period === "completed" ? styles.completedAgenda : ""}`} key={task.id}>
                   <button className={styles.checkButton} type="button" aria-label={task.period === "completed" ? `Задача выполнена: ${task.title}` : `Выполнить задачу: ${task.title}`} disabled={task.period === "completed"} onClick={() => setCompletingTaskId(task.id)}>{task.period === "completed" ? "✓" : ""}</button>
                   <button className={styles.agendaMain} type="button" onClick={() => setSelectedTaskId(task.id)}><span><i>{kindIcons[task.kind]}</i>{task.kind}<time>{task.dueTime || "Без времени"}</time></span><strong>{task.title}</strong><small>{task.assignee}</small></button>
-                  {(task.contactName || task.dealTitle) && <div className={styles.relations}>{task.contactName && <Link href="/contacts">{task.contactName}</Link>}{task.dealTitle && <Link href="/">{task.dealTitle}</Link>}</div>}
+                  {(task.contactName || task.dealTitle) && <div className={styles.relations}>{task.contactName && <Link href={`/contacts?contact=${task.contactId}`}>{task.contactName}</Link>}{task.dealTitle && task.dealId && <Link href={`/?deal=${task.dealId}&task=${task.id}`}>Открыть сделку · {task.dealTitle}</Link>}</div>}
                 </article>
               )) : <div className={styles.emptyDay}><span>○</span><h4>На этот день задач нет</h4><p>Можно оставить день свободным или запланировать действие.</p><button type="button" onClick={() => setIsCreating(true)}>＋ Добавить задачу</button></div>}
             </div>

@@ -24,7 +24,7 @@ import { useTasks } from "@/components/tasks/TasksContext";
 import { normalizePhone } from "@/lib/phone";
 import { localDateKey } from "@/lib/tasks";
 import { mapApiActivity, type ApiActivity } from "@/lib/activity";
-import type { ActivityEvent, Deal, DealStatus, PipelineStage } from "@/types/crm";
+import type { ActivityEvent, CrmTask, Deal, DealStatus, PipelineStage } from "@/types/crm";
 import { DealDrawer } from "./DealDrawer";
 import { DealCardPreview } from "./DealCard";
 import { NewDealModal, type NewDealDraft } from "./NewDealModal";
@@ -60,6 +60,18 @@ function importedOperation(value: string | undefined): keyof typeof operationFro
   if (normalized === "rent" || normalized === "аренда") return "RENT";
   if (normalized === "sale" || normalized === "продажа") return "SALE";
   return "PURCHASE";
+}
+
+function compareTasks(first: CrmTask, second: CrmTask) {
+  const firstKey = `${first.dueDate || "9999-12-31"}T${first.dueTime || "23:59"}`;
+  const secondKey = `${second.dueDate || "9999-12-31"}T${second.dueTime || "23:59"}`;
+  return firstKey.localeCompare(secondKey);
+}
+
+function taskState(task: CrmTask): Deal["taskState"] {
+  if (task.period === "overdue") return "overdue";
+  if (task.period === "today") return "due";
+  return "normal";
 }
 
 const pipelineCollisionDetection: CollisionDetection = (args) => {
@@ -167,14 +179,15 @@ async function requestDealActivities(dealId: string): Promise<ActivityEvent[]> {
 export function PipelineBoard() {
   const router = useRouter();
   const pipelineMenuRef = useRef<HTMLDivElement>(null);
+  const deepLinkHandledRef = useRef(false);
   const user = useCurrentUser();
-  const { createTask, completeTask: persistCompleteTask } = useTasks();
+  const { tasks, createTask, completeTask: persistCompleteTask } = useTasks();
   const [pipelineName, setPipelineName] = useState("Продажа недвижимости");
   const [stages, setStages] = useState<PipelineStage[]>([]);
   const [contacts, setContacts] = useState<ContactOption[]>([]);
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [activities, setActivities] = useState<Record<string, ActivityEvent[]>>({});
-  const [selected, setSelected] = useState<{ dealId: string; stageId: string; composer?: "note" | "task" } | null>(null);
+  const [selected, setSelected] = useState<{ dealId: string; stageId: string; composer?: "note" | "task"; taskId?: string } | null>(null);
   const [newDealStageId, setNewDealStageId] = useState<string | null>(null);
   const [activeDealId, setActiveDealId] = useState<string | null>(null);
   const [view, setView] = useState<"board" | "list">("board");
@@ -198,6 +211,15 @@ export function PipelineBoard() {
         setStages(pipeline.stages);
         setContacts(contactOptions);
         setLoadState("ready");
+        if (!deepLinkHandledRef.current) {
+          const parameters = new URLSearchParams(window.location.search);
+          const dealId = parameters.get("deal");
+          const stage = dealId ? pipeline.stages.find((item) => item.deals.some((deal) => deal.id === dealId)) : undefined;
+          if (dealId && stage) {
+            deepLinkHandledRef.current = true;
+            setSelected({ dealId, stageId: stage.id, taskId: parameters.get("task") || undefined });
+          }
+        }
       },
       () => { if (active) setLoadState("error"); },
     );
@@ -282,12 +304,29 @@ export function PipelineBoard() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  const dealsCount = stages.reduce((total, stage) => total + stage.deals.length, 0);
-  const assignees = useMemo(() => ["Все", ...new Set(stages.flatMap((stage) => stage.deals.map((deal) => deal.assignee)))], [stages]);
+  const stagesWithTasks = useMemo(() => stages.map((stage) => ({
+    ...stage,
+    deals: stage.deals.map((deal) => {
+      const dealTasks = tasks
+        .filter((task) => task.dealId === deal.id && task.period !== "completed")
+        .sort(compareTasks);
+      const nextTask = dealTasks[0];
+      return {
+        ...deal,
+        task: nextTask?.title,
+        taskId: nextTask?.id,
+        taskState: nextTask ? taskState(nextTask) : undefined,
+        taskCount: dealTasks.length,
+        taskDueLabel: nextTask ? `${nextTask.dueLabel}${nextTask.dueTime ? `, ${nextTask.dueTime}` : ""}` : undefined,
+      };
+    }),
+  })), [stages, tasks]);
+  const dealsCount = stagesWithTasks.reduce((total, stage) => total + stage.deals.length, 0);
+  const assignees = useMemo(() => ["Все", ...new Set(stagesWithTasks.flatMap((stage) => stage.deals.map((deal) => deal.assignee)))], [stagesWithTasks]);
   const activeFilters = [assigneeFilter, sourceFilter, taskFilter].filter((value) => value !== "Все").length;
   const filteredStages = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("ru");
-    return stages.map((stage) => ({
+    return stagesWithTasks.map((stage) => ({
       ...stage,
       deals: stage.deals.filter((deal) => {
         const matchesQuery = !normalized || `${deal.title || ""} ${deal.contactName} ${deal.phone} ${deal.request} ${deal.number}`.toLocaleLowerCase("ru").includes(normalized);
@@ -297,10 +336,11 @@ export function PipelineBoard() {
         return matchesQuery && matchesAssignee && matchesSource && matchesTask;
       }),
     }));
-  }, [assigneeFilter, query, sourceFilter, stages, taskFilter]);
+  }, [assigneeFilter, query, sourceFilter, stagesWithTasks, taskFilter]);
   const visibleDealsCount = filteredStages.reduce((total, stage) => total + stage.deals.length, 0);
-  const selectedStage = selected ? stages.find((stage) => stage.id === selected.stageId) : undefined;
+  const selectedStage = selected ? stagesWithTasks.find((stage) => stage.id === selected.stageId) : undefined;
   const selectedDeal = selectedStage?.deals.find((deal) => deal.id === selected?.dealId);
+  const selectedTasks = selected ? tasks.filter((task) => task.dealId === selected.dealId && task.period !== "completed").sort(compareTasks) : [];
 
   const stageOptions = useMemo(
     () => stages.map(({ id, title }) => ({ id, title })),
@@ -309,8 +349,19 @@ export function PipelineBoard() {
 
   const selectedActivities = selected ? activities[selected.dealId] || [] : [];
   const activeDeal = activeDealId
-    ? stages.flatMap((stage) => stage.deals).find((deal) => deal.id === activeDealId)
+    ? stagesWithTasks.flatMap((stage) => stage.deals).find((deal) => deal.id === activeDealId)
     : undefined;
+  const notificationTasks = tasks.filter((task) => task.period === "overdue" || task.period === "today").sort(compareTasks);
+
+  function openTaskDeal(task: CrmTask) {
+    if (!task.dealId) {
+      router.push("/tasks");
+      return;
+    }
+    const stage = stagesWithTasks.find((item) => item.deals.some((deal) => deal.id === task.dealId));
+    if (stage) setSelected({ dealId: task.dealId, stageId: stage.id, taskId: task.id });
+    else router.push(`/?deal=${task.dealId}&task=${task.id}`);
+  }
 
   function currentTime() {
     return new Intl.DateTimeFormat("ru-RU", {
@@ -330,33 +381,6 @@ export function PipelineBoard() {
       ...current,
       [event.dealId]: [activity, ...(current[event.dealId] || [])],
     }));
-  }
-
-  function updateDeal(patch: Partial<Deal>) {
-    if (!selected || !selectedDeal) return;
-
-    if (patch.assignee && patch.assignee !== selectedDeal.assignee) {
-      appendActivity({
-        dealId: selected.dealId,
-        category: "change",
-        title: "Изменён ответственный",
-        description: `${selectedDeal.assignee} → ${patch.assignee}`,
-        author: user.name,
-      });
-    }
-
-    setStages((current) =>
-      current.map((stage) =>
-        stage.id === selected.stageId
-          ? {
-              ...stage,
-              deals: stage.deals.map((deal) =>
-                deal.id === selected.dealId ? { ...deal, ...patch } : deal,
-              ),
-            }
-          : stage,
-      ),
-    );
   }
 
   async function saveDeal(nextDeal: Deal, nextStageId: string) {
@@ -450,24 +474,16 @@ export function PipelineBoard() {
     setActivities((current) => ({ ...current, [savedDeal.id]: refreshedActivities }));
   }
 
-  async function addTask(title: string, dueAt?: string) {
+  async function addTask(draft: { title: string; dueDate?: string; dueTime?: string }) {
     if (!selected || !selectedDeal) throw new Error("Сделка больше не открыта.");
-    const now = new Date();
-    const offsets: Record<string, number> = { "Сегодня, 18:00": 0, "Завтра, 10:00": 1, "Через 3 дня": 3, "Через неделю": 7 };
-    const days = dueAt ? offsets[dueAt] ?? 0 : 0;
-    const dueDate = dueAt ? localDateKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() + days)) : undefined;
-    const dueTime = dueAt?.match(/(\d{2}:\d{2})/)?.[1];
-    const task = await createTask({ title, kind: "Звонок", dueDate, dueTime, dealId: selected.dealId, contactId: selectedDeal.contactId, assigneeId: selectedDeal.assigneeId || user.id });
-    updateDeal({ task: title, taskId: task.id, taskState: "normal" });
+    await createTask({ ...draft, kind: "Звонок", dealId: selected.dealId, contactId: selectedDeal.contactId, assigneeId: selectedDeal.assigneeId || user.id });
     const refreshedActivities = await requestDealActivities(selected.dealId);
     setActivities((current) => ({ ...current, [selected.dealId]: refreshedActivities }));
   }
 
-  async function completeTask(result: string) {
-    if (!selected || !selectedDeal?.task) return;
-
-    if (selectedDeal.taskId) await persistCompleteTask(selectedDeal.taskId, result);
-    updateDeal({ task: undefined, taskId: undefined, taskState: undefined });
+  async function completeTask(taskId: string, result: string) {
+    if (!selected) return;
+    await persistCompleteTask(taskId, result);
     const refreshedActivities = await requestDealActivities(selected.dealId);
     setActivities((current) => ({ ...current, [selected.dealId]: refreshedActivities }));
   }
@@ -734,11 +750,11 @@ export function PipelineBoard() {
         </label>
 
         <div className={styles.notificationWrap}>
-        <button className={styles.iconButton} type="button" aria-label="Уведомления" aria-expanded={notificationsOpen} onClick={() => { setNotificationsOpen((value) => !value); setPipelineMenuOpen(false); }}>
+        <button className={styles.iconButton} type="button" aria-label={`Уведомления: ${notificationTasks.length}`} aria-expanded={notificationsOpen} onClick={() => { setNotificationsOpen((value) => !value); setPipelineMenuOpen(false); }}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg>
-          <span className={styles.notificationDot} />
+          {notificationTasks.length > 0 && <span className={styles.notificationDot} />}
         </button>
-        {notificationsOpen && <div className={styles.notificationPanel}><header><strong>Уведомления</strong><span>3 новых</span></header><button type="button" onClick={() => setNotificationsOpen(false)}><i className={styles.alertRed}>!</i><span><strong>Просрочена задача</strong><small>Ольга Мельник · Позвонить до 14:00</small></span><time>12 мин</time></button><button type="button" onClick={() => setNotificationsOpen(false)}><i className={styles.alertBlue}>↗</i><span><strong>Новая сделка из Meta</strong><small>Анна Коваленко · квартира в центре</small></span><time>34 мин</time></button><button type="button" onClick={() => setNotificationsOpen(false)}><i className={styles.alertAmber}>○</i><span><strong>Сделка без ответственного</strong><small>Максим Бондарь ожидает назначения</small></span><time>1 ч</time></button><footer>Показать все уведомления</footer></div>}
+        {notificationsOpen && <div className={styles.notificationPanel}><header><strong>Задачи требуют внимания</strong><span>{notificationTasks.length}</span></header>{notificationTasks.slice(0, 5).map((task) => <button type="button" key={task.id} onClick={() => { setNotificationsOpen(false); openTaskDeal(task); }}><i className={task.period === "overdue" ? styles.alertRed : styles.alertAmber}>{task.period === "overdue" ? "!" : "○"}</i><span><strong>{task.period === "overdue" ? "Просрочена задача" : "Задача на сегодня"}</strong><small>{task.contactName || "Без контакта"} · {task.title}</small></span><time>{task.dueTime || task.dueLabel}</time></button>)}{notificationTasks.length === 0 && <div className={styles.notificationEmpty}>На сегодня нет задач, требующих внимания.</div>}<footer><button type="button" onClick={() => router.push("/tasks")}>Открыть все задачи</button></footer></div>}
         </div>
         <button className={styles.primaryButton} type="button" disabled={!stages.length} onClick={() => { if (stages[0]) setNewDealStageId(stages[0].id); }}>
           <span aria-hidden="true">＋</span><span className={styles.actionLabel}>Новая сделка</span>
@@ -805,6 +821,8 @@ export function PipelineBoard() {
           stages={stageOptions}
           assignees={[{ id: user.id, name: user.name }]}
           activities={selectedActivities}
+          tasks={selectedTasks}
+          highlightedTaskId={selected?.taskId}
           contacts={contacts.map(({ id, name, phone }) => ({ id, name, phone }))}
           initialComposerMode={selected?.composer}
           onSave={saveDeal}
@@ -816,7 +834,10 @@ export function PipelineBoard() {
           onCompleteTask={completeTask}
           onLifecycle={(status) => runDealLifecycle(selectedDeal.id, status)}
           onOpenContact={(contactId) => router.push(`/contacts?contact=${contactId}`)}
-          onClose={() => setSelected(null)}
+          onClose={() => {
+            setSelected(null);
+            if (window.location.search) router.replace("/");
+          }}
         />
       )}
 

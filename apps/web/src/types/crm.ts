@@ -25,6 +25,8 @@ export interface Deal {
   task?: string;
   taskId?: string;
   taskState?: "normal" | "due" | "overdue";
+  taskCount?: number;
+  taskDueLabel?: string;
   priority?: DealPriority;
 }
 
