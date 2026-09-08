@@ -19,7 +19,7 @@ export async function buildApp(
   config: ApiConfig,
   database: DatabaseConnection,
 ): Promise<FastifyInstance> {
-  const app = Fastify({ logger: true });
+  const app = Fastify({ logger: true, trustProxy: true });
 
   await app.register(cors, {
     origin: config.webOrigins,

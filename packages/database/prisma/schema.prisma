@@ -308,22 +308,23 @@ model ActivityEvent {
 }
 
 model IntegrationConnection {
-  id             String                      @id @default(uuid()) @db.Uuid
-  organizationId String                      @map("organization_id") @db.Uuid
-  provider       IntegrationProvider
-  status         IntegrationConnectionStatus @default(CREDENTIALS_REQUIRED)
-  enabled        Boolean                     @default(false)
-  pipelineId     String?                     @map("pipeline_id") @db.Uuid
-  stageId        String?                     @map("stage_id") @db.Uuid
-  config         Json?
-  lastEventAt    DateTime?                   @map("last_event_at")
-  lastError      String?                     @map("last_error")
-  createdAt      DateTime                    @default(now()) @map("created_at")
-  updatedAt      DateTime                    @updatedAt @map("updated_at")
-  organization   Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  pipeline       Pipeline?                   @relation(fields: [pipelineId], references: [id], onDelete: SetNull)
-  stage          PipelineStage?              @relation(fields: [stageId], references: [id], onDelete: SetNull)
-  events         IntegrationEvent[]
+  id                String                      @id @default(uuid()) @db.Uuid
+  organizationId    String                      @map("organization_id") @db.Uuid
+  provider          IntegrationProvider
+  status            IntegrationConnectionStatus @default(CREDENTIALS_REQUIRED)
+  enabled           Boolean                     @default(false)
+  pipelineId        String?                     @map("pipeline_id") @db.Uuid
+  stageId           String?                     @map("stage_id") @db.Uuid
+  config            Json?
+  webhookSecretHash String?                     @unique @map("webhook_secret_hash")
+  lastEventAt       DateTime?                   @map("last_event_at")
+  lastError         String?                     @map("last_error")
+  createdAt         DateTime                    @default(now()) @map("created_at")
+  updatedAt         DateTime                    @updatedAt @map("updated_at")
+  organization      Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pipeline          Pipeline?                   @relation(fields: [pipelineId], references: [id], onDelete: SetNull)
+  stage             PipelineStage?              @relation(fields: [stageId], references: [id], onDelete: SetNull)
+  events            IntegrationEvent[]
 
   @@unique([organizationId, provider])
   @@index([organizationId, status])

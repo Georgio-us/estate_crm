@@ -368,6 +368,22 @@ export interface IntegrationConnectionRecord {
   lastEventAt: string | null;
   lastError: string | null;
   processedCount: number;
+  webhookConfigured: boolean;
+}
+
+export interface GoogleSheetsIntegrationSetupResponse {
+  connectionId: string;
+  webhookUrl: string;
+  secret: string;
+}
+
+export interface GoogleSheetsMetaLeadRequest {
+  externalId: string;
+  name: string;
+  phone: string;
+  message?: string;
+  createdAt?: string;
+  metadata?: Record<string, string | number | boolean>;
 }
 
 export interface IntegrationEventRecord {

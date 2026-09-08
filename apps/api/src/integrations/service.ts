@@ -9,7 +9,10 @@ export interface CanonicalInboundLead {
   name: string;
   phone: string;
   message?: string;
+  dealTitle?: string;
   adapter?: string;
+  createdAt?: string;
+  metadata?: Record<string, string | number | boolean>;
 }
 
 export class InvalidInboundLeadError extends Error {}
@@ -61,7 +64,14 @@ export async function ingestInboundLead(
     });
     if (!stage) throw new InvalidInboundLeadError("В воронке нет этапов для новых обращений.");
 
-    const payload = { name, phone: phone.formatted, message: lead.message?.trim() || null, adapter: lead.adapter ?? null };
+    const payload = {
+      name,
+      phone: phone.formatted,
+      message: lead.message?.trim() || null,
+      adapter: lead.adapter ?? null,
+      ...(lead.createdAt ? { createdAt: lead.createdAt } : {}),
+      ...(lead.metadata ? { metadata: lead.metadata } : {}),
+    };
     const event = await transaction.integrationEvent.create({
       data: {
         organizationId,
@@ -99,7 +109,7 @@ export async function ingestInboundLead(
           pipelineId: pipeline.id,
           stageId: stage.id,
           contactId: contact.id,
-          title: lead.message?.trim() || name,
+          title: lead.dealTitle?.trim() || lead.message?.trim() || name,
           request: lead.message?.trim() || "",
           source: lead.provider === "META_LEAD_ADS" || lead.provider === "INSTAGRAM_DIRECT" ? "META" : "MANUAL",
         },
