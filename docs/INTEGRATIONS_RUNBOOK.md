@@ -22,17 +22,21 @@ The first real provider adapter uses the client's existing transport instead of 
 
 An admin creates the connection in **Интеграции → Meta Lead Ads · Google Sheets**. The setup endpoint returns a webhook URL and a 256-bit secret once; only its SHA-256 hash is stored in PostgreSQL. The public webhook requires that secret in `x-estate-crm-secret`, resolves the organization from the connection, and submits the row to the same canonical inbound-lead pipeline.
 
-The Apps Script source of truth is [`docs/google-apps-script/Code.gs`](google-apps-script/Code.gs). Keep the existing Telegram endpoint and marker. Add the CRM webhook URL and secret as Apps Script properties named `ESTATE_CRM_WEBHOOK_URL` and `ESTATE_CRM_WEBHOOK_SECRET`, then run `initializeEstateCrmIntegration` once. It records the next sheet row as the cutover, so historical rows are not imported. The existing minute trigger continues to call `sendNewMetaLeads`; successful CRM deliveries are marked separately in `estate_crm_sent_at`.
+The Apps Script source of truth is [`docs/google-apps-script/Code.gs`](google-apps-script/Code.gs). Keep the existing Telegram endpoint and marker. Add the CRM webhook URL and secret as Apps Script properties named `ESTATE_CRM_WEBHOOK_URL` and `ESTATE_CRM_WEBHOOK_SECRET`. On its first configured run, `sendNewMetaLeads` automatically stores the next sheet row in `ESTATE_CRM_START_ROW`; historical rows are therefore not imported. `initializeEstateCrmIntegration` remains available only as an explicit cutover reset. The existing minute trigger continues to call `sendNewMetaLeads`; successful CRM deliveries are marked separately in `estate_crm_sent_at`.
 
 If Apps Script retries after a timeout, the Meta Lead ID remains the external event ID, so the CRM returns the existing result instead of creating another contact, deal, activity, or notification.
 
 ## Deliberately not enabled
 
-- No Telegram bot was created and no messages are delivered.
+- No Estate CRM Telegram worker was created. The client's pre-existing Apps Script → Telegram route continues to deliver independently.
 - No direct Meta Developer application, Meta webhook subscription, Instagram permission, or telephony account was created.
-- No provider secret is stored in the database or Railway.
-- Provider cards remain `CREDENTIALS_REQUIRED`; a simulated event does not mark an external service connected.
+- No plaintext provider secret is stored in the database or Railway; only the webhook secret hash is persisted by the CRM.
+- The Meta Lead Ads connection is `CONNECTED` for Delmar through Google Sheets. Other provider cards remain `CREDENTIALS_REQUIRED`; a simulated event does not connect an external service.
 
 ## Later: direct Meta and Telegram delivery
 
 When direct Meta access is available, add a second transport adapter that validates the provider signature and maps a lead to the same canonical input. Then add an outbox worker and a Telegram transport using either the existing client bot or a new shared bot. Only at that point are Meta tokens, webhook verification data, and Telegram credentials required in the deployment secret store.
+
+Sending qualification outcomes back to Meta is a separate outbound integration, not part of lead ingestion. It requires semantic CRM outcomes, a dedicated Meta event outbox, customer-specific Meta authorization, idempotent delivery, retries, and an operational delivery log. It is intentionally deferred because the current client workflow does not require it for basic CRM operation.
+
+See [`META_LEAD_INTEGRATION.md`](META_LEAD_INTEGRATION.md) for the complete Russian-language architecture and product boundary.

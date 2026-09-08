@@ -1,6 +1,6 @@
 # Estate CRM
 
-CRM для агентств недвижимости. Репозиторий организован как monorepo: рабочий frontend находится в `apps/web`, Fastify API — в `apps/api`, а схема PostgreSQL и миграции Prisma — в `packages/database`. Авторизация, контакты и основной сценарий воронки подключены к API; остальные модули переносятся с mock-данных поэтапно.
+CRM для агентств недвижимости. Репозиторий организован как monorepo: рабочий frontend находится в `apps/web`, Fastify API — в `apps/api`, а схема PostgreSQL и миграции Prisma — в `packages/database`. Авторизация, контакты, воронка, задачи, календарь и первый реальный поток Meta Lead Ads для Delmar подключены к постоянному хранению; оставшиеся модули переводятся с прототипов поэтапно.
 
 ## Стек
 
@@ -81,7 +81,9 @@ docs/                    рабочая проектная документац�
 
 - спецификация MVP: [`docs/CRM_MVP_SPEC.md`](docs/CRM_MVP_SPEC.md);
 - дизайн-система и токены: [`docs/DESIGN_SYSTEM.md`](docs/DESIGN_SYSTEM.md);
-- текущее состояние исполнения: [`docs/CURRENT_EXECUTION_STATE.md`](docs/CURRENT_EXECUTION_STATE.md).
+- текущее состояние исполнения: [`docs/CURRENT_EXECUTION_STATE.md`](docs/CURRENT_EXECUTION_STATE.md);
+- эксплуатация интеграционного шлюза: [`docs/INTEGRATIONS_RUNBOOK.md`](docs/INTEGRATIONS_RUNBOOK.md);
+- текущая архитектура Meta Lead Ads и отложенный обратный контур: [`docs/META_LEAD_INTEGRATION.md`](docs/META_LEAD_INTEGRATION.md).
 
 ## Railway
 
