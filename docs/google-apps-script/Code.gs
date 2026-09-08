@@ -31,7 +31,15 @@ function sendNewMetaLeads() {
   const properties = PropertiesService.getScriptProperties();
   const crmUrl = String(properties.getProperty(CRM_URL_PROPERTY) || '').trim();
   const crmSecret = String(properties.getProperty(CRM_SECRET_PROPERTY) || '').trim();
-  const crmStartRow = Number(properties.getProperty(CRM_START_ROW_PROPERTY) || 0);
+  let crmStartRow = Number(properties.getProperty(CRM_START_ROW_PROPERTY) || 0);
+
+  // При первом запуске после подключения запоминаем границу автоматически.
+  // Всё, что уже есть в таблице, остаётся историей; отправка начнётся с новой строки.
+  if (crmUrl && crmSecret && crmStartRow < 2) {
+    crmStartRow = lastRow + 1;
+    properties.setProperty(CRM_START_ROW_PROPERTY, String(crmStartRow));
+  }
+
   const crmConfigured = Boolean(crmUrl && crmSecret && crmStartRow >= 2);
   const rows = sheet.getRange(2, 1, lastRow - 1, headers.length).getValues();
   const errors = [];
@@ -85,8 +93,8 @@ function sendNewMetaLeads() {
   if (errors.length) throw new Error(errors.slice(0, 8).join('\n'));
 }
 
-// Запустить один раз после добавления URL и секрета в свойства скрипта.
-// Текущие строки считаются историей и в CRM не отправляются.
+// Необязательный ручной способ заново установить границу импорта.
+// Обычно это не требуется: sendNewMetaLeads сделает это автоматически.
 function initializeEstateCrmIntegration() {
   const properties = PropertiesService.getScriptProperties();
   const crmUrl = String(properties.getProperty(CRM_URL_PROPERTY) || '').trim();
