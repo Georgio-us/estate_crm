@@ -437,6 +437,7 @@
 }
 
 .card {
+  position: relative;
   padding: 13px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -489,6 +490,27 @@
 }
 
 .cardActions .dragHandle:active { cursor: grabbing; }
+
+.cardMenu {
+  position: absolute;
+  z-index: 12;
+  top: 42px;
+  right: 10px;
+  display: grid;
+  width: 210px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: #fff;
+  box-shadow: 0 14px 36px rgba(28, 28, 26, 0.16);
+  cursor: default;
+}
+
+.cardMenu button { min-height: 34px; padding: 0 9px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text); cursor: pointer; text-align: left; }
+.cardMenu button:hover { background: var(--surface-muted); }
+.cardMenu button:disabled { opacity: 0.55; cursor: default; }
+.cardMenu > span { height: 1px; margin: 5px 3px; background: var(--border); }
+.cardMenu .menuMuted { color: var(--text-muted); }
 
 .cardTopline h4 {
   margin: 0;
@@ -607,7 +629,7 @@
 }
 
 .listView > header,
-.listView > button {
+.listRow {
   display: grid;
   grid-template-columns: minmax(230px, 1.05fr) minmax(260px, 1.35fr) minmax(150px, .7fr) minmax(120px, .6fr) minmax(180px, .8fr) 14px;
   align-items: center;
@@ -625,7 +647,7 @@
   text-transform: uppercase;
 }
 
-.listView > button {
+.listRow {
   width: 100%;
   min-height: 82px;
   padding: 12px 16px;
@@ -636,8 +658,8 @@
   cursor: pointer;
 }
 
-.listView > button:hover { background: #fff; }
-.listView > button > b { color: var(--text-subtle); font-size: 18px; }
+.listRow:hover { background: #fff; }
+.listRow > b { color: var(--text-subtle); font-size: 18px; }
 .listContact { display: flex; min-width: 0; align-items: center; gap: 11px; }
 .listContact > i { display: grid; width: 36px; height: 36px; flex: 0 0 auto; place-items: center; border-radius: 50%; background: #e9e5dd; color: #675f51; font-style: normal; font-weight: 700; }
 .listContact > span, .listRequest { display: grid; min-width: 0; gap: 3px; }
@@ -646,6 +668,12 @@
 .listStage { display: flex; align-items: center; gap: 7px; }
 .listStage i { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; }
 .listTask { overflow: hidden; color: var(--text-muted); text-overflow: ellipsis; white-space: nowrap; }
+.lifecycleBadge { width: fit-content; padding: 5px 8px; border-radius: var(--radius-xs); font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); }
+.lifecycleWON { background: #e8f5ed; color: #357554; }
+.lifecycleLOST { background: #f8eaea; color: #a24b4b; }
+.lifecycleARCHIVED { background: #ececea; color: #666661; }
+.restoreButton { min-height: 30px; padding: 0 9px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: #fff; color: var(--primary); cursor: pointer; }
+.notice { position: fixed; z-index: 90; right: 24px; bottom: 24px; max-width: min(380px, calc(100vw - 32px)); padding: 12px 15px; border: 1px solid #cbd5e7; border-radius: var(--radius-md); background: #fff; color: var(--text); box-shadow: 0 16px 40px rgba(28, 28, 26, 0.16); font-size: var(--font-size-body-sm); }
 .emptyDeals { display: grid; min-height: 420px; place-content: center; justify-items: center; gap: 5px; background: #f8f8f6; }
 .emptyDeals span { color: var(--text-muted); }
 
@@ -707,11 +735,11 @@
   .filterPanel > button { justify-self: start; padding-left: 0; }
   .listView { min-height: calc(100vh - var(--topbar-height) - 116px); padding: 0 14px 40px; }
   .listView > header { display: none; }
-  .listView > button { grid-template-columns: 1fr auto; gap: 10px; min-height: 132px; padding: 17px 0; }
+  .listRow { grid-template-columns: 1fr auto; gap: 10px; min-height: 132px; padding: 17px 0; }
   .listContact { grid-column: 1; }
   .listRequest { grid-column: 1 / -1; }
   .listStage { grid-column: 1; font-size: var(--font-size-caption); }
-  .listView > button > span:nth-child(4) { display: none; }
+  .listRow > span:nth-child(4) { display: none; }
   .listTask { grid-column: 1; }
-  .listView > button > b { grid-column: 2; grid-row: 1; }
+  .listRow > b, .restoreButton { grid-column: 2; grid-row: 1; }
 }

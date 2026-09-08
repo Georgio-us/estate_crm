@@ -107,6 +107,7 @@ export interface LinkContactRequest {
 }
 
 export type DealOperation = "PURCHASE" | "RENT" | "SALE";
+export type DealStatus = "ACTIVE" | "WON" | "LOST" | "ARCHIVED";
 
 export interface PipelineDealRecord {
   id: string;
@@ -122,9 +123,11 @@ export interface PipelineDealRecord {
   district: string | null;
   rooms: string | null;
   source: ContactSource;
+  status: DealStatus;
   assignee: ContactAssignee | null;
   comment: string | null;
   position: number;
+  closedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -183,6 +186,10 @@ export interface UpdateDealRequest {
 export interface MoveDealRequest {
   stageId: string;
   position?: number;
+}
+
+export interface UpdateDealLifecycleRequest {
+  status: DealStatus;
 }
 
 export type TaskKind = "CALL" | "MEETING" | "MESSAGE" | "OTHER";

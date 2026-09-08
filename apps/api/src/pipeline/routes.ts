@@ -7,6 +7,7 @@ import type {
   MoveDealRequest,
   PipelineDealRecord,
   PipelineResponse,
+  UpdateDealLifecycleRequest,
   UpdateDealRequest,
 } from "@estate-crm/contracts";
 import type { DatabaseConnection } from "@estate-crm/database";
@@ -28,6 +29,7 @@ function optionalText(value: string | undefined): string | null {
 
 const sourceLabels = { META: "Meta", WEBSITE: "Сайт", MANUAL: "Не указан" } as const;
 const operationLabels = { PURCHASE: "Покупка", RENT: "Аренда", SALE: "Продажа" } as const;
+const lifecycleLabels = { ACTIVE: "Сделка возвращена в работу", WON: "Сделка успешно завершена", LOST: "Сделка закрыта как неуспешная", ARCHIVED: "Сделка перенесена в архив" } as const;
 
 function describeChange(label: string, previous: string | null, next: string | null): string | null {
   if ((previous ?? "") === (next ?? "")) return null;
@@ -46,7 +48,9 @@ function mapDeal(deal: {
   district: string | null;
   rooms: string | null;
   source: "META" | "WEBSITE" | "MANUAL";
+  status: "ACTIVE" | "WON" | "LOST" | "ARCHIVED";
   position: number;
+  closedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
   contact: { id: string; name: string; phone: string | null };
@@ -60,6 +64,7 @@ function mapDeal(deal: {
     ...deal,
     relatedContacts: deal.relatedContacts?.map((link) => link.contact) ?? [],
     nextTask: deal.tasks?.[0] ? { ...deal.tasks[0], dueDate: deal.tasks[0].dueDate?.toISOString().slice(0, 10) ?? null } : null,
+    closedAt: deal.closedAt?.toISOString() ?? null,
     createdAt: deal.createdAt.toISOString(),
     updatedAt: deal.updatedAt.toISOString(),
   };
@@ -86,7 +91,18 @@ export async function registerPipelineRoutes(
   app: FastifyInstance,
   database: DatabaseConnection,
 ): Promise<void> {
-  app.get<{ Reply: PipelineResponse | ApiErrorResponse }>("/pipeline", async (request, reply) => {
+  app.get<{
+    Querystring: { view?: "active" | "closed" | "all" };
+    Reply: PipelineResponse | ApiErrorResponse;
+  }>("/pipeline", {
+    schema: {
+      querystring: {
+        type: "object",
+        additionalProperties: false,
+        properties: { view: { type: "string", enum: ["active", "closed", "all"] } },
+      },
+    },
+  }, async (request, reply) => {
     const user = await requireUser(request, reply, database);
     if (!user) return reply;
 
@@ -96,6 +112,11 @@ export async function registerPipelineRoutes(
       orderBy: { position: "asc" },
       include: {
         deals: {
+          where: request.query.view === "all"
+            ? undefined
+            : request.query.view === "closed"
+              ? { status: { not: "ACTIVE" } }
+              : { status: "ACTIVE" },
           orderBy: [{ position: "asc" }, { createdAt: "desc" }],
           include: {
             contact: { select: { id: true, name: true, phone: true } },
@@ -466,6 +487,55 @@ export async function registerPipelineRoutes(
         tasks: { where: { status: "ACTIVE" }, orderBy: [{ dueDate: "asc" }, { dueTime: "asc" }], take: 1, select: { id: true, title: true, dueDate: true, dueTime: true } },
       },
     });
+    return { deal: mapDeal(updated), stageId: updated.stageId };
+  });
+
+  app.patch<{
+    Params: { dealId: string };
+    Body: UpdateDealLifecycleRequest;
+    Reply: { deal: PipelineDealRecord; stageId: string } | ApiErrorResponse;
+  }>("/deals/:dealId/lifecycle", {
+    schema: {
+      params: { type: "object", required: ["dealId"], properties: { dealId: { type: "string", format: "uuid" } } },
+      body: { type: "object", additionalProperties: false, required: ["status"], properties: { status: { type: "string", enum: ["ACTIVE", "WON", "LOST", "ARCHIVED"] } } },
+    },
+  }, async (request, reply) => {
+    const user = await requireUser(request, reply, database);
+    if (!user) return reply;
+
+    const deal = await database.client.deal.findFirst({
+      where: { id: request.params.dealId, organizationId: user.organization.id },
+      select: { id: true, contactId: true, stageId: true, status: true, closedAt: true },
+    });
+    if (!deal) return reply.status(404).send({ error: "deal_not_found", message: "Сделка не найдена." });
+
+    const updated = await database.client.deal.update({
+      where: { id: deal.id },
+      data: {
+        status: request.body.status,
+        closedAt: request.body.status === "ACTIVE" ? null : deal.closedAt ?? new Date(),
+      },
+      include: {
+        contact: { select: { id: true, name: true, phone: true } },
+        relatedContacts: { include: { contact: { select: { id: true, name: true, phone: true } } } },
+        assignee: { select: { id: true, name: true } },
+        tasks: { where: { status: "ACTIVE" }, orderBy: [{ dueDate: "asc" }, { dueTime: "asc" }], take: 1, select: { id: true, title: true, dueDate: true, dueTime: true } },
+      },
+    });
+
+    if (deal.status !== request.body.status) {
+      await database.client.activityEvent.create({
+        data: {
+          organizationId: user.organization.id,
+          contactId: deal.contactId,
+          dealId: deal.id,
+          authorId: user.id,
+          category: "CHANGE",
+          title: lifecycleLabels[request.body.status],
+        },
+      });
+    }
+
     return { deal: mapDeal(updated), stageId: updated.stageId };
   });
 

@@ -7,10 +7,12 @@ import styles from "./pipeline.module.css";
 interface PipelineColumnProps {
   stage: PipelineStage;
   onOpenDeal: (dealId: string) => void;
+  onAddTask: (dealId: string) => void;
+  onLifecycle: (dealId: string, status: "WON" | "LOST" | "ARCHIVED") => Promise<void>;
   onAddDeal: () => void;
 }
 
-export function PipelineColumn({ stage, onOpenDeal, onAddDeal }: PipelineColumnProps) {
+export function PipelineColumn({ stage, onOpenDeal, onAddTask, onLifecycle, onAddDeal }: PipelineColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: `stage:${stage.id}`,
     data: { type: "stage", stageId: stage.id },
@@ -32,7 +34,7 @@ export function PipelineColumn({ stage, onOpenDeal, onAddDeal }: PipelineColumnP
       <SortableContext items={stage.deals.map((deal) => deal.id)} strategy={verticalListSortingStrategy}>
         <div className={styles.cardList}>
           {stage.deals.map((deal) => (
-            <DealCard deal={deal} stageId={stage.id} key={deal.id} onOpen={() => onOpenDeal(deal.id)} />
+            <DealCard deal={deal} stageId={stage.id} key={deal.id} onOpen={() => onOpenDeal(deal.id)} onAddTask={() => onAddTask(deal.id)} onLifecycle={(status) => onLifecycle(deal.id, status)} />
           ))}
           <button className={styles.quickAdd} type="button" onClick={onAddDeal}>＋ Добавить сделку</button>
         </div>

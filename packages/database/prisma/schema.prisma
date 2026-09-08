@@ -31,6 +31,13 @@ enum DealOperation {
   SALE
 }
 
+enum DealStatus {
+  ACTIVE
+  WON
+  LOST
+  ARCHIVED
+}
+
 enum ActivityCategory {
   NOTE
   TASK
@@ -210,7 +217,9 @@ model Deal {
   district        String?
   rooms           String?
   source          ContactSource        @default(MANUAL)
+  status          DealStatus           @default(ACTIVE)
   position        Int                  @default(0)
+  closedAt        DateTime?            @map("closed_at")
   createdAt       DateTime             @default(now()) @map("created_at")
   updatedAt       DateTime             @updatedAt @map("updated_at")
   organization    Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -223,7 +232,7 @@ model Deal {
   tasks           Task[]
 
   @@unique([organizationId, number])
-  @@index([pipelineId, stageId, position])
+  @@index([pipelineId, status, stageId, position])
   @@index([contactId])
   @@index([assigneeId])
   @@map("deals")

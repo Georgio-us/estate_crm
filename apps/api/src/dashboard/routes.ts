@@ -20,6 +20,7 @@ export async function registerDashboardRoutes(app: FastifyInstance, database: Da
             orderBy: { position: "asc" },
             include: {
               deals: {
+                where: { status: "ACTIVE" },
                 select: {
                   id: true,
                   assigneeId: true,

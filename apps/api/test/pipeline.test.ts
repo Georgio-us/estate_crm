@@ -282,3 +282,35 @@ test("a secondary contact can be linked to a deal and is returned by the API", a
   assert.equal(response.json().deal.relatedContacts[0].name, "Ольга Войченко");
   await app.close();
 });
+
+test("closing a deal persists its lifecycle without deleting the contact", async () => {
+  const dealId = "14a292bd-d84e-447c-b71a-aa185b809b88";
+  const now = new Date("2026-09-08T15:00:00.000Z");
+  let updatedData: Record<string, unknown> = {};
+  let activityTitle = "";
+  const database = {
+    client: {
+      session: { async findUnique() { return session(); } },
+      deal: {
+        async findFirst() { return { id: dealId, contactId, stageId, status: "ACTIVE" as const, closedAt: null }; },
+        async update({ data }: { data: Record<string, unknown> }) {
+          updatedData = data;
+          return { id: dealId, number: 1001, organizationId: user.memberships[0].organization.id, pipelineId, stageId, contactId, assigneeId: null, title: "Клиент тест", request: "", budget: null, comment: null, operation: "PURCHASE" as const, propertyType: null, district: null, rooms: null, source: "MANUAL" as const, status: data.status, position: 0, closedAt: data.closedAt, createdAt: now, updatedAt: now, contact: { id: contactId, name: "Игорь Войченко", phone: "+380 93 884 92 14" }, relatedContacts: [], tasks: [], assignee: null };
+        },
+      },
+      activityEvent: { async create({ data }: { data: { title: string } }) { activityTitle = data.title; } },
+    },
+    async ping() {},
+    async disconnect() {},
+  } as unknown as DatabaseConnection;
+
+  const app = await buildApp(config, database);
+  const response = await app.inject({ method: "PATCH", url: `/deals/${dealId}/lifecycle`, headers: { cookie: "estate_crm_session=test-token" }, payload: { status: "WON" } });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(updatedData.status, "WON");
+  assert.ok(updatedData.closedAt instanceof Date);
+  assert.equal(response.json().deal.status, "WON");
+  assert.equal(activityTitle, "Сделка успешно завершена");
+  await app.close();
+});

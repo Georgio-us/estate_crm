@@ -1,4 +1,5 @@
 export type DealPriority = "low" | "medium" | "high";
+export type DealStatus = "ACTIVE" | "WON" | "LOST" | "ARCHIVED";
 
 export interface Deal {
   id: string;
@@ -17,6 +18,8 @@ export interface Deal {
   comment?: string;
   createdAt?: string;
   source: "Meta" | "Website" | "Manual";
+  status?: DealStatus;
+  closedAt?: string;
   assigneeId?: string;
   assignee: string;
   task?: string;

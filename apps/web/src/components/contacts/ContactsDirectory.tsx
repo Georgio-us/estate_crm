@@ -105,11 +105,12 @@ export function ContactsDirectory() {
   const [dealsById, setDealsById] = useState<Map<string, RelatedDeal>>(() => new Map());
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [contactActivities, setContactActivities] = useState<Record<string, ActivityEvent[]>>({});
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(() => typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("contact"));
   const [isCreating, setIsCreating] = useState(false);
   const [dealContactId, setDealContactId] = useState<string | null>(null);
   const [dealStages, setDealStages] = useState<Array<{ id: string; title: string }>>([]);
   const [taskContactId, setTaskContactId] = useState<string | null>(null);
+
   const [search, setSearch] = useState("");
   const [assignee, setAssignee] = useState("all");
   const [source, setSource] = useState("all");

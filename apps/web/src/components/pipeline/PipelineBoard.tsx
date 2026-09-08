@@ -23,7 +23,7 @@ import { useCurrentUser } from "@/components/auth/AuthContext";
 import { useTasks } from "@/components/tasks/TasksContext";
 import { localDateKey } from "@/lib/tasks";
 import { mapApiActivity, type ApiActivity } from "@/lib/activity";
-import type { ActivityEvent, Deal, PipelineStage } from "@/types/crm";
+import type { ActivityEvent, Deal, DealStatus, PipelineStage } from "@/types/crm";
 import { DealDrawer } from "./DealDrawer";
 import { DealCardPreview } from "./DealCard";
 import { NewDealModal, type NewDealDraft } from "./NewDealModal";
@@ -75,6 +75,8 @@ interface ApiDeal {
   district: string | null;
   rooms: string | null;
   source: keyof typeof sourceFromApi;
+  status: DealStatus;
+  closedAt: string | null;
   assignee: { id: string; name: string } | null;
   comment: string | null;
   createdAt: string;
@@ -102,6 +104,8 @@ function mapApiDeal(deal: ApiDeal): Deal {
     district: deal.district || undefined,
     rooms: deal.rooms || undefined,
     source: sourceFromApi[deal.source],
+    status: deal.status,
+    closedAt: deal.closedAt || undefined,
     assigneeId: deal.assignee?.id,
     assignee: deal.assignee?.name || "Не назначен",
     comment: deal.comment || undefined,
@@ -109,8 +113,8 @@ function mapApiDeal(deal: ApiDeal): Deal {
   };
 }
 
-async function requestPipeline(): Promise<{ name: string; stages: PipelineStage[] }> {
-  const response = await fetch("/api/crm/pipeline", { cache: "no-store" });
+async function requestPipeline(view: "active" | "closed" = "active"): Promise<{ name: string; stages: PipelineStage[] }> {
+  const response = await fetch(`/api/crm/pipeline?view=${view}`, { cache: "no-store" });
   if (!response.ok) throw new Error("Не удалось загрузить воронку.");
   const payload = await response.json() as { pipeline: { name: string; stages: ApiStage[] } };
   return {
@@ -142,7 +146,7 @@ export function PipelineBoard() {
   const [contacts, setContacts] = useState<ContactOption[]>([]);
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [activities, setActivities] = useState<Record<string, ActivityEvent[]>>({});
-  const [selected, setSelected] = useState<{ dealId: string; stageId: string } | null>(null);
+  const [selected, setSelected] = useState<{ dealId: string; stageId: string; composer?: "note" | "task" } | null>(null);
   const [newDealStageId, setNewDealStageId] = useState<string | null>(null);
   const [activeDealId, setActiveDealId] = useState<string | null>(null);
   const [view, setView] = useState<"board" | "list">("board");
@@ -153,10 +157,12 @@ export function PipelineBoard() {
   const [taskFilter, setTaskFilter] = useState("Все");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [pipelineMenuOpen, setPipelineMenuOpen] = useState(false);
+  const [pipelineView, setPipelineView] = useState<"active" | "closed">("active");
+  const [notice, setNotice] = useState("");
 
   useEffect(() => {
     let active = true;
-    void Promise.all([requestPipeline(), requestContactOptions()]).then(
+    void Promise.all([requestPipeline(pipelineView), requestContactOptions()]).then(
       ([pipeline, contactOptions]) => {
         if (!active) return;
         setPipelineName(pipeline.name);
@@ -167,7 +173,7 @@ export function PipelineBoard() {
       () => { if (active) setLoadState("error"); },
     );
     return () => { active = false; };
-  }, []);
+  }, [pipelineView]);
 
   useEffect(() => {
     if (!selected?.dealId) return;
@@ -179,9 +185,15 @@ export function PipelineBoard() {
     return () => { active = false; };
   }, [selected?.dealId]);
 
+  useEffect(() => {
+    if (!notice) return;
+    const timeout = window.setTimeout(() => setNotice(""), 3_500);
+    return () => window.clearTimeout(timeout);
+  }, [notice]);
+
   async function reloadPipeline() {
     try {
-      const pipeline = await requestPipeline();
+      const pipeline = await requestPipeline(pipelineView);
       setPipelineName(pipeline.name);
       setStages(pipeline.stages);
       setLoadState("ready");
@@ -197,6 +209,33 @@ export function PipelineBoard() {
       body: JSON.stringify({ stageId, position }),
     });
     if (!response.ok) await reloadPipeline();
+  }
+
+  async function updateDealLifecycle(dealId: string, status: DealStatus) {
+    const response = await fetch(`/api/crm/deals/${dealId}/lifecycle`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    const payload = await response.json() as { deal?: ApiDeal; stageId?: string; message?: string };
+    if (!response.ok || !payload.deal || !payload.stageId) throw new Error(payload.message || "Не удалось изменить состояние сделки.");
+
+    const updatedDeal = mapApiDeal(payload.deal);
+    const remainsVisible = pipelineView === "active" ? status === "ACTIVE" : status !== "ACTIVE";
+    setStages((current) => current.map((stage) => ({
+      ...stage,
+      deals: stage.deals.flatMap((deal) => deal.id === dealId ? (remainsVisible ? [updatedDeal] : []) : [deal]),
+    })));
+    if (!remainsVisible) setSelected((current) => current?.dealId === dealId ? null : current);
+    setNotice(status === "ACTIVE" ? "Сделка возвращена в работу" : status === "WON" ? "Сделка успешно завершена" : status === "LOST" ? "Сделка закрыта как неуспешная" : "Сделка перенесена в архив");
+  }
+
+  async function runDealLifecycle(dealId: string, status: DealStatus) {
+    try {
+      await updateDealLifecycle(dealId, status);
+    } catch (cause) {
+      setNotice(cause instanceof Error ? cause.message : "Не удалось изменить состояние сделки");
+    }
   }
 
   const sensors = useSensors(
@@ -551,21 +590,24 @@ export function PipelineBoard() {
             </button>
             {pipelineMenuOpen && <div className={styles.pipelineMenu}><button type="button" onClick={() => router.push("/settings")}>Настроить этапы <span>→</span></button><button type="button" onClick={exportDeals}>Экспортировать CSV <span>↓</span></button></div>}
           </div>
-          <p>{visibleDealsCount === dealsCount ? `${dealsCount} активных сделок` : `${visibleDealsCount} из ${dealsCount} сделок`}</p>
+          <p>{visibleDealsCount === dealsCount ? `${dealsCount} ${pipelineView === "active" ? "активных" : "закрытых"} сделок` : `${visibleDealsCount} из ${dealsCount} сделок`}</p>
         </div>
 
         <div className={styles.toolbarActions}>
+          <button className={styles.secondaryButton} type="button" onClick={() => { setLoadState("loading"); setPipelineView((current) => current === "active" ? "closed" : "active"); }}>{pipelineView === "active" ? "Закрытые" : "← Активные"}</button>
+          {pipelineView === "active" && (
           <div className={styles.viewSwitch}>
             <button className={view === "board" ? styles.viewActive : ""} type="button" onClick={() => setView("board")}>Доска</button>
             <button className={view === "list" ? styles.viewActive : ""} type="button" onClick={() => setView("list")}>Список</button>
           </div>
+          )}
           <button className={`${styles.secondaryButton} ${filtersOpen || activeFilters ? styles.filtersActive : ""}`} type="button" onClick={() => setFiltersOpen((value) => !value)}>Фильтры{activeFilters > 0 && <span>{activeFilters}</span>}</button>
         </div>
       </div>
 
       {filtersOpen && <section className={styles.filterPanel}><label><span>Ответственный</span><select value={assigneeFilter} onChange={(event) => setAssigneeFilter(event.target.value)}>{assignees.map((assignee) => <option key={assignee}>{assignee}</option>)}</select></label><label><span>Источник</span><select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value)}><option>Все</option><option value="Meta">Meta</option><option value="Website">Сайт</option><option value="Manual">Не указан</option></select></label><label><span>Задача</span><select value={taskFilter} onChange={(event) => setTaskFilter(event.target.value)}><option>Все</option><option value="overdue">Просрочена</option><option value="due">На сегодня</option><option value="normal">Запланирована</option><option>Без задачи</option></select></label><div><strong>{visibleDealsCount}</strong><span>найдено</span></div><button type="button" disabled={!activeFilters} onClick={resetFilters}>Сбросить</button></section>}
 
-      {loadState === "loading" ? <div className={styles.emptyDeals}><strong>Загружаем воронку…</strong><span>Получаем этапы и сделки из CRM.</span></div> : loadState === "error" ? <div className={styles.emptyDeals}><strong>Не удалось загрузить воронку</strong><span>Проверьте соединение и обновите страницу.</span></div> : view === "board" ? <DndContext
+      {loadState === "loading" ? <div className={styles.emptyDeals}><strong>Загружаем воронку…</strong><span>Получаем этапы и сделки из CRM.</span></div> : loadState === "error" ? <div className={styles.emptyDeals}><strong>Не удалось загрузить воронку</strong><span>Проверьте соединение и обновите страницу.</span></div> : pipelineView === "active" && view === "board" ? <DndContext
         id="pipeline-dnd"
         sensors={sensors}
         collisionDetection={pipelineCollisionDetection}
@@ -580,6 +622,8 @@ export function PipelineBoard() {
               stage={stage}
               key={stage.id}
               onOpenDeal={(dealId) => setSelected({ dealId, stageId: stage.id })}
+              onAddTask={(dealId) => setSelected({ dealId, stageId: stage.id, composer: "task" })}
+              onLifecycle={(dealId, status) => runDealLifecycle(dealId, status)}
               onAddDeal={() => setNewDealStageId(stage.id)}
             />
           ))}
@@ -587,7 +631,7 @@ export function PipelineBoard() {
         <DragOverlay dropAnimation={{ duration: 150, easing: "ease-out" }}>
           {activeDeal ? <DealCardPreview deal={activeDeal} /> : null}
         </DragOverlay>
-      </DndContext> : <DealList stages={filteredStages} onOpenDeal={(dealId, stageId) => setSelected({ dealId, stageId })} />}
+      </DndContext> : <DealList stages={filteredStages} closed={pipelineView === "closed"} onRestore={(dealId) => runDealLifecycle(dealId, "ACTIVE")} onOpenDeal={(dealId, stageId) => setSelected({ dealId, stageId })} />}
 
       {selectedDeal && selectedStage && (
         <DealDrawer
@@ -598,6 +642,7 @@ export function PipelineBoard() {
           assignees={[{ id: user.id, name: user.name }]}
           activities={selectedActivities}
           contacts={contacts.map(({ id, name, phone }) => ({ id, name, phone }))}
+          initialComposerMode={selected?.composer}
           onSave={saveDeal}
           onUpdateContactPhone={updateContactPhone}
           onAddNote={addNote}
@@ -605,9 +650,12 @@ export function PipelineBoard() {
           onUnlinkContact={unlinkContact}
           onAddTask={addTask}
           onCompleteTask={completeTask}
+          onLifecycle={(status) => runDealLifecycle(selectedDeal.id, status)}
+          onOpenContact={(contactId) => router.push(`/contacts?contact=${contactId}`)}
           onClose={() => setSelected(null)}
         />
       )}
+      {notice && <div className={styles.notice} role="status">{notice}</div>}
 
       {newDealStageId && (
         <NewDealModal
@@ -623,10 +671,10 @@ export function PipelineBoard() {
   );
 }
 
-function DealList({ stages, onOpenDeal }: { stages: PipelineStage[]; onOpenDeal: (dealId: string, stageId: string) => void }) {
+function DealList({ stages, closed = false, onRestore, onOpenDeal }: { stages: PipelineStage[]; closed?: boolean; onRestore?: (dealId: string) => Promise<void>; onOpenDeal: (dealId: string, stageId: string) => void }) {
   const rows = stages.flatMap((stage) => stage.deals.map((deal) => ({ deal, stage })));
 
   if (!rows.length) return <div className={styles.emptyDeals}><strong>Сделки не найдены</strong><span>Измените запрос или сбросьте фильтры.</span></div>;
 
-  return <div className={styles.listView}><header><span>Контакт</span><span>Сделка и запрос</span><span>Этап</span><span>Ответственный</span><span>Следующая задача</span></header>{rows.map(({ deal, stage }) => <button type="button" onClick={() => onOpenDeal(deal.id, stage.id)} key={deal.id}><span className={styles.listContact}><i>{deal.contactName.slice(0, 1)}</i><span><strong>{deal.contactName}</strong><small>Сделка #{deal.number} · {deal.phone}</small></span></span><span className={styles.listRequest}><strong>{deal.title || deal.request}</strong><small>{deal.request || "Запрос не указан"} · {deal.budget || "Бюджет не указан"}</small></span><span className={styles.listStage}><i style={{ backgroundColor: stage.color }} />{stage.title}</span><span>{deal.assignee}</span><span className={`${styles.listTask} ${deal.taskState ? styles[deal.taskState] : ""}`}>{deal.task || "Нет задачи"}</span><b>›</b></button>)}</div>;
+  return <div className={styles.listView}><header><span>Контакт</span><span>Сделка и запрос</span><span>Этап</span><span>Ответственный</span><span>{closed ? "Состояние" : "Следующая задача"}</span></header>{rows.map(({ deal, stage }) => <div className={styles.listRow} role="button" tabIndex={0} onClick={() => onOpenDeal(deal.id, stage.id)} onKeyDown={(event) => { if (event.key === "Enter") onOpenDeal(deal.id, stage.id); }} key={deal.id}><span className={styles.listContact}><i>{deal.contactName.slice(0, 1)}</i><span><strong>{deal.contactName}</strong><small>Сделка #{deal.number} · {deal.phone}</small></span></span><span className={styles.listRequest}><strong>{deal.title || deal.request}</strong><small>{deal.request || "Запрос не указан"} · {deal.budget || "Бюджет не указан"}</small></span><span className={styles.listStage}><i style={{ backgroundColor: stage.color }} />{stage.title}</span><span>{deal.assignee}</span>{closed ? <span className={`${styles.lifecycleBadge} ${styles[`lifecycle${deal.status}`]}`}>{deal.status === "WON" ? "Успешно" : deal.status === "LOST" ? "Неуспешно" : "Архив"}</span> : <span className={`${styles.listTask} ${deal.taskState ? styles[deal.taskState] : ""}`}>{deal.task || "Нет задачи"}</span>}{closed && onRestore ? <button className={styles.restoreButton} type="button" onClick={(event) => { event.stopPropagation(); void onRestore(deal.id); }}>Вернуть</button> : <b>›</b>}</div>)}</div>;
 }

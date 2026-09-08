@@ -112,6 +112,7 @@
 }
 
 .headerActions {
+  position: relative;
   display: flex;
   gap: 4px;
 }
@@ -130,6 +131,29 @@
 
 .headerActions button:hover { background: var(--surface-muted); }
 .headerActions .closeButton { font-size: var(--font-size-heading-md); line-height: 1; }
+
+.entityMenu {
+  position: absolute;
+  z-index: 14;
+  top: 40px;
+  right: 38px;
+  display: grid;
+  width: 220px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: #fff;
+  box-shadow: 0 16px 40px rgba(28, 28, 26, 0.16);
+}
+
+.headerActions .entityMenu button,
+.contactHeader .entityMenu button,
+.contactHeader .entityMenu a { display: flex; width: 100%; min-height: 34px; height: auto; align-items: center; justify-content: flex-start; padding: 0 9px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text); cursor: pointer; font: inherit; font-size: var(--font-size-caption); text-align: left; text-decoration: none; }
+.headerActions .entityMenu button:hover,
+.contactHeader .entityMenu button:hover,
+.contactHeader .entityMenu a:hover { background: var(--surface-muted); }
+.entityMenu > span { height: 1px; margin: 5px 3px; background: var(--border); }
+.entityMenu .entityMenuMuted { color: var(--text-muted); }
 
 .workspace {
   display: grid;
@@ -237,6 +261,7 @@
 }
 
 .contactHeader {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 11px;
@@ -268,6 +293,8 @@
   color: var(--text-subtle);
   cursor: pointer;
 }
+
+.contactHeader .contactMenu { top: 34px; right: 0; display: grid; min-width: 230px; flex: none; gap: 0; }
 
 .contactNameButton,
 .contactNameInput {

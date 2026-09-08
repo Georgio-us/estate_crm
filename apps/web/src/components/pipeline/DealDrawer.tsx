@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import type { ActivityCategory, ActivityEvent, Deal } from "@/types/crm";
+import type { ActivityCategory, ActivityEvent, Deal, DealStatus } from "@/types/crm";
 import { isValidPhone } from "@/lib/phone";
 import styles from "./deal-drawer.module.css";
 
@@ -17,6 +17,9 @@ interface DealDrawerProps {
   onUnlinkContact: (contactId: string) => Promise<void>;
   onAddTask: (title: string, dueAt?: string) => Promise<void>;
   onCompleteTask: (result: string) => Promise<void>;
+  onLifecycle: (status: DealStatus) => Promise<void>;
+  onOpenContact: (contactId: string) => void;
+  initialComposerMode?: ComposerMode;
   onClose: () => void;
 }
 
@@ -51,9 +54,12 @@ export function DealDrawer({
   onUnlinkContact,
   onAddTask,
   onCompleteTask,
+  onLifecycle,
+  onOpenContact,
+  initialComposerMode = "note",
   onClose,
 }: DealDrawerProps) {
-  const [composerMode, setComposerMode] = useState<ComposerMode>("note");
+  const [composerMode, setComposerMode] = useState<ComposerMode>(initialComposerMode);
   const [composerText, setComposerText] = useState("");
   const [taskDueAt, setTaskDueAt] = useState("Без срока");
   const [isDueMenuOpen, setIsDueMenuOpen] = useState(false);
@@ -70,6 +76,9 @@ export function DealDrawer({
   const [relatedContactId, setRelatedContactId] = useState("");
   const [relatedError, setRelatedError] = useState("");
   const [relatedBusy, setRelatedBusy] = useState(false);
+  const [dealMenuOpen, setDealMenuOpen] = useState(false);
+  const [contactMenuOpen, setContactMenuOpen] = useState(false);
+  const [lifecycleBusy, setLifecycleBusy] = useState(false);
 
   const comparable = (value: Deal) => ({ title: value.title, phone: value.phone, assigneeId: value.assigneeId, budget: value.budget, operation: value.operation, propertyType: value.propertyType, district: value.district, rooms: value.rooms, request: value.request, comment: value.comment, source: value.source });
   const isDirty = draftStageId !== stageId || JSON.stringify(comparable(draft)) !== JSON.stringify(comparable(deal));
@@ -105,6 +114,17 @@ export function DealDrawer({
       setSaveError(cause instanceof Error ? cause.message : "Не удалось сохранить сделку.");
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function changeLifecycle(status: DealStatus) {
+    if (lifecycleBusy) return;
+    setLifecycleBusy(true);
+    setDealMenuOpen(false);
+    try {
+      await onLifecycle(status);
+    } finally {
+      setLifecycleBusy(false);
     }
   }
 
@@ -198,7 +218,16 @@ export function DealDrawer({
           </div>
 
           <div className={styles.headerActions}>
-            <button type="button" aria-label="Меню сделки">•••</button>
+            <button type="button" aria-label="Меню сделки" aria-expanded={dealMenuOpen} onClick={() => setDealMenuOpen((value) => !value)}>•••</button>
+            {dealMenuOpen && <div className={styles.entityMenu}>
+              {(deal.status ?? "ACTIVE") === "ACTIVE" ? <>
+                <button type="button" onClick={() => { setDealMenuOpen(false); setComposerMode("task"); }}>Поставить задачу</button>
+                <span />
+                <button type="button" disabled={lifecycleBusy} onClick={() => { void changeLifecycle("WON"); }}>Завершить успешно</button>
+                <button type="button" disabled={lifecycleBusy} onClick={() => { void changeLifecycle("LOST"); }}>Закрыть неуспешно</button>
+                <button className={styles.entityMenuMuted} type="button" disabled={lifecycleBusy} onClick={() => { void changeLifecycle("ARCHIVED"); }}>В архив</button>
+              </> : <button type="button" disabled={lifecycleBusy} onClick={() => { void changeLifecycle("ACTIVE"); }}>Вернуть в работу</button>}
+            </div>}
             <button className={styles.closeButton} type="button" onClick={onClose} aria-label="Закрыть">×</button>
           </div>
         </header>
@@ -234,7 +263,12 @@ export function DealDrawer({
                   <strong className={styles.contactName}>{deal.contactName}</strong>
                   <span>Основной контакт сделки</span>
                 </div>
-                <button type="button" aria-label="Меню контакта">•••</button>
+                <button type="button" aria-label="Меню контакта" aria-expanded={contactMenuOpen} onClick={() => setContactMenuOpen((value) => !value)}>•••</button>
+                {contactMenuOpen && <div className={`${styles.entityMenu} ${styles.contactMenu}`}>
+                  <button type="button" onClick={() => onOpenContact(deal.contactId!)}>Открыть карточку контакта</button>
+                  <button type="button" onClick={() => { void navigator.clipboard.writeText(draft.phone || ""); setContactMenuOpen(false); }}>Скопировать телефон</button>
+                  <a href={`tel:${(draft.phone || "").replaceAll(" ", "")}`}>Позвонить</a>
+                </div>}
               </div>
               <PropertyInput label="Телефон" icon="☎" value={draft.phone || ""} onChange={(value) => updateDraft({ phone: value })} />
               <SourceSelect value={draft.source} onChange={(value) => updateDraft({ source: value })} />
