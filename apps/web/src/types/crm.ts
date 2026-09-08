@@ -7,6 +7,7 @@ export interface Deal {
   title?: string;
   contactName: string;
   phone: string;
+  relatedContacts?: Array<{ id: string; name: string; phone: string | null }>;
   request: string;
   budget?: string;
   operation?: "Покупка" | "Аренда" | "Продажа";

@@ -120,7 +120,13 @@ export async function registerActivityRoutes(
     if (!contact) return reply.status(404).send({ error: "contact_not_found", message: "Контакт не найден." });
 
     const activities = await database.client.activityEvent.findMany({
-      where: { organizationId: user.organization.id, contactId: contact.id },
+      where: {
+        organizationId: user.organization.id,
+        OR: [
+          { contactId: contact.id },
+          { deal: { relatedContacts: { some: { contactId: contact.id } } } },
+        ],
+      },
       include: { author: { select: { id: true, name: true } } },
       orderBy: { createdAt: "desc" },
       take: 200,

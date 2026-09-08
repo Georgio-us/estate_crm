@@ -345,13 +345,30 @@
 .inlineTextEditor button { height: 26px; padding: 0 8px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: #fff; cursor: pointer; font-size: var(--font-size-caption); }
 .inlineTextEditor button:last-child { border-color: var(--primary); background: var(--primary); color: #fff; }
 
+.relatedSection { padding: 20px 28px; border-bottom: 1px solid var(--border); }
+.relatedHeader { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.relatedHeader h3 { margin: 0; font-size: var(--font-size-body-sm); }
+.relatedHeader span { color: var(--text-subtle); font-size: var(--font-size-caption); }
+.relatedContact { display: grid; align-items: center; grid-template-columns: 34px minmax(0, 1fr) 28px; gap: 10px; padding: 9px 0; border-top: 1px solid var(--border); }
+.relatedContact > i { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 50%; background: var(--surface-muted); color: var(--text-muted); font-style: normal; font-weight: var(--font-weight-semibold); }
+.relatedContact div { display: grid; min-width: 0; gap: 2px; }
+.relatedContact strong { overflow: hidden; font-size: var(--font-size-body-sm); text-overflow: ellipsis; white-space: nowrap; }
+.relatedContact small { color: var(--text-muted); }
+.relatedContact button { border: 0; background: transparent; color: var(--text-subtle); cursor: pointer; font-size: 20px; }
+.relatedPicker { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px; padding-top: 8px; }
+.relatedPicker select, .relatedPicker button { min-height: 36px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: #fff; }
+.relatedPicker select { min-width: 0; padding: 0 8px; }
+.relatedPicker button { padding: 0 10px; cursor: pointer; }
+.relatedPicker button:last-child { border-color: var(--primary); background: var(--primary); color: #fff; }
+.relatedError { margin: 8px 0 0; color: #b04a4a; font-size: var(--font-size-caption); }
+
 .addContactButton {
   display: flex;
   width: 100%;
   min-height: 64px;
   align-items: center;
   gap: 12px;
-  padding: 0 28px;
+  padding: 0;
   border: 0;
   background: transparent;
   color: var(--text-muted);
@@ -721,6 +738,9 @@
   .propertySection,
   .contactSection,
   .notesSection { padding: 22px 18px; }
+  .relatedSection { padding: 18px; }
+  .relatedPicker { grid-template-columns: 1fr 1fr; }
+  .relatedPicker select { grid-column: 1 / -1; }
   .activityToolbar { padding: 16px 18px; border-top: 8px solid var(--background); }
   .activityFeed { min-height: 360px; padding: 22px 18px 150px; }
   .composer { position: absolute; right: 14px; bottom: 14px; left: 14px; }

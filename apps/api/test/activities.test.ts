@@ -105,7 +105,9 @@ test("contact history includes events from linked deals", async () => {
 
   assert.equal(response.statusCode, 200);
   assert.equal(historyWhere.organizationId, organizationId);
-  assert.equal(historyWhere.contactId, contactId);
+  const historyBranches = historyWhere.OR as Array<Record<string, unknown>>;
+  assert.equal(historyBranches[0].contactId, contactId);
+  assert.deepEqual(historyBranches[1], { deal: { relatedContacts: { some: { contactId } } } });
   assert.equal(response.json().activities[0].dealId, dealId);
   await app.close();
 });

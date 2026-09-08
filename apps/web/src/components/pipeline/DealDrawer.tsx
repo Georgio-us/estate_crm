@@ -8,8 +8,11 @@ interface DealDrawerProps {
   stages: Array<{ id: string; title: string }>;
   assignees: Array<{ id: string; name: string }>;
   activities: ActivityEvent[];
+  contacts: Array<{ id: string; name: string; phone: string | null }>;
   onSave: (deal: Deal, stageId: string) => Promise<{ deal: Deal; stageId: string }>;
   onAddNote: (text: string) => Promise<void>;
+  onLinkContact: (contactId: string) => Promise<void>;
+  onUnlinkContact: (contactId: string) => Promise<void>;
   onAddTask: (title: string, dueAt?: string) => void;
   onCompleteTask: (result: string) => void;
   onClose: () => void;
@@ -38,8 +41,11 @@ export function DealDrawer({
   stages,
   assignees,
   activities,
+  contacts,
   onSave,
   onAddNote,
+  onLinkContact,
+  onUnlinkContact,
   onAddTask,
   onCompleteTask,
   onClose,
@@ -57,6 +63,10 @@ export function DealDrawer({
   const [draftStageId, setDraftStageId] = useState(stageId);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [relatedPickerOpen, setRelatedPickerOpen] = useState(false);
+  const [relatedContactId, setRelatedContactId] = useState("");
+  const [relatedError, setRelatedError] = useState("");
+  const [relatedBusy, setRelatedBusy] = useState(false);
 
   const comparable = (value: Deal) => ({ title: value.title, assigneeId: value.assigneeId, budget: value.budget, operation: value.operation, propertyType: value.propertyType, district: value.district, rooms: value.rooms, request: value.request, comment: value.comment, source: value.source });
   const isDirty = draftStageId !== stageId || JSON.stringify(comparable(draft)) !== JSON.stringify(comparable(deal));
@@ -90,6 +100,32 @@ export function DealDrawer({
     () => activityFilter === "all" ? activities : activities.filter((event) => event.category === activityFilter),
     [activities, activityFilter],
   );
+  const relatedContacts = deal.relatedContacts || [];
+  const availableContacts = contacts.filter((contact) => contact.id !== deal.contactId && !relatedContacts.some((linked) => linked.id === contact.id));
+
+  async function linkRelatedContact() {
+    if (!relatedContactId || relatedBusy) return;
+    setRelatedBusy(true);
+    setRelatedError("");
+    try {
+      await onLinkContact(relatedContactId);
+      setRelatedContactId("");
+      setRelatedPickerOpen(false);
+    } catch (cause) {
+      setRelatedError(cause instanceof Error ? cause.message : "Не удалось связать контакт.");
+    } finally {
+      setRelatedBusy(false);
+    }
+  }
+
+  async function unlinkRelatedContact(contactId: string) {
+    if (relatedBusy) return;
+    setRelatedBusy(true);
+    setRelatedError("");
+    try { await onUnlinkContact(contactId); }
+    catch (cause) { setRelatedError(cause instanceof Error ? cause.message : "Не удалось удалить связь."); }
+    finally { setRelatedBusy(false); }
+  }
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -196,7 +232,12 @@ export function DealDrawer({
               <InlineTextEditor label="Комментарий" value={draft.comment || ""} placeholder="Добавить комментарий" onSave={(value) => updateDraft({ comment: value })} />
             </section>
 
-            <button className={styles.addContactButton} type="button"><span>＋</span> Добавить связанный контакт</button>
+            <section className={styles.relatedSection}>
+              <div className={styles.relatedHeader}><h3>Связанные контакты</h3><span>{relatedContacts.length}</span></div>
+              {relatedContacts.map((contact) => <div className={styles.relatedContact} key={contact.id}><i>{contact.name.slice(0, 1)}</i><div><strong>{contact.name}</strong><small>{contact.phone || "Телефон не указан"}</small></div><button type="button" disabled={relatedBusy} onClick={() => { void unlinkRelatedContact(contact.id); }} aria-label={`Удалить связь с ${contact.name}`}>×</button></div>)}
+              {relatedPickerOpen ? <div className={styles.relatedPicker}><select autoFocus value={relatedContactId} onChange={(event) => setRelatedContactId(event.target.value)}><option value="">Выберите контакт</option>{availableContacts.map((contact) => <option value={contact.id} key={contact.id}>{contact.name}{contact.phone ? ` · ${contact.phone}` : ""}</option>)}</select><button type="button" onClick={() => setRelatedPickerOpen(false)} disabled={relatedBusy}>Отмена</button><button type="button" onClick={() => { void linkRelatedContact(); }} disabled={!relatedContactId || relatedBusy}>{relatedBusy ? "Добавляем…" : "Добавить"}</button></div> : <button className={styles.addContactButton} type="button" disabled={!availableContacts.length} onClick={() => setRelatedPickerOpen(true)}><span>＋</span>{availableContacts.length ? "Добавить связанный контакт" : "Нет доступных контактов"}</button>}
+              {relatedError && <p className={styles.relatedError} role="alert">{relatedError}</p>}
+            </section>
             {isDirty && <div className={styles.saveBar}><div>{saveError || "Есть несохранённые изменения"}</div><button type="button" onClick={discardChanges} disabled={isSaving}>Отменить</button><button type="button" onClick={() => { void saveChanges(); }} disabled={isSaving}>{isSaving ? "Сохраняем…" : "Сохранить"}</button></div>}
           </div>
 

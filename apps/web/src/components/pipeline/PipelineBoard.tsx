@@ -33,6 +33,7 @@ interface ApiDeal {
   id: string;
   number: number;
   contact: { id: string; name: string; phone: string | null };
+  relatedContacts: Array<{ id: string; name: string; phone: string | null }>;
   title: string;
   request: string;
   budget: string | null;
@@ -57,6 +58,7 @@ function mapApiDeal(deal: ApiDeal): Deal {
     title: deal.title,
     contactName: deal.contact.name,
     phone: deal.contact.phone || "",
+    relatedContacts: deal.relatedContacts || [],
     request: deal.request,
     budget: deal.budget || undefined,
     operation: operationFromApi[deal.operation],
@@ -292,6 +294,32 @@ export function PipelineBoard() {
     }));
   }
 
+  async function linkContact(contactId: string) {
+    if (!selected) throw new Error("Сделка больше не открыта.");
+    const response = await fetch(`/api/crm/deals/${selected.dealId}/contacts`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ contactId }),
+    });
+    const payload = await response.json() as { deal?: ApiDeal; stageId?: string; message?: string };
+    if (!response.ok || !payload.deal || !payload.stageId) throw new Error(payload.message || "Не удалось связать контакт.");
+    const savedDeal = mapApiDeal(payload.deal);
+    setStages((current) => current.map((stage) => ({ ...stage, deals: stage.deals.map((deal) => deal.id === savedDeal.id ? savedDeal : deal) })));
+    const refreshedActivities = await requestDealActivities(savedDeal.id);
+    setActivities((current) => ({ ...current, [savedDeal.id]: refreshedActivities }));
+  }
+
+  async function unlinkContact(contactId: string) {
+    if (!selected) throw new Error("Сделка больше не открыта.");
+    const response = await fetch(`/api/crm/deals/${selected.dealId}/contacts/${contactId}`, { method: "DELETE" });
+    const payload = await response.json() as { deal?: ApiDeal; stageId?: string; message?: string };
+    if (!response.ok || !payload.deal || !payload.stageId) throw new Error(payload.message || "Не удалось удалить связь.");
+    const savedDeal = mapApiDeal(payload.deal);
+    setStages((current) => current.map((stage) => ({ ...stage, deals: stage.deals.map((deal) => deal.id === savedDeal.id ? savedDeal : deal) })));
+    const refreshedActivities = await requestDealActivities(savedDeal.id);
+    setActivities((current) => ({ ...current, [savedDeal.id]: refreshedActivities }));
+  }
+
   function addTask(title: string, dueAt?: string) {
     if (!selected) return;
 
@@ -518,8 +546,11 @@ export function PipelineBoard() {
           stages={stageOptions}
           assignees={[{ id: user.id, name: user.name }]}
           activities={selectedActivities}
+          contacts={contacts.map(({ id, name, phone }) => ({ id, name, phone }))}
           onSave={saveDeal}
           onAddNote={addNote}
+          onLinkContact={linkContact}
+          onUnlinkContact={unlinkContact}
           onAddTask={addTask}
           onCompleteTask={completeTask}
           onClose={() => setSelected(null)}

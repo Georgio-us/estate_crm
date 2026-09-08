@@ -89,6 +89,7 @@ model Contact {
   organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   assignee        User?         @relation("ContactAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   deals           Deal[]
+  relatedDeals    DealRelatedContact[]
   activities      ActivityEvent[]
 
   @@index([organizationId, createdAt])
@@ -154,12 +155,25 @@ model Deal {
   contact        Contact        @relation(fields: [contactId], references: [id], onDelete: Restrict)
   assignee       User?          @relation("DealAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   activities     ActivityEvent[]
+  relatedContacts DealRelatedContact[]
 
   @@unique([organizationId, number])
   @@index([pipelineId, stageId, position])
   @@index([contactId])
   @@index([assigneeId])
   @@map("deals")
+}
+
+model DealRelatedContact {
+  dealId    String   @map("deal_id") @db.Uuid
+  contactId String   @map("contact_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  deal      Deal     @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  contact   Contact  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@id([dealId, contactId])
+  @@index([contactId])
+  @@map("deal_related_contacts")
 }
 
 model ActivityEvent {

@@ -105,6 +105,7 @@ export interface PipelineDealRecord {
   id: string;
   number: number;
   contact: ContactAssignee & { phone: string | null };
+  relatedContacts: Array<ContactAssignee & { phone: string | null }>;
   title: string;
   request: string;
   budget: string | null;
@@ -118,6 +119,10 @@ export interface PipelineDealRecord {
   position: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface LinkDealContactRequest {
+  contactId: string;
 }
 
 export interface PipelineStageRecord {

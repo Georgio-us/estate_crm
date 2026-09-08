@@ -247,3 +247,38 @@ test("changing a deal source synchronizes the contact and its other deals", asyn
   assert.equal(relatedDealsSource, "META");
   await app.close();
 });
+
+test("a secondary contact can be linked to a deal and is returned by the API", async () => {
+  const dealId = "14a292bd-d84e-447c-b71a-aa185b809b88";
+  const relatedContactId = "8de55dd9-a09d-4f6d-9f0b-5cfe2ff895d1";
+  let createdLink: Record<string, unknown> = {};
+  const now = new Date("2026-09-08T10:00:00.000Z");
+  const relatedContact = { id: relatedContactId, name: "Ольга Войченко", phone: "+380 50 123 45 67" };
+  const database = {
+    client: {
+      session: { async findUnique() { return session(); } },
+      deal: {
+        async findFirst() { return { id: dealId, stageId, contactId }; },
+        async findUniqueOrThrow() {
+          return { id: dealId, number: 1001, organizationId: user.memberships[0].organization.id, pipelineId, stageId, contactId, assigneeId: null, title: "Клиент тест", request: "", budget: null, comment: null, operation: "PURCHASE" as const, propertyType: null, district: null, rooms: null, source: "MANUAL" as const, position: 0, createdAt: now, updatedAt: now, contact: { id: contactId, name: "Игорь Войченко", phone: "+380 93 884 92 14" }, relatedContacts: [{ contact: relatedContact }], assignee: null };
+        },
+      },
+      contact: { async findFirst() { return { id: relatedContactId, name: relatedContact.name }; } },
+      dealRelatedContact: {
+        async findUnique() { return null; },
+        async create({ data }: { data: Record<string, unknown> }) { createdLink = data; },
+      },
+      activityEvent: { async create() {} },
+    },
+    async ping() {},
+    async disconnect() {},
+  } as unknown as DatabaseConnection;
+
+  const app = await buildApp(config, database);
+  const response = await app.inject({ method: "POST", url: `/deals/${dealId}/contacts`, headers: { cookie: "estate_crm_session=test-token" }, payload: { contactId: relatedContactId } });
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(createdLink, { dealId, contactId: relatedContactId });
+  assert.equal(response.json().deal.relatedContacts[0].name, "Ольга Войченко");
+  await app.close();
+});

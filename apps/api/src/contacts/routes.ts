@@ -37,11 +37,17 @@ function mapContact(contact: {
   updatedAt: Date;
   assignee: { id: string; name: string } | null;
   deals?: Array<{ id: string; number: number; title: string; request: string; budget: string | null; stage: { id: string; title: string; color: string } }>;
+  relatedDeals?: Array<{ deal: { id: string; number: number; title: string; request: string; budget: string | null; stage: { id: string; title: string; color: string } } }>;
 }): ContactRecord {
+  const { deals: primaryDeals, relatedDeals, ...record } = contact;
+  const deals = Array.from(new Map([
+    ...(primaryDeals ?? []),
+    ...(relatedDeals?.map((link) => link.deal) ?? []),
+  ].map((deal) => [deal.id, deal])).values());
   return {
-    ...contact,
-    dealIds: contact.deals?.map((deal) => deal.id) ?? [],
-    deals: contact.deals ?? [],
+    ...record,
+    dealIds: deals.map((deal) => deal.id),
+    deals,
     createdAt: contact.createdAt.toISOString(),
     updatedAt: contact.updatedAt.toISOString(),
   };
@@ -71,7 +77,7 @@ export async function registerContactRoutes(
           ],
         } : {}),
       },
-      include: { assignee: { select: { id: true, name: true } }, deals: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } } },
+      include: { assignee: { select: { id: true, name: true } }, deals: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } }, relatedDeals: { include: { deal: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } } } } },
       orderBy: { createdAt: "desc" },
       take: 200,
     });
@@ -149,7 +155,7 @@ export async function registerContactRoutes(
         assigneeId: request.body.assigneeId ?? null,
         comment: optionalText(request.body.comment),
       },
-      include: { assignee: { select: { id: true, name: true } }, deals: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } } },
+      include: { assignee: { select: { id: true, name: true } }, deals: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } }, relatedDeals: { include: { deal: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } } } } },
     });
 
     return reply.status(201).send({ contact: mapContact(contact) });
@@ -217,7 +223,7 @@ export async function registerContactRoutes(
         ...(request.body.assigneeId !== undefined ? { assigneeId: request.body.assigneeId } : {}),
         ...(request.body.comment !== undefined ? { comment: optionalText(request.body.comment) } : {}),
       },
-      include: { assignee: { select: { id: true, name: true } }, deals: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } } },
+      include: { assignee: { select: { id: true, name: true } }, deals: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } }, relatedDeals: { include: { deal: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } } } } },
     });
 
     if (request.body.source !== undefined && request.body.source !== existing.source) {

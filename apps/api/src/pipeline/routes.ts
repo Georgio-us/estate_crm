@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import type {
   ApiErrorResponse,
   CreateDealRequest,
+  LinkDealContactRequest,
   MoveDealRequest,
   PipelineDealRecord,
   PipelineResponse,
@@ -49,12 +50,14 @@ function mapDeal(deal: {
   createdAt: Date;
   updatedAt: Date;
   contact: { id: string; name: string; phone: string | null };
+  relatedContacts?: Array<{ contact: { id: string; name: string; phone: string | null } }>;
   assignee: { id: string; name: string } | null;
   title: string;
   comment: string | null;
 }): PipelineDealRecord {
   return {
     ...deal,
+    relatedContacts: deal.relatedContacts?.map((link) => link.contact) ?? [],
     createdAt: deal.createdAt.toISOString(),
     updatedAt: deal.updatedAt.toISOString(),
   };
@@ -94,6 +97,7 @@ export async function registerPipelineRoutes(
           orderBy: [{ position: "asc" }, { createdAt: "desc" }],
           include: {
             contact: { select: { id: true, name: true, phone: true } },
+            relatedContacts: { include: { contact: { select: { id: true, name: true, phone: true } } } },
             assignee: { select: { id: true, name: true } },
           },
         },
@@ -218,6 +222,7 @@ export async function registerPipelineRoutes(
       },
       include: {
         contact: { select: { id: true, name: true, phone: true } },
+        relatedContacts: { include: { contact: { select: { id: true, name: true, phone: true } } } },
         assignee: { select: { id: true, name: true } },
       },
     });
@@ -307,6 +312,7 @@ export async function registerPipelineRoutes(
       },
       include: {
         contact: { select: { id: true, name: true, phone: true } },
+        relatedContacts: { include: { contact: { select: { id: true, name: true, phone: true } } } },
         assignee: { select: { id: true, name: true } },
       },
     });
@@ -354,6 +360,108 @@ export async function registerPipelineRoutes(
     return { deal: mapDeal(updated), stageId: updated.stageId };
   });
 
+  app.post<{
+    Params: { dealId: string };
+    Body: LinkDealContactRequest;
+    Reply: { deal: PipelineDealRecord; stageId: string } | ApiErrorResponse;
+  }>("/deals/:dealId/contacts", {
+    schema: {
+      params: { type: "object", required: ["dealId"], properties: { dealId: { type: "string", format: "uuid" } } },
+      body: { type: "object", additionalProperties: false, required: ["contactId"], properties: { contactId: { type: "string", format: "uuid" } } },
+    },
+  }, async (request, reply) => {
+    const user = await requireUser(request, reply, database);
+    if (!user) return reply;
+
+    const deal = await database.client.deal.findFirst({
+      where: { id: request.params.dealId, organizationId: user.organization.id },
+      select: { id: true, stageId: true, contactId: true },
+    });
+    if (!deal) return reply.status(404).send({ error: "deal_not_found", message: "Сделка не найдена." });
+    if (deal.contactId === request.body.contactId) {
+      return reply.status(409).send({ error: "contact_is_primary", message: "Этот контакт уже является основным в сделке." });
+    }
+
+    const contact = await database.client.contact.findFirst({
+      where: { id: request.body.contactId, organizationId: user.organization.id },
+      select: { id: true, name: true },
+    });
+    if (!contact) return reply.status(400).send({ error: "invalid_contact", message: "Контакт не найден." });
+
+    const existingLink = await database.client.dealRelatedContact.findUnique({
+      where: { dealId_contactId: { dealId: deal.id, contactId: contact.id } },
+    });
+    if (existingLink) return reply.status(409).send({ error: "contact_already_linked", message: "Контакт уже связан с этой сделкой." });
+
+    await database.client.dealRelatedContact.create({ data: { dealId: deal.id, contactId: contact.id } });
+    await database.client.activityEvent.create({
+      data: {
+        organizationId: user.organization.id,
+        contactId: contact.id,
+        dealId: deal.id,
+        authorId: user.id,
+        category: "CHANGE",
+        title: "Добавлен связанный контакт",
+        description: contact.name,
+      },
+    });
+
+    const updated = await database.client.deal.findUniqueOrThrow({
+      where: { id: deal.id },
+      include: {
+        contact: { select: { id: true, name: true, phone: true } },
+        assignee: { select: { id: true, name: true } },
+        relatedContacts: { include: { contact: { select: { id: true, name: true, phone: true } } } },
+      },
+    });
+    return { deal: mapDeal(updated), stageId: updated.stageId };
+  });
+
+  app.delete<{
+    Params: { dealId: string; contactId: string };
+    Reply: { deal: PipelineDealRecord; stageId: string } | ApiErrorResponse;
+  }>("/deals/:dealId/contacts/:contactId", {
+    schema: { params: { type: "object", required: ["dealId", "contactId"], properties: { dealId: { type: "string", format: "uuid" }, contactId: { type: "string", format: "uuid" } } } },
+  }, async (request, reply) => {
+    const user = await requireUser(request, reply, database);
+    if (!user) return reply;
+
+    const deal = await database.client.deal.findFirst({
+      where: { id: request.params.dealId, organizationId: user.organization.id },
+      select: { id: true },
+    });
+    if (!deal) return reply.status(404).send({ error: "deal_not_found", message: "Сделка не найдена." });
+
+    const link = await database.client.dealRelatedContact.findUnique({
+      where: { dealId_contactId: { dealId: deal.id, contactId: request.params.contactId } },
+      include: { contact: { select: { name: true } } },
+    });
+    if (!link) return reply.status(404).send({ error: "linked_contact_not_found", message: "Связанный контакт не найден." });
+
+    await database.client.dealRelatedContact.delete({ where: { dealId_contactId: { dealId: deal.id, contactId: request.params.contactId } } });
+    await database.client.activityEvent.create({
+      data: {
+        organizationId: user.organization.id,
+        contactId: request.params.contactId,
+        dealId: deal.id,
+        authorId: user.id,
+        category: "CHANGE",
+        title: "Связанный контакт удалён",
+        description: link.contact.name,
+      },
+    });
+
+    const updated = await database.client.deal.findUniqueOrThrow({
+      where: { id: deal.id },
+      include: {
+        contact: { select: { id: true, name: true, phone: true } },
+        assignee: { select: { id: true, name: true } },
+        relatedContacts: { include: { contact: { select: { id: true, name: true, phone: true } } } },
+      },
+    });
+    return { deal: mapDeal(updated), stageId: updated.stageId };
+  });
+
   app.patch<{
     Params: { dealId: string };
     Body: MoveDealRequest;
@@ -378,6 +486,7 @@ export async function registerPipelineRoutes(
       data: { stageId: stage.id, position: request.body.position ?? 0 },
       include: {
         contact: { select: { id: true, name: true, phone: true } },
+        relatedContacts: { include: { contact: { select: { id: true, name: true, phone: true } } } },
         assignee: { select: { id: true, name: true } },
       },
     });
