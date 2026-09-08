@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Deal } from "@/types/crm";
-import { formatPhoneInput, isValidPhone, normalizePhone } from "@/lib/phone";
+import { isValidPhone, normalizePhone } from "@/lib/phone";
 import styles from "./new-deal-modal.module.css";
 
 export interface NewDealDraft {
@@ -21,21 +21,32 @@ export interface NewDealDraft {
 
 interface NewDealModalProps {
   initialStageId: string;
+  initialContactId?: string;
   stages: Array<{ id: string; title: string }>;
-  contacts: Array<{ id: string; name: string; phone: string | null; source?: Deal["source"] }>;
+  contacts: Array<{ id: string; name: string; phone: string | null; source?: Deal["source"]; dealCount?: number }>;
   assignees: Array<{ id: string; name: string }>;
   onCreate: (draft: NewDealDraft) => Promise<void>;
   onClose: () => void;
 }
 
-export function NewDealModal({ initialStageId, stages, contacts, assignees, onCreate, onClose }: NewDealModalProps) {
-  const [contactId, setContactId] = useState("");
-  const [contactName, setContactName] = useState("");
-  const [phone, setPhone] = useState("");
+function activeDealsLabel(count: number) {
+  const mod100 = count % 100;
+  const mod10 = count % 10;
+  if (mod100 >= 11 && mod100 <= 14) return "активных сделок";
+  if (mod10 === 1) return "активная сделка";
+  if (mod10 >= 2 && mod10 <= 4) return "активные сделки";
+  return "активных сделок";
+}
+
+export function NewDealModal({ initialStageId, initialContactId, stages, contacts, assignees, onCreate, onClose }: NewDealModalProps) {
+  const initialContact = contacts.find((contact) => contact.id === initialContactId);
+  const [contactId, setContactId] = useState(initialContact?.id || "");
+  const [contactName, setContactName] = useState(initialContact?.name || "");
+  const [phone, setPhone] = useState(initialContact?.phone || "");
   const [stageId, setStageId] = useState(initialStageId);
   const [assigneeId, setAssigneeId] = useState("");
   const [title, setTitle] = useState("");
-  const [source, setSource] = useState<Deal["source"]>("Manual");
+  const [source, setSource] = useState<Deal["source"]>(initialContact?.source || "Manual");
   const [operation, setOperation] = useState<Deal["operation"]>("Покупка");
   const [propertyType, setPropertyType] = useState("");
   const [budget, setBudget] = useState("");
@@ -48,6 +59,8 @@ export function NewDealModal({ initialStageId, stages, contacts, assignees, onCr
   const matchingContact = !contactId && normalizedPhone
     ? contacts.find((contact) => normalizePhone(contact.phone || "") === normalizedPhone)
     : undefined;
+  const selectedContact = contacts.find((contact) => contact.id === contactId);
+  const existingDealCount = selectedContact?.dealCount || 0;
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -138,9 +151,10 @@ export function NewDealModal({ initialStageId, stages, contacts, assignees, onCr
 
           <label>
             <span>Телефон {!contactId && <b>обязательно</b>}</span>
-            <input type="tel" value={phone} readOnly={Boolean(contactId)} onChange={(event) => { setPhone(formatPhoneInput(event.target.value)); setError(""); }} placeholder="+380 93 888 49 21" />
+            <input type="tel" value={phone} readOnly={Boolean(contactId)} onChange={(event) => { setPhone(event.target.value); setError(""); }} placeholder="+380 93 888 49 21" />
           </label>
           {matchingContact && <div className={styles.existingContact}><span>Найден существующий контакт: <strong>{matchingContact.name}</strong></span><button type="button" onClick={() => selectContact(matchingContact.id)}>Выбрать контакт</button></div>}
+          {existingDealCount > 0 && <div className={styles.existingContact}><span>У контакта уже {existingDealCount} {activeDealsLabel(existingDealCount)}. Новая сделка будет отдельным обращением.</span></div>}
 
           <label>
             <span>Название сделки <small>необязательно</small></span>
@@ -229,7 +243,7 @@ export function NewDealModal({ initialStageId, stages, contacts, assignees, onCr
           <span>Остальные данные можно заполнить позже</span>
           <div>
             <button type="button" onClick={onClose} disabled={isSubmitting}>Отмена</button>
-            <button className={styles.createButton} type="submit" disabled={!contactName.trim() || (!contactId && !isValidPhone(phone)) || isSubmitting}>{isSubmitting ? "Создаём…" : "Создать сделку"}</button>
+            <button className={styles.createButton} type="submit" disabled={!contactName.trim() || isSubmitting}>{isSubmitting ? "Создаём…" : existingDealCount > 0 ? "Создать ещё одну сделку" : "Создать сделку"}</button>
           </div>
         </footer>
       </form>

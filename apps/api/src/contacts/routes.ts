@@ -5,6 +5,7 @@ import type {
   ContactListResponse,
   ContactRecord,
   CreateContactRequest,
+  LinkContactRequest,
   UpdateContactRequest,
 } from "@estate-crm/contracts";
 import type { DatabaseConnection } from "@estate-crm/database";
@@ -38,8 +39,10 @@ function mapContact(contact: {
   assignee: { id: string; name: string } | null;
   deals?: Array<{ id: string; number: number; title: string; request: string; budget: string | null; stage: { id: string; title: string; color: string } }>;
   relatedDeals?: Array<{ deal: { id: string; number: number; title: string; request: string; budget: string | null; stage: { id: string; title: string; color: string } } }>;
+  relationsAsA?: Array<{ label: string | null; contactB: { id: string; name: string; phone: string | null } }>;
+  relationsAsB?: Array<{ label: string | null; contactA: { id: string; name: string; phone: string | null } }>;
 }): ContactRecord {
-  const { deals: primaryDeals, relatedDeals, ...record } = contact;
+  const { deals: primaryDeals, relatedDeals, relationsAsA, relationsAsB, ...record } = contact;
   const deals = Array.from(new Map([
     ...(primaryDeals ?? []),
     ...(relatedDeals?.map((link) => link.deal) ?? []),
@@ -48,6 +51,10 @@ function mapContact(contact: {
     ...record,
     dealIds: deals.map((deal) => deal.id),
     deals,
+    relatedContacts: [
+      ...(relationsAsA?.map((relation) => ({ ...relation.contactB, label: relation.label })) ?? []),
+      ...(relationsAsB?.map((relation) => ({ ...relation.contactA, label: relation.label })) ?? []),
+    ],
     createdAt: contact.createdAt.toISOString(),
     updatedAt: contact.updatedAt.toISOString(),
   };
@@ -77,7 +84,7 @@ export async function registerContactRoutes(
           ],
         } : {}),
       },
-      include: { assignee: { select: { id: true, name: true } }, deals: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } }, relatedDeals: { include: { deal: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } } } } },
+      include: { assignee: { select: { id: true, name: true } }, deals: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } }, relatedDeals: { include: { deal: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } } } }, relationsAsA: { include: { contactB: { select: { id: true, name: true, phone: true } } } }, relationsAsB: { include: { contactA: { select: { id: true, name: true, phone: true } } } } },
       orderBy: { createdAt: "desc" },
       take: 200,
     });
@@ -155,7 +162,7 @@ export async function registerContactRoutes(
         assigneeId: request.body.assigneeId ?? null,
         comment: optionalText(request.body.comment),
       },
-      include: { assignee: { select: { id: true, name: true } }, deals: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } }, relatedDeals: { include: { deal: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } } } } },
+      include: { assignee: { select: { id: true, name: true } }, deals: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } }, relatedDeals: { include: { deal: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } } } }, relationsAsA: { include: { contactB: { select: { id: true, name: true, phone: true } } } }, relationsAsB: { include: { contactA: { select: { id: true, name: true, phone: true } } } } },
     });
 
     return reply.status(201).send({ contact: mapContact(contact) });
@@ -223,7 +230,7 @@ export async function registerContactRoutes(
         ...(request.body.assigneeId !== undefined ? { assigneeId: request.body.assigneeId } : {}),
         ...(request.body.comment !== undefined ? { comment: optionalText(request.body.comment) } : {}),
       },
-      include: { assignee: { select: { id: true, name: true } }, deals: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } }, relatedDeals: { include: { deal: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } } } } },
+      include: { assignee: { select: { id: true, name: true } }, deals: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } }, relatedDeals: { include: { deal: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } } } }, relationsAsA: { include: { contactB: { select: { id: true, name: true, phone: true } } } }, relationsAsB: { include: { contactA: { select: { id: true, name: true, phone: true } } } } },
     });
 
     if (request.body.source !== undefined && request.body.source !== existing.source) {
@@ -257,5 +264,67 @@ export async function registerContactRoutes(
     }
 
     return { contact: mapContact(contact) };
+  });
+
+  app.post<{
+    Params: { contactId: string };
+    Body: LinkContactRequest;
+    Reply: { relatedContacts: ContactRecord["relatedContacts"] } | ApiErrorResponse;
+  }>("/contacts/:contactId/relations", {
+    schema: {
+      params: { type: "object", required: ["contactId"], properties: { contactId: { type: "string", format: "uuid" } } },
+      body: { type: "object", additionalProperties: false, required: ["relatedContactId"], properties: { relatedContactId: { type: "string", format: "uuid" }, label: { type: "string", maxLength: 80 } } },
+    },
+  }, async (request, reply) => {
+    const user = await requireUser(request, reply, database);
+    if (!user) return reply;
+    if (request.params.contactId === request.body.relatedContactId) return reply.status(409).send({ error: "same_contact", message: "Нельзя связать контакт с самим собой." });
+
+    const contacts = await database.client.contact.findMany({
+      where: { organizationId: user.organization.id, id: { in: [request.params.contactId, request.body.relatedContactId] } },
+      select: { id: true, name: true, phone: true },
+    });
+    if (contacts.length !== 2) return reply.status(404).send({ error: "contact_not_found", message: "Один из контактов не найден." });
+
+    const contactIds = [request.params.contactId, request.body.relatedContactId].sort();
+    const contactAId = contactIds[0]!;
+    const contactBId = contactIds[1]!;
+    const existing = await database.client.contactRelation.findUnique({ where: { contactAId_contactBId: { contactAId, contactBId } } });
+    if (existing) return reply.status(409).send({ error: "contacts_already_related", message: "Контакты уже связаны." });
+
+    const label = optionalText(request.body.label);
+    await database.client.contactRelation.create({ data: { organizationId: user.organization.id, contactAId, contactBId, label } });
+    const current = contacts.find((contact) => contact.id === request.params.contactId)!;
+    const related = contacts.find((contact) => contact.id === request.body.relatedContactId)!;
+    await database.client.activityEvent.createMany({ data: [
+      { organizationId: user.organization.id, contactId: current.id, authorId: user.id, category: "CHANGE", title: "Добавлен связанный контакт", description: `${related.name}${label ? ` · ${label}` : ""}` },
+      { organizationId: user.organization.id, contactId: related.id, authorId: user.id, category: "CHANGE", title: "Добавлен связанный контакт", description: `${current.name}${label ? ` · ${label}` : ""}` },
+    ] });
+
+    return { relatedContacts: [{ id: related.id, name: related.name, phone: related.phone, label }] };
+  });
+
+  app.delete<{
+    Params: { contactId: string; relatedContactId: string };
+    Reply: { ok: true } | ApiErrorResponse;
+  }>("/contacts/:contactId/relations/:relatedContactId", {
+    schema: { params: { type: "object", required: ["contactId", "relatedContactId"], properties: { contactId: { type: "string", format: "uuid" }, relatedContactId: { type: "string", format: "uuid" } } } },
+  }, async (request, reply) => {
+    const user = await requireUser(request, reply, database);
+    if (!user) return reply;
+    const contactIds = [request.params.contactId, request.params.relatedContactId].sort();
+    const contactAId = contactIds[0]!;
+    const contactBId = contactIds[1]!;
+    const relation = await database.client.contactRelation.findFirst({
+      where: { contactAId, contactBId, organizationId: user.organization.id },
+      include: { contactA: { select: { name: true } }, contactB: { select: { name: true } } },
+    });
+    if (!relation) return reply.status(404).send({ error: "relation_not_found", message: "Связь контактов не найдена." });
+    await database.client.contactRelation.delete({ where: { id: relation.id } });
+    await database.client.activityEvent.createMany({ data: [
+      { organizationId: user.organization.id, contactId: request.params.contactId, authorId: user.id, category: "CHANGE", title: "Связь контактов удалена", description: request.params.contactId === contactAId ? relation.contactB.name : relation.contactA.name },
+      { organizationId: user.organization.id, contactId: request.params.relatedContactId, authorId: user.id, category: "CHANGE", title: "Связь контактов удалена", description: request.params.relatedContactId === contactAId ? relation.contactB.name : relation.contactA.name },
+    ] });
+    return { ok: true };
   });
 }

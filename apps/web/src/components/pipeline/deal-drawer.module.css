@@ -355,11 +355,14 @@
 .relatedContact strong { overflow: hidden; font-size: var(--font-size-body-sm); text-overflow: ellipsis; white-space: nowrap; }
 .relatedContact small { color: var(--text-muted); }
 .relatedContact button { border: 0; background: transparent; color: var(--text-subtle); cursor: pointer; font-size: 20px; }
-.relatedPicker { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px; padding-top: 8px; }
-.relatedPicker select, .relatedPicker button { min-height: 36px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: #fff; }
-.relatedPicker select { min-width: 0; padding: 0 8px; }
+.relatedPicker { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding-top: 8px; }
+.relatedPicker button { min-height: 36px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: #fff; }
 .relatedPicker button { padding: 0 10px; cursor: pointer; }
 .relatedPicker button:last-child { border-color: var(--primary); background: var(--primary); color: #fff; }
+.relatedChoices { display: grid; grid-column: 1 / -1; max-height: 180px; gap: 4px; overflow-y: auto; padding: 5px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: #fbfbfa; }
+.relatedChoices > button { display: grid; gap: 2px; padding: 8px 10px; border-color: transparent; text-align: left; }
+.relatedChoices > button:hover, .relatedChoices > .relatedChoiceActive { border-color: #a9bee7; background: #f2f6ff; color: var(--text); }
+.relatedChoices small { color: var(--text-subtle); }
 .relatedError { margin: 8px 0 0; color: #b04a4a; font-size: var(--font-size-caption); }
 
 .addContactButton {
@@ -740,7 +743,6 @@
   .notesSection { padding: 22px 18px; }
   .relatedSection { padding: 18px; }
   .relatedPicker { grid-template-columns: 1fr 1fr; }
-  .relatedPicker select { grid-column: 1 / -1; }
   .activityToolbar { padding: 16px 18px; border-top: 8px solid var(--background); }
   .activityFeed { min-height: 360px; padding: 22px 18px 150px; }
   .composer { position: absolute; right: 14px; bottom: 14px; left: 14px; }

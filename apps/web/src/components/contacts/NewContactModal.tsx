@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Deal } from "@/types/crm";
-import { formatPhoneInput, isValidPhone } from "@/lib/phone";
+import { isValidPhone } from "@/lib/phone";
 import styles from "./contacts.module.css";
 
 export interface NewContactDraft { name: string; phone: string; email: string; telegram: string; source: Deal["source"]; assigneeId: string; comment: string; }
@@ -34,13 +34,13 @@ export function NewContactModal({ onCreate, onClose, assignees }: { onCreate: (d
         <header><div><span>Новый контакт</span><h2>Добавить человека или компанию</h2></div><button type="button" onClick={onClose} aria-label="Закрыть">×</button></header>
         <div className={styles.modalBody}>
           <Field label="Имя или название" required><input autoFocus aria-label="Имя или название" value={draft.name} onChange={(event) => update({ name: event.target.value })} placeholder="Например, Мария Иванова" /></Field>
-          <div className={styles.formGrid}><Field label="Телефон" required><input type="tel" value={draft.phone} onChange={(event) => { update({ phone: formatPhoneInput(event.target.value) }); setError(""); }} placeholder="+380 93 888 49 21" /></Field><Field label="Telegram"><input value={draft.telegram} onChange={(event) => update({ telegram: event.target.value })} placeholder="@username" /></Field></div>
+          <div className={styles.formGrid}><Field label="Телефон" required><input type="tel" value={draft.phone} onChange={(event) => { update({ phone: event.target.value }); setError(""); }} placeholder="+380 93 888 49 21" /></Field><Field label="Telegram"><input value={draft.telegram} onChange={(event) => update({ telegram: event.target.value })} placeholder="@username" /></Field></div>
           <Field label="Email"><input type="email" value={draft.email} onChange={(event) => update({ email: event.target.value })} placeholder="name@example.com" /></Field>
           <div className={styles.formGrid}><Field label="Источник"><select value={draft.source} onChange={(event) => update({ source: event.target.value as Deal["source"] })}><option value="Manual">Не указан</option><option value="Meta">Meta</option><option value="Website">Сайт</option></select></Field><Field label="Ответственный"><select value={draft.assigneeId} onChange={(event) => update({ assigneeId: event.target.value })}><option value="">Не назначен</option>{assignees.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></Field></div>
           <Field label="Комментарий"><textarea value={draft.comment} onChange={(event) => update({ comment: event.target.value })} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} placeholder="Контекст знакомства или важная информация" /></Field>
           {error && <p className={styles.modalError} role="alert">{error}</p>}
         </div>
-        <footer><span>Сделку можно создать позднее из карточки контакта</span><div><button type="button" onClick={onClose} disabled={isSubmitting}>Отмена</button><button className={styles.primaryButton} type="submit" disabled={!draft.name.trim() || !isValidPhone(draft.phone) || isSubmitting}>{isSubmitting ? "Создаём…" : "Создать контакт"}</button></div></footer>
+        <footer><span>Сделку можно создать позднее из карточки контакта</span><div><button type="button" onClick={onClose} disabled={isSubmitting}>Отмена</button><button className={styles.primaryButton} type="submit" disabled={!draft.name.trim() || isSubmitting}>{isSubmitting ? "Создаём…" : "Создать контакт"}</button></div></footer>
       </form>
     </div>
   );

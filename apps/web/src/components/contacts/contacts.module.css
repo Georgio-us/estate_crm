@@ -148,6 +148,24 @@
 .composer .saveButton { height: 26px; padding: 0 10px; border-radius: var(--radius-sm); background: var(--primary); color: #fff; font-size: var(--font-size-caption); }
 .composer .saveButton:disabled { background: #d7dbe2; cursor: default; }
 
+.relationsSection { display: grid; gap: 10px; }
+.relationRow { display: grid; grid-template-columns: 36px minmax(0, 1fr) 28px; align-items: center; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--border); }
+.relationRow .avatar { width: 36px; height: 36px; }
+.relationRow div { display: grid; gap: 2px; }
+.relationRow small { color: var(--text-subtle); }
+.relationRow > button { width: 28px; height: 28px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text-muted); cursor: pointer; }
+.addRelationButton { width: 100%; min-height: 38px; border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); background: #fff; color: var(--primary); cursor: pointer; }
+.addRelationButton:disabled { color: var(--text-subtle); cursor: default; }
+.relationPicker { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius-md); background: #fbfbfa; }
+.relationChoices { display: grid; max-height: 180px; gap: 4px; overflow-y: auto; }
+.relationChoices > button { display: grid; gap: 2px; padding: 8px 10px; border: 1px solid transparent; border-radius: var(--radius-sm); background: #fff; text-align: left; cursor: pointer; }
+.relationChoices > button:hover, .relationChoices .relationChoiceActive { border-color: #a9bee7; background: #f2f6ff; }
+.relationChoices small { color: var(--text-subtle); }
+.relationPicker > input { height: 36px; padding: 0 9px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: #fff; }
+.relationPicker > div:last-child { display: flex; justify-content: flex-end; gap: 6px; }
+.relationPicker > div:last-child button { min-height: 34px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: #fff; cursor: pointer; }
+.relationPicker > div:last-child button:last-child { border-color: var(--primary); background: var(--primary); color: #fff; }
+
 .modalLayer { display: grid; place-items: center; padding: 20px; z-index: 70; }
 .modal { position: relative; display: flex; width: min(590px, calc(100vw - 32px)); max-height: calc(100vh - 40px); flex-direction: column; overflow: hidden; border: 1px solid var(--border-strong); border-radius: var(--radius-lg); background: #fff; box-shadow: var(--shadow-modal); }
 .modal > header { display: flex; align-items: flex-start; justify-content: space-between; padding: 21px 24px 18px; border-bottom: 1px solid var(--border); }

@@ -48,7 +48,7 @@ interface ApiDeal {
 }
 
 interface ApiStage { id: string; title: string; color: string; position: number; deals: ApiDeal[] }
-interface ContactOption { id: string; name: string; phone: string | null; source: Deal["source"] }
+interface ContactOption { id: string; name: string; phone: string | null; source: Deal["source"]; dealIds?: string[]; dealCount?: number }
 
 function mapApiDeal(deal: ApiDeal): Deal {
   return {
@@ -87,7 +87,7 @@ async function requestContactOptions(): Promise<ContactOption[]> {
   const response = await fetch("/api/crm/contacts", { cache: "no-store" });
   if (!response.ok) throw new Error("Не удалось загрузить контакты.");
   const payload = await response.json() as { contacts: Array<Omit<ContactOption, "source"> & { source: keyof typeof sourceFromApi }> };
-  return payload.contacts.map((contact) => ({ ...contact, source: sourceFromApi[contact.source] }));
+  return payload.contacts.map((contact) => ({ ...contact, source: sourceFromApi[contact.source], dealCount: contact.dealIds?.length || 0 }));
 }
 
 async function requestDealActivities(dealId: string): Promise<ActivityEvent[]> {
@@ -278,6 +278,22 @@ export function PipelineBoard() {
     return { deal: savedDeal, stageId: payload.stageId };
   }
 
+  async function updateContactPhone(phone: string) {
+    if (!selectedDeal?.contactId) throw new Error("У сделки нет основного контакта.");
+    const contactId = selectedDeal.contactId;
+    const response = await fetch(`/api/crm/contacts/${contactId}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ phone }),
+    });
+    const payload = await response.json() as { contact?: { phone: string | null }; message?: string };
+    if (!response.ok || !payload.contact) throw new Error(payload.message || "Не удалось обновить телефон контакта.");
+    const savedPhone = payload.contact.phone || "";
+    setContacts((current) => current.map((contact) => contact.id === contactId ? { ...contact, phone: savedPhone } : contact));
+    setStages((current) => current.map((stage) => ({ ...stage, deals: stage.deals.map((deal) => deal.contactId === contactId ? { ...deal, phone: savedPhone } : deal) })));
+    return savedPhone;
+  }
+
   async function addNote(text: string) {
     if (!selected) throw new Error("Сделка больше не открыта.");
     const response = await fetch(`/api/crm/deals/${selected.dealId}/notes`, {
@@ -390,7 +406,9 @@ export function PipelineBoard() {
     setNewDealStageId(null);
     setSelected({ dealId, stageId: draft.stageId });
     if (!draft.contactId && deal.contactId) {
-      setContacts((current) => current.some((item) => item.id === deal.contactId) ? current : [{ id: deal.contactId!, name: deal.contactName, phone: deal.phone || null, source: deal.source }, ...current]);
+      setContacts((current) => current.some((item) => item.id === deal.contactId) ? current : [{ id: deal.contactId!, name: deal.contactName, phone: deal.phone || null, source: deal.source, dealCount: 1 }, ...current]);
+    } else if (draft.contactId) {
+      setContacts((current) => current.map((contact) => contact.id === draft.contactId ? { ...contact, dealCount: (contact.dealCount || 0) + 1 } : contact));
     }
   }
 
@@ -548,6 +566,7 @@ export function PipelineBoard() {
           activities={selectedActivities}
           contacts={contacts.map(({ id, name, phone }) => ({ id, name, phone }))}
           onSave={saveDeal}
+          onUpdateContactPhone={updateContactPhone}
           onAddNote={addNote}
           onLinkContact={linkContact}
           onUnlinkContact={unlinkContact}

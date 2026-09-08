@@ -1,6 +1,6 @@
 import type { Contact } from "@/types/crm";
 
-export const mockContacts: Contact[] = [
+const contactsWithoutRelations: Array<Omit<Contact, "relatedContacts">> = [
   { id: "contact-1", name: "Анна Коваленко", phone: "+38 093 412 68 20", telegram: "@anna_koval", source: "Meta", assignee: "Не назначен", dealIds: ["deal-1"], lastContact: "Сегодня, 10:43", nextTask: "Связаться сегодня", comment: "Предпочитает общение в Telegram.", createdAt: "Сегодня, 10:42" },
   { id: "contact-2", name: "Максим Бондарь", phone: "+38 067 801 15 44", source: "Meta", assignee: "Не назначен", dealIds: ["deal-2"], lastContact: "Сегодня, 09:18", createdAt: "Сегодня, 09:18" },
   { id: "contact-3", name: "Ольга Мельник", phone: "+38 097 503 45 03", email: "olga.melnik@example.com", telegram: "@olga_melnik", source: "Website", assignee: "Елена", dealIds: ["deal-3"], lastContact: "Вчера, 18:34", nextTask: "Позвонить до 14:00", comment: "Интересуется рассрочкой и готовыми новостройками.", createdAt: "Вчера, 18:34" },
@@ -10,3 +10,5 @@ export const mockContacts: Contact[] = [
   { id: "contact-7", name: "Виктория Гринь", phone: "+38 098 100 42 67", telegram: "@victoria_green", source: "Website", assignee: "Андрей", dealIds: ["deal-7"], lastContact: "Сегодня, 13:05", nextTask: "Отправить 3 объекта", comment: "Рассматривает только квартиры с готовым ремонтом.", createdAt: "21 августа, 12:47" },
   { id: "contact-8", name: "Дмитрий Орлов", phone: "+38 099 610 28 55", telegram: "@d_orlov", source: "Manual", assignee: "Георгий", dealIds: [], lastContact: "30 августа, 16:20", comment: "Контакт добавлен после рекомендации. Запрос пока не сформирован.", createdAt: "30 августа, 16:20" },
 ];
+
+export const mockContacts: Contact[] = contactsWithoutRelations.map((contact) => ({ ...contact, relatedContacts: [] }));

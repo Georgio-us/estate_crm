@@ -69,6 +69,7 @@ export interface ContactRecord {
   assignee: ContactAssignee | null;
   dealIds: string[];
   deals: ContactDealSummary[];
+  relatedContacts: Array<ContactAssignee & { phone: string | null; label: string | null }>;
   comment: string | null;
   createdAt: string;
   updatedAt: string;
@@ -97,6 +98,11 @@ export interface UpdateContactRequest {
   source?: ContactSource;
   assigneeId?: string | null;
   comment?: string | null;
+}
+
+export interface LinkContactRequest {
+  relatedContactId: string;
+  label?: string;
 }
 
 export type DealOperation = "PURCHASE" | "RENT" | "SALE";

@@ -81,6 +81,7 @@ export interface Contact {
   assigneeId?: string;
   assignee: string;
   dealIds: string[];
+  relatedContacts: Array<{ id: string; name: string; phone: string | null; label: string | null }>;
   lastContact: string;
   nextTask?: string;
   comment?: string;

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ActivityCategory, ActivityEvent, Deal } from "@/types/crm";
+import { isValidPhone } from "@/lib/phone";
 import styles from "./deal-drawer.module.css";
 
 interface DealDrawerProps {
@@ -10,6 +11,7 @@ interface DealDrawerProps {
   activities: ActivityEvent[];
   contacts: Array<{ id: string; name: string; phone: string | null }>;
   onSave: (deal: Deal, stageId: string) => Promise<{ deal: Deal; stageId: string }>;
+  onUpdateContactPhone: (phone: string) => Promise<string>;
   onAddNote: (text: string) => Promise<void>;
   onLinkContact: (contactId: string) => Promise<void>;
   onUnlinkContact: (contactId: string) => Promise<void>;
@@ -43,6 +45,7 @@ export function DealDrawer({
   activities,
   contacts,
   onSave,
+  onUpdateContactPhone,
   onAddNote,
   onLinkContact,
   onUnlinkContact,
@@ -68,7 +71,7 @@ export function DealDrawer({
   const [relatedError, setRelatedError] = useState("");
   const [relatedBusy, setRelatedBusy] = useState(false);
 
-  const comparable = (value: Deal) => ({ title: value.title, assigneeId: value.assigneeId, budget: value.budget, operation: value.operation, propertyType: value.propertyType, district: value.district, rooms: value.rooms, request: value.request, comment: value.comment, source: value.source });
+  const comparable = (value: Deal) => ({ title: value.title, phone: value.phone, assigneeId: value.assigneeId, budget: value.budget, operation: value.operation, propertyType: value.propertyType, district: value.district, rooms: value.rooms, request: value.request, comment: value.comment, source: value.source });
   const isDirty = draftStageId !== stageId || JSON.stringify(comparable(draft)) !== JSON.stringify(comparable(deal));
 
   function updateDraft(patch: Partial<Deal>) {
@@ -83,10 +86,19 @@ export function DealDrawer({
 
   async function saveChanges() {
     if (!isDirty || isSaving) return;
+    if (draft.phone !== deal.phone && !isValidPhone(draft.phone)) {
+      setSaveError("Введите корректный номер телефона.");
+      return;
+    }
     setIsSaving(true);
     setSaveError("");
     try {
-      const saved = await onSave(draft, draftStageId);
+      let nextDraft = draft;
+      if (draft.phone !== deal.phone) {
+        const phone = await onUpdateContactPhone(draft.phone);
+        nextDraft = { ...draft, phone };
+      }
+      const saved = await onSave(nextDraft, draftStageId);
       setDraft(saved.deal);
       setDraftStageId(saved.stageId);
     } catch (cause) {
@@ -221,7 +233,7 @@ export function DealDrawer({
                 </div>
                 <button type="button" aria-label="Меню контакта">•••</button>
               </div>
-              <PropertyInput label="Телефон" icon="☎" value={deal.phone || ""} readOnly onChange={() => undefined} />
+              <PropertyInput label="Телефон" icon="☎" value={draft.phone || ""} onChange={(value) => updateDraft({ phone: value })} />
               <SourceSelect value={draft.source} onChange={(value) => updateDraft({ source: value })} />
             </section>
 
@@ -235,7 +247,7 @@ export function DealDrawer({
             <section className={styles.relatedSection}>
               <div className={styles.relatedHeader}><h3>Связанные контакты</h3><span>{relatedContacts.length}</span></div>
               {relatedContacts.map((contact) => <div className={styles.relatedContact} key={contact.id}><i>{contact.name.slice(0, 1)}</i><div><strong>{contact.name}</strong><small>{contact.phone || "Телефон не указан"}</small></div><button type="button" disabled={relatedBusy} onClick={() => { void unlinkRelatedContact(contact.id); }} aria-label={`Удалить связь с ${contact.name}`}>×</button></div>)}
-              {relatedPickerOpen ? <div className={styles.relatedPicker}><select autoFocus value={relatedContactId} onChange={(event) => setRelatedContactId(event.target.value)}><option value="">Выберите контакт</option>{availableContacts.map((contact) => <option value={contact.id} key={contact.id}>{contact.name}{contact.phone ? ` · ${contact.phone}` : ""}</option>)}</select><button type="button" onClick={() => setRelatedPickerOpen(false)} disabled={relatedBusy}>Отмена</button><button type="button" onClick={() => { void linkRelatedContact(); }} disabled={!relatedContactId || relatedBusy}>{relatedBusy ? "Добавляем…" : "Добавить"}</button></div> : <button className={styles.addContactButton} type="button" disabled={!availableContacts.length} onClick={() => setRelatedPickerOpen(true)}><span>＋</span>{availableContacts.length ? "Добавить связанный контакт" : "Нет доступных контактов"}</button>}
+              {relatedPickerOpen ? <div className={styles.relatedPicker}><div className={styles.relatedChoices}>{availableContacts.map((contact) => <button className={relatedContactId === contact.id ? styles.relatedChoiceActive : ""} type="button" key={contact.id} onClick={() => setRelatedContactId(contact.id)}><strong>{contact.name}</strong><small>{contact.phone || "Телефон не указан"}</small></button>)}</div><button type="button" onClick={() => setRelatedPickerOpen(false)} disabled={relatedBusy}>Отмена</button><button type="button" onClick={() => { void linkRelatedContact(); }} disabled={!relatedContactId || relatedBusy}>{relatedBusy ? "Добавляем…" : "Добавить"}</button></div> : <button className={styles.addContactButton} type="button" disabled={!availableContacts.length} onClick={() => setRelatedPickerOpen(true)}><span>＋</span>{availableContacts.length ? "Добавить участника сделки" : "Нет доступных контактов"}</button>}
               {relatedError && <p className={styles.relatedError} role="alert">{relatedError}</p>}
             </section>
             {isDirty && <div className={styles.saveBar}><div>{saveError || "Есть несохранённые изменения"}</div><button type="button" onClick={discardChanges} disabled={isSaving}>Отменить</button><button type="button" onClick={() => { void saveChanges(); }} disabled={isSaving}>{isSaving ? "Сохраняем…" : "Сохранить"}</button></div>}

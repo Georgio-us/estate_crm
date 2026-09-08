@@ -235,3 +235,53 @@ test("updating a contact rejects an invalid email", async () => {
   assert.equal(response.json().error, "validation_error");
   await app.close();
 });
+
+test("linking contacts creates one symmetric relation and history for both contacts", async () => {
+  const firstId = "201f180c-d032-49a0-8aa7-04db19095eb2";
+  const secondId = "14a292bd-d84e-447c-b71a-aa185b809b88";
+  let relationData: Record<string, unknown> = {};
+  let activityRows: Array<{ contactId: string; description: string }> = [];
+  const database = {
+    client: {
+      session: {
+        async findUnique() {
+          return { id: "session-1", expiresAt: new Date(Date.now() + 60_000), user: sessionUser };
+        },
+      },
+      contact: {
+        async findMany() {
+          return [
+            { id: firstId, name: "Муж", phone: "+380 93 111 11 11" },
+            { id: secondId, name: "Жена", phone: "+380 67 222 22 22" },
+          ];
+        },
+      },
+      contactRelation: {
+        async findUnique() { return null; },
+        async create({ data }: { data: Record<string, unknown> }) { relationData = data; },
+      },
+      activityEvent: {
+        async createMany({ data }: { data: Array<{ contactId: string; description: string }> }) { activityRows = data; },
+      },
+    },
+    async ping() {},
+    async disconnect() {},
+  } as unknown as DatabaseConnection;
+
+  const app = await buildApp(config, database);
+  const response = await app.inject({
+    method: "POST",
+    url: `/contacts/${firstId}/relations`,
+    headers: { cookie: "estate_crm_session=test-token" },
+    payload: { relatedContactId: secondId, label: "Супруги" },
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(relationData.organizationId, "org-1");
+  assert.deepEqual([relationData.contactAId, relationData.contactBId], [secondId, firstId].sort());
+  assert.equal(activityRows.length, 2);
+  assert.deepEqual(new Set(activityRows.map((row) => row.contactId)), new Set([firstId, secondId]));
+  assert.equal(response.json().relatedContacts[0].phone, "+380 67 222 22 22");
+
+  await app.close();
+});

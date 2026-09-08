@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useCurrentUser } from "@/components/auth/AuthContext";
 import { mapApiActivity, type ApiActivity } from "@/lib/activity";
 import type { ActivityEvent, Contact, Deal } from "@/types/crm";
+import { NewDealModal, type NewDealDraft } from "@/components/pipeline/NewDealModal";
 import { ContactDrawer } from "./ContactDrawer";
 import { NewContactModal, type NewContactDraft } from "./NewContactModal";
 import styles from "./contacts.module.css";
@@ -17,6 +18,7 @@ export interface RelatedDeal {
 const sourceLabels: Record<Deal["source"], string> = { Meta: "Meta", Website: "Сайт", Manual: "Не указан" };
 const sourceFromApi = { META: "Meta", WEBSITE: "Website", MANUAL: "Manual" } as const;
 const sourceToApi = { Meta: "META", Website: "WEBSITE", Manual: "MANUAL" } as const;
+const operationToApi = { Покупка: "PURCHASE", Аренда: "RENT", Продажа: "SALE" } as const;
 
 interface ApiContact {
   id: string;
@@ -27,6 +29,7 @@ interface ApiContact {
   source: keyof typeof sourceFromApi;
   assignee: { id: string; name: string } | null;
   dealIds?: string[];
+  relatedContacts?: Array<{ id: string; name: string; phone: string | null; label: string | null }>;
   deals?: Array<{ id: string; number: number; title: string; request: string; budget: string | null; stage: { id: string; title: string; color: string } }>;
   comment: string | null;
   createdAt: string;
@@ -44,6 +47,7 @@ function mapApiContact(contact: ApiContact): Contact {
     assigneeId: contact.assignee?.id,
     assignee: contact.assignee?.name || "Не назначен",
     dealIds: contact.dealIds || [],
+    relatedContacts: contact.relatedContacts || [],
     lastContact: "Нет взаимодействий",
     comment: contact.comment || undefined,
     createdAt: new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", year: "numeric" }).format(new Date(contact.createdAt)),
@@ -98,6 +102,8 @@ export function ContactsDirectory() {
   const [contactActivities, setContactActivities] = useState<Record<string, ActivityEvent[]>>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [dealContactId, setDealContactId] = useState<string | null>(null);
+  const [dealStages, setDealStages] = useState<Array<{ id: string; title: string }>>([]);
   const [search, setSearch] = useState("");
   const [assignee, setAssignee] = useState("all");
   const [source, setSource] = useState("all");
@@ -131,6 +137,16 @@ export function ContactsDirectory() {
       setLoadState("ready");
     } catch {
       setLoadState("error");
+    }
+  }
+
+  async function refreshContacts(contactId?: string) {
+    const result = await requestContacts();
+    setContacts(result.contacts);
+    setDealsById(result.dealsById);
+    if (contactId) {
+      const items = await requestContactActivities(contactId);
+      setContactActivities((current) => ({ ...current, [contactId]: items }));
     }
   }
 
@@ -217,6 +233,60 @@ export function ContactsDirectory() {
     setContactActivities((current) => ({ ...current, [contactId]: [activity, ...(current[contactId] || [])] }));
   }
 
+  async function linkRelatedContact(relatedContactId: string, label?: string) {
+    if (!selectedContact) throw new Error("Контакт больше не открыт.");
+    const response = await fetch(`/api/crm/contacts/${selectedContact.id}/relations`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ relatedContactId, label }),
+    });
+    const payload = await response.json() as { message?: string };
+    if (!response.ok) throw new Error(payload.message || "Не удалось связать контакты.");
+    await refreshContacts(selectedContact.id);
+  }
+
+  async function unlinkRelatedContact(relatedContactId: string) {
+    if (!selectedContact) throw new Error("Контакт больше не открыт.");
+    const response = await fetch(`/api/crm/contacts/${selectedContact.id}/relations/${relatedContactId}`, { method: "DELETE" });
+    const payload = await response.json() as { message?: string };
+    if (!response.ok) throw new Error(payload.message || "Не удалось удалить связь контактов.");
+    await refreshContacts(selectedContact.id);
+  }
+
+  async function openDealCreation(contactId: string) {
+    const response = await fetch("/api/crm/pipeline", { cache: "no-store" });
+    if (!response.ok) throw new Error("Не удалось загрузить этапы воронки.");
+    const payload = await response.json() as { pipeline: { stages: Array<{ id: string; title: string }> } };
+    if (!payload.pipeline.stages.length) throw new Error("В воронке нет доступных этапов.");
+    setDealStages(payload.pipeline.stages.map(({ id, title }) => ({ id, title })));
+    setDealContactId(contactId);
+  }
+
+  async function createDeal(draft: NewDealDraft) {
+    const response = await fetch("/api/crm/deals", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        stageId: draft.stageId,
+        contactId: draft.contactId,
+        assigneeId: draft.assigneeId || null,
+        title: draft.title,
+        request: draft.request,
+        budget: draft.budget,
+        operation: draft.operation ? operationToApi[draft.operation] : undefined,
+        propertyType: draft.propertyType,
+        district: draft.district,
+        rooms: draft.rooms,
+        source: sourceToApi[draft.source],
+      }),
+    });
+    const payload = await response.json() as { message?: string };
+    if (!response.ok) throw new Error(payload.message || "Не удалось создать сделку.");
+    const contactId = draft.contactId;
+    await refreshContacts(contactId);
+    setDealContactId(null);
+  }
+
   return (
     <section className={styles.page}>
       <header className={styles.topbar}>
@@ -268,8 +338,9 @@ export function ContactsDirectory() {
         </section>
       </div>
 
-      {selectedContact && <ContactDrawer key={selectedContact.id} contact={selectedContact} deals={selectedDeals} activities={selectedActivities} assignees={[{ id: user.id, name: user.name }]} onSave={saveContact} onAddNote={addContactNote} onClose={() => setSelectedId(null)} />}
+      {selectedContact && <ContactDrawer key={selectedContact.id} contact={selectedContact} contacts={contacts} deals={selectedDeals} activities={selectedActivities} assignees={[{ id: user.id, name: user.name }]} onSave={saveContact} onAddNote={addContactNote} onLinkContact={linkRelatedContact} onUnlinkContact={unlinkRelatedContact} onCreateDeal={() => { void openDealCreation(selectedContact.id).catch(() => undefined); }} onClose={() => setSelectedId(null)} />}
       {isCreating && <NewContactModal onCreate={createContact} onClose={() => setIsCreating(false)} assignees={[{ id: user.id, name: user.name }]} />}
+      {dealContactId && dealStages[0] && <NewDealModal initialContactId={dealContactId} initialStageId={dealStages[0].id} stages={dealStages} contacts={contacts.map((item) => ({ id: item.id, name: item.name, phone: item.phone || null, source: item.source, dealCount: item.dealIds.length }))} assignees={[{ id: user.id, name: user.name }]} onCreate={createDeal} onClose={() => setDealContactId(null)} />}
     </section>
   );
 }

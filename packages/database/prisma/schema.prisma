@@ -40,62 +40,82 @@ enum ActivityCategory {
 }
 
 model Organization {
-  id          String       @id @default(uuid()) @db.Uuid
-  name        String
-  slug        String       @unique
-  timezone    String       @default("Europe/Madrid")
-  locale      String       @default("ru")
-  createdAt   DateTime     @default(now()) @map("created_at")
-  updatedAt   DateTime     @updatedAt @map("updated_at")
-  memberships Membership[]
-  contacts    Contact[]
-  pipelines   Pipeline[]
-  deals       Deal[]
-  activities  ActivityEvent[]
+  id               String            @id @default(uuid()) @db.Uuid
+  name             String
+  slug             String            @unique
+  timezone         String            @default("Europe/Madrid")
+  locale           String            @default("ru")
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+  memberships      Membership[]
+  contacts         Contact[]
+  pipelines        Pipeline[]
+  deals            Deal[]
+  activities       ActivityEvent[]
+  contactRelations ContactRelation[]
 
   @@map("organizations")
 }
 
 model User {
-  id           String       @id @default(uuid()) @db.Uuid
-  email        String       @unique
-  name         String
-  phone        String?
-  passwordHash String?      @map("password_hash")
-  createdAt    DateTime     @default(now()) @map("created_at")
-  updatedAt    DateTime     @updatedAt @map("updated_at")
-  memberships  Membership[]
-  sessions     Session[]
-  assignedContacts Contact[] @relation("ContactAssignee")
-  assignedDeals Deal[] @relation("DealAssignee")
+  id                 String          @id @default(uuid()) @db.Uuid
+  email              String          @unique
+  name               String
+  phone              String?
+  passwordHash       String?         @map("password_hash")
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
+  memberships        Membership[]
+  sessions           Session[]
+  assignedContacts   Contact[]       @relation("ContactAssignee")
+  assignedDeals      Deal[]          @relation("DealAssignee")
   authoredActivities ActivityEvent[] @relation("ActivityAuthor")
 
   @@map("users")
 }
 
 model Contact {
-  id              String        @id @default(uuid()) @db.Uuid
-  organizationId  String        @map("organization_id") @db.Uuid
+  id              String               @id @default(uuid()) @db.Uuid
+  organizationId  String               @map("organization_id") @db.Uuid
   name            String
   phone           String?
-  normalizedPhone String?       @map("normalized_phone")
+  normalizedPhone String?              @map("normalized_phone")
   email           String?
   telegram        String?
-  source          ContactSource @default(MANUAL)
-  assigneeId      String?       @map("assignee_id") @db.Uuid
+  source          ContactSource        @default(MANUAL)
+  assigneeId      String?              @map("assignee_id") @db.Uuid
   comment         String?
-  createdAt       DateTime      @default(now()) @map("created_at")
-  updatedAt       DateTime      @updatedAt @map("updated_at")
-  organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  assignee        User?         @relation("ContactAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
+  organization    Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignee        User?                @relation("ContactAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   deals           Deal[]
   relatedDeals    DealRelatedContact[]
+  relationsAsA    ContactRelation[]    @relation("ContactRelationA")
+  relationsAsB    ContactRelation[]    @relation("ContactRelationB")
   activities      ActivityEvent[]
 
   @@index([organizationId, createdAt])
   @@index([organizationId, normalizedPhone])
   @@index([assigneeId])
   @@map("contacts")
+}
+
+model ContactRelation {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  contactAId     String       @map("contact_a_id") @db.Uuid
+  contactBId     String       @map("contact_b_id") @db.Uuid
+  label          String?
+  createdAt      DateTime     @default(now()) @map("created_at")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contactA       Contact      @relation("ContactRelationA", fields: [contactAId], references: [id], onDelete: Cascade)
+  contactB       Contact      @relation("ContactRelationB", fields: [contactBId], references: [id], onDelete: Cascade)
+
+  @@unique([contactAId, contactBId])
+  @@index([organizationId])
+  @@index([contactBId])
+  @@map("contact_relations")
 }
 
 model Pipeline {
@@ -130,31 +150,31 @@ model PipelineStage {
 }
 
 model Deal {
-  id             String         @id @default(uuid()) @db.Uuid
-  number         Int            @default(autoincrement())
-  organizationId String         @map("organization_id") @db.Uuid
-  pipelineId     String         @map("pipeline_id") @db.Uuid
-  stageId        String         @map("stage_id") @db.Uuid
-  contactId      String         @map("contact_id") @db.Uuid
-  assigneeId     String?        @map("assignee_id") @db.Uuid
-  title          String
-  request        String
-  budget         String?
-  comment        String?
-  operation      DealOperation  @default(PURCHASE)
-  propertyType   String?        @map("property_type")
-  district       String?
-  rooms          String?
-  source         ContactSource  @default(MANUAL)
-  position       Int            @default(0)
-  createdAt      DateTime       @default(now()) @map("created_at")
-  updatedAt      DateTime       @updatedAt @map("updated_at")
-  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  pipeline       Pipeline       @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
-  stage          PipelineStage  @relation(fields: [stageId], references: [id], onDelete: Restrict)
-  contact        Contact        @relation(fields: [contactId], references: [id], onDelete: Restrict)
-  assignee       User?          @relation("DealAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  activities     ActivityEvent[]
+  id              String               @id @default(uuid()) @db.Uuid
+  number          Int                  @default(autoincrement())
+  organizationId  String               @map("organization_id") @db.Uuid
+  pipelineId      String               @map("pipeline_id") @db.Uuid
+  stageId         String               @map("stage_id") @db.Uuid
+  contactId       String               @map("contact_id") @db.Uuid
+  assigneeId      String?              @map("assignee_id") @db.Uuid
+  title           String
+  request         String
+  budget          String?
+  comment         String?
+  operation       DealOperation        @default(PURCHASE)
+  propertyType    String?              @map("property_type")
+  district        String?
+  rooms           String?
+  source          ContactSource        @default(MANUAL)
+  position        Int                  @default(0)
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
+  organization    Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pipeline        Pipeline             @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  stage           PipelineStage        @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  contact         Contact              @relation(fields: [contactId], references: [id], onDelete: Restrict)
+  assignee        User?                @relation("DealAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  activities      ActivityEvent[]
   relatedContacts DealRelatedContact[]
 
   @@unique([organizationId, number])
