@@ -532,8 +532,8 @@
 .taskUnit { display: grid; }
 .activeTasks .activityCard { margin-bottom: 0; }
 .highlightedTask { border-color: #87a9e7; box-shadow: 0 0 0 3px rgba(78, 123, 206, .12); }
-.taskDue_overdue { color: #b64f4f !important; font-weight: var(--font-weight-semibold); }
-.taskDue_today { color: #9b701f !important; font-weight: var(--font-weight-semibold); }
+.activityCard .taskDue_overdue { color: #b64f4f; font-weight: var(--font-weight-semibold); }
+.activityCard .taskDue_today { color: #9b701f; font-weight: var(--font-weight-semibold); }
 
 .overdueCard { border-color: #ebcdcd; }
 
@@ -655,7 +655,7 @@
 
 .timelineItem div { display: grid; align-content: start; gap: 4px; padding-top: 2px; }
 .timelineItem p { margin: 0; font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); }
-.timelineItem div > span { color: #575754; font-size: var(--font-size-caption); line-height: var(--line-height-normal)5; }
+.timelineItem div > span { color: #575754; font-size: var(--font-size-caption); line-height: var(--line-height-normal); }
 .timelineItem small,
 .timelineItem time { color: var(--text-subtle); font-size: var(--font-size-caption); }
 .timelineItem time { padding-top: 3px; }
@@ -821,10 +821,6 @@
   .headerActions { flex: 0 0 auto; }
   .titleInput,
   .titleValue { width: 100%; max-width: 100%; min-width: 0; font-size: var(--font-size-heading-md); }
-  .taskSchedule { flex-wrap: wrap; }
-  .quickDates { width: 100%; flex-basis: 100%; }
-  .taskSchedule label { flex: 1; }
-  .taskSchedule input, .taskSchedule input[type="time"] { width: 100%; }
   .workspace { display: block; width: 100%; min-width: 0; overflow: visible; }
   .detailsPane,
   .activityPane { width: 100%; min-width: 0; overflow: visible; border-right: 0; }
@@ -834,9 +830,49 @@
   .notesSection { padding: 22px 18px; }
   .relatedSection { padding: 18px; }
   .relatedPicker { grid-template-columns: 1fr 1fr; }
-  .activityToolbar { padding: 16px 18px; border-top: 8px solid var(--background); }
-  .activityFeed { min-height: 360px; padding: 22px 18px 150px; }
-  .composer { position: absolute; right: 14px; bottom: 14px; left: 14px; }
+  .activityToolbar {
+    display: grid;
+    min-height: 0;
+    order: 0;
+    gap: 14px;
+    padding: 18px;
+    border-top: 8px solid var(--background);
+  }
+  .activityToolbar h2 { white-space: nowrap; }
+  .activityButtons { display: grid; width: 100%; grid-template-columns: minmax(112px, .7fr) minmax(0, 1.3fr); gap: 8px; }
+  .activityButtons button,
+  .activityButtons select { width: 100%; height: 44px; min-width: 0; padding: 0 12px; font-size: var(--font-size-body); }
+  .composer {
+    position: static;
+    right: auto;
+    bottom: auto;
+    left: auto;
+    width: calc(100% - 36px);
+    min-height: 0;
+    order: 1;
+    margin: 14px 18px 0;
+  }
+  .composerTask { min-height: 0; }
+  .composerTabs { height: 46px; gap: 22px; }
+  .composerTabs button { font-size: var(--font-size-body); }
+  .composer > textarea { min-height: 76px; max-height: 120px; padding: 13px 14px 8px; font-size: 16px; }
+  .taskSchedule { display: grid; align-items: stretch; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 8px 12px 10px; }
+  .quickDates { display: grid; width: 100%; grid-column: 1 / -1; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+  .taskSchedule .quickDates button { width: 100%; height: 40px; padding: 0 8px; font-size: var(--font-size-caption); }
+  .taskSchedule label { min-width: 0; gap: 5px; }
+  .taskSchedule label span { font-size: var(--font-size-caption); }
+  .taskSchedule input,
+  .taskSchedule input[type="time"] { width: 100%; height: 44px; min-width: 0; background: #fff; font-size: 16px; }
+  .composerFooter { min-height: 51px; padding: 4px 10px 10px 12px; }
+  .composerFooter .saveNoteButton { min-width: 132px; height: 40px; font-size: var(--font-size-body-sm); }
+  .activityFeed { min-height: 360px; flex: none; order: 2; overflow: visible; padding: 24px 18px max(40px, env(safe-area-inset-bottom)); }
+  .taskPrompt { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; margin-bottom: 24px; padding: 14px; }
+  .taskPrompt button { min-height: 36px; font-size: var(--font-size-body-sm); }
+  .activityCard { display: grid; align-items: start; grid-template-columns: 30px minmax(0, 1fr); gap: 10px; padding: 14px; }
+  .activityCard button { grid-column: 2; min-height: 36px; justify-self: start; font-size: var(--font-size-body-sm); }
+  .activityCard p { font-size: var(--font-size-body); }
+  .activityCard div > span { font-size: var(--font-size-body-sm); }
+  .completionForm { margin-left: 0; }
 }
 
 @media (hover: none) and (pointer: coarse) {
