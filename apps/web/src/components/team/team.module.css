@@ -585,6 +585,10 @@
 .inviteList article { grid-template-columns: 40px minmax(180px, 1fr) minmax(160px, .7fr) auto; }
 .inviteList article > div { display: flex; gap: var(--space-3); }
 .inviteList article > div button:last-child { color: #c34d51; }
+.inviteList button:disabled { cursor: wait; opacity: .55; }
+.inlineError,
+.formError { margin: 12px 0 0; color: #b42318; font-size: var(--font-size-body-sm); }
+.modalHint { margin: 0; color: var(--text-muted); line-height: 1.55; }
 
 .auditList article { grid-template-columns: 40px 1fr minmax(220px, auto); }
 .auditList article > span:last-child { text-align: right; }

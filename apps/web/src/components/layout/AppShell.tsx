@@ -16,7 +16,7 @@ export function AppShell({ children }: AppShellProps) {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  if (pathname === "/login") {
+  if (pathname === "/login" || pathname.startsWith("/invite/")) {
     return children;
   }
 

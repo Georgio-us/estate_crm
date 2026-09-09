@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import type { TeamMember, TeamRole, TeamStatus } from "@/types/crm";
 import styles from "./team.module.css";
 
@@ -28,15 +28,17 @@ type ApiRole = "ADMIN" | "LEAD" | "MANAGER";
 type ApiStatus = "ACTIVE" | "INVITED" | "SUSPENDED";
 type MemberDeal = { id: string; number: number; title: string; request: string };
 type MemberTask = { id: string; title: string; dueDate: string | null; dueTime: string | null; contactName: string | null; dealId: string | null; dealNumber: number | null; dealTitle: string | null };
-type TeamRow = TeamMember & { activeDeals: number; activeTasks: number; todayTasks: number; overdueTasks: number; deals: MemberDeal[]; tasks: MemberTask[] };
+type TeamRow = TeamMember & { pendingInvitationId: string | null; activeDeals: number; activeTasks: number; todayTasks: number; overdueTasks: number; deals: MemberDeal[]; tasks: MemberTask[] };
 
 type TeamApiResponse = {
   members: Array<{
     id: string; name: string; email: string; phone: string | null; role: ApiRole; status: ApiStatus;
-    joinedAt: string; updatedAt: string; activeDeals: number; activeTasks: number; todayTasks: number; overdueTasks: number;
+    joinedAt: string; updatedAt: string; pendingInvitationId: string | null; activeDeals: number; activeTasks: number; todayTasks: number; overdueTasks: number;
     deals: MemberDeal[]; tasks: MemberTask[];
   }>;
 };
+
+type InvitationLink = { invitationId: string; connectUrl: string; expiresAt: string };
 
 const roleFromApi: Record<ApiRole, TeamRole> = { ADMIN: "Администратор", LEAD: "Руководитель", MANAGER: "Менеджер" };
 const statusFromApi: Record<ApiStatus, TeamStatus> = { ACTIVE: "Активен", INVITED: "Приглашён", SUSPENDED: "Доступ отключён" };
@@ -60,23 +62,30 @@ function mapMember(member: TeamApiResponse["members"][number]): TeamRow {
   };
 }
 
+async function requestTeam(): Promise<TeamRow[]> {
+  const response = await fetch("/api/crm/team", { cache: "no-store" });
+  const payload = await response.json() as TeamApiResponse & { message?: string };
+  if (!response.ok) throw new Error(payload.message || "Не удалось загрузить команду.");
+  return payload.members.map(mapMember);
+}
+
 export function TeamDirectory() {
   const [rows, setRows] = useState<TeamRow[]>([]);
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [loadError, setLoadError] = useState("");
   const [tab, setTab] = useState<ModuleTab>("overview");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [invitationLink, setInvitationLink] = useState<InvitationLink | null>(null);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<"Все" | TeamRole>("Все");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("Все");
 
   useEffect(() => {
     let active = true;
-    void fetch("/api/crm/team", { cache: "no-store" }).then(async (response) => {
-      const payload = await response.json() as TeamApiResponse & { message?: string };
-      if (!response.ok) throw new Error(payload.message || "Не удалось загрузить команду.");
+    void requestTeam().then((members) => {
       if (!active) return;
-      setRows(payload.members.map(mapMember));
+      setRows(members);
       setLoadState("ready");
     }).catch((error: unknown) => {
       if (!active) return;
@@ -89,11 +98,12 @@ export function TeamDirectory() {
   const selected = rows.find((member) => member.id === selectedId);
 
   function openMember(id: string) { setSelectedId(id); }
+  async function refreshTeam() { setRows(await requestTeam()); }
 
   if (selected) return <MemberPage member={selected} onBack={() => setSelectedId(null)} />;
 
   return <section className={styles.page}>
-    <header className={styles.topbar}><h1>Команда</h1><label className={styles.search}><span>⌕</span><input type="search" value={search} onFocus={() => setTab("people")} onChange={(event) => setSearch(event.target.value)} placeholder="Сотрудник или email" /></label><button className={styles.primaryButton} type="button" aria-label="Перейти к приглашениям" onClick={() => setTab("invites")}><span>＋</span><b>Пригласить</b></button></header>
+    <header className={styles.topbar}><h1>Команда</h1><label className={styles.search}><span>⌕</span><input type="search" value={search} onFocus={() => setTab("people")} onChange={(event) => setSearch(event.target.value)} placeholder="Сотрудник или email" /></label><button className={styles.primaryButton} type="button" aria-label="Пригласить сотрудника" onClick={() => setInviteOpen(true)}><span>＋</span><b>Пригласить</b></button></header>
     <main className={styles.content}>
       <div className={styles.heading}><div><span className={styles.eyebrow}>Рабочее пространство</span><h2>Управление командой</h2><p>Люди, нагрузка, роли и доступ к данным CRM.</p></div><span>{rows.filter((member) => member.status === "Активен").length} активных сотрудников</span></div>
       <nav className={styles.tabs} aria-label="Разделы команды">{moduleTabs.map((item) => <button className={tab === item.id ? styles.tabActive : ""} type="button" onClick={() => setTab(item.id)} key={item.id}>{item.label}{item.id === "invites" && rows.some((member) => member.status === "Приглашён") && <i>{rows.filter((member) => member.status === "Приглашён").length}</i>}</button>)}</nav>
@@ -102,9 +112,11 @@ export function TeamDirectory() {
       {loadState === "ready" && tab === "overview" && <Overview rows={rows} onOpen={openMember} />}
       {loadState === "ready" && tab === "people" && <People rows={rows} search={search} role={roleFilter} status={statusFilter} onSearch={setSearch} onRole={setRoleFilter} onStatus={setStatusFilter} onOpen={openMember} />}
       {loadState === "ready" && tab === "roles" && <Roles rules={initialRules} />}
-      {loadState === "ready" && tab === "invites" && <Invites members={rows} />}
+      {loadState === "ready" && tab === "invites" && <Invites members={rows} onResend={async (invitationId) => { const response = await fetch(`/api/crm/team/invitations/${invitationId}/resend`, { method: "POST" }); const payload = await response.json() as InvitationLink & { message?: string }; if (!response.ok) throw new Error(payload.message || "Не удалось обновить приглашение."); setInvitationLink(payload); await refreshTeam(); }} onCancel={async (invitationId) => { const response = await fetch(`/api/crm/team/invitations/${invitationId}`, { method: "DELETE" }); const payload = await response.json() as { message?: string }; if (!response.ok) throw new Error(payload.message || "Не удалось отменить приглашение."); await refreshTeam(); }} />}
       {tab === "audit" && <Audit />}
     </main>
+    {inviteOpen && <InviteModal onClose={() => setInviteOpen(false)} onCreated={async (link) => { setInviteOpen(false); setInvitationLink(link); setTab("invites"); await refreshTeam(); }} />}
+    {invitationLink && <InvitationLinkModal invitation={invitationLink} onClose={() => setInvitationLink(null)} />}
   </section>;
 }
 
@@ -132,9 +144,12 @@ function Roles({ rules }: { rules: Record<TeamRole, Record<AccessKey, Scope>> })
   return <section className={styles.roles}><aside><h3>Роли</h3><p>Наборы прав для участников</p>{roles.map((role) => <button className={selected === role ? styles.selectedRole : ""} type="button" onClick={() => setSelected(role)} key={role}><span><strong>{role}</strong><small>{role === "Администратор" ? "Полный доступ" : role === "Руководитель" ? "Своя команда и её данные" : "Только рабочие данные"}</small></span><i>›</i></button>)}</aside><div className={styles.matrix}><header><div><span>Системная роль</span><h3>{selected}</h3><p>{locked ? "Полный доступ нельзя ограничить" : "Базовая область данных для этой роли"}</p></div><span>{locked ? "Защищена" : "Сохранение — следующий этап"}</span></header><div className={styles.matrixRows}>{(Object.keys(accessLabels) as AccessKey[]).map((key) => <label key={key}><span><strong>{accessLabels[key].title}</strong><small>{accessLabels[key].description}</small></span><select disabled value={rules[selected][key]} aria-label={`${accessLabels[key].title}: ${rules[selected][key]}`}><option>Нет доступа</option><option>Только свои</option><option>Своя команда</option><option>Все данные</option></select></label>)}</div></div></section>;
 }
 
-function Invites({ members }: { members: TeamRow[] }) {
+function Invites({ members, onResend, onCancel }: { members: TeamRow[]; onResend: (id: string) => Promise<void>; onCancel: (id: string) => Promise<void> }) {
   const invited = members.filter((member) => member.status === "Приглашён");
-  return <section className={styles.invites}><div className={styles.sectionTitle}><div><h3>Приглашения</h3><p>Доступ ещё не активирован сотрудником</p></div><span>Создание приглашений — следующий этап</span></div>{invited.length ? <div className={styles.inviteList}>{invited.map((member) => <article key={member.id}><span className={styles.avatar}>{member.initials}</span><span><strong>{member.name}</strong><small>{member.email}</small></span><span><b>{member.role}</b><small>{member.lastActive}</small></span></article>)}</div> : <div className={styles.empty}><span>✓</span><h3>Нет ожидающих приглашений</h3><p>Сейчас в системе есть только реальные активные участники.</p></div>}</section>;
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  async function act(id: string, action: (id: string) => Promise<void>) { setBusyId(id); setError(""); try { await action(id); } catch (caught) { setError(caught instanceof Error ? caught.message : "Не удалось выполнить действие."); } finally { setBusyId(null); } }
+  return <section className={styles.invites}><div className={styles.sectionTitle}><div><h3>Приглашения</h3><p>Доступ ещё не активирован сотрудником</p></div><span>Ссылка действует 7 дней</span></div>{error && <p className={styles.inlineError} role="alert">{error}</p>}{invited.length ? <div className={styles.inviteList}>{invited.map((member) => <article key={member.id}><span className={styles.avatar}>{member.initials}</span><span><strong>{member.name}</strong><small>{member.email}</small></span><span><b>{member.role}</b><small>{member.lastActive}</small></span><div><button type="button" disabled={!member.pendingInvitationId || busyId === member.id} onClick={() => member.pendingInvitationId && void act(member.id, () => onResend(member.pendingInvitationId!))}>Новая ссылка</button><button type="button" disabled={!member.pendingInvitationId || busyId === member.id} onClick={() => member.pendingInvitationId && void act(member.id, () => onCancel(member.pendingInvitationId!))}>Отменить</button></div></article>)}</div> : <div className={styles.empty}><span>✓</span><h3>Нет ожидающих приглашений</h3><p>Все приглашённые сотрудники уже подключились.</p></div>}</section>;
 }
 
 function Audit() { return <section className={styles.audit}><div className={styles.sectionTitle}><div><h3>Журнал действий</h3><p>Изменения ролей, доступов и состава команды</p></div><span>Подключим вместе с управлением командой</span></div><div className={styles.empty}><span>↔</span><h3>Действий пока нет</h3><p>Здесь появятся реальные изменения, а не демонстрационные записи.</p></div></section>; }
@@ -148,4 +163,16 @@ function EntityList({ items, empty }: { items: { title: string; subtitle: string
 
 function StatePanel({ title, description }: { title: string; description: string }) {
   return <div className={styles.empty}><h3>{title}</h3><p>{description}</p></div>;
+}
+
+function InviteModal({ onClose, onCreated }: { onClose: () => void; onCreated: (link: InvitationLink) => Promise<void> }) {
+  const [name, setName] = useState(""); const [email, setEmail] = useState(""); const [role, setRole] = useState<"LEAD" | "MANAGER">("MANAGER"); const [submitting, setSubmitting] = useState(false); const [error, setError] = useState("");
+  async function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setSubmitting(true); setError(""); try { const response = await fetch("/api/crm/team/invitations", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name, email, role }) }); const payload = await response.json() as InvitationLink & { message?: string }; if (!response.ok) throw new Error(payload.message || "Не удалось создать приглашение."); await onCreated(payload); } catch (caught) { setError(caught instanceof Error ? caught.message : "Не удалось создать приглашение."); } finally { setSubmitting(false); } }
+  return <div className={styles.modalLayer}><button className={styles.backdrop} type="button" aria-label="Закрыть" onClick={onClose} /><form className={styles.modal} onSubmit={submit}><header><div><span>Новый участник</span><h2>Пригласить сотрудника</h2></div><button type="button" onClick={onClose}>×</button></header><div className={styles.modalBody}><label><span>Имя</span><input autoFocus required minLength={2} value={name} onChange={(event) => setName(event.target.value)} /></label><label><span>Рабочий email</span><input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label><label><span>Роль</span><select value={role} onChange={(event) => setRole(event.target.value as "LEAD" | "MANAGER")}><option value="MANAGER">Менеджер</option><option value="LEAD">Руководитель</option></select></label>{error && <p className={styles.formError} role="alert">{error}</p>}</div><footer><button type="button" onClick={onClose}>Отмена</button><button className={styles.modalPrimary} type="submit" disabled={submitting}>{submitting ? "Создаём…" : "Создать приглашение"}</button></footer></form></div>;
+}
+
+function InvitationLinkModal({ invitation, onClose }: { invitation: InvitationLink; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+  async function copy() { await navigator.clipboard.writeText(invitation.connectUrl); setCopied(true); }
+  return <div className={styles.modalLayer}><button className={styles.backdrop} type="button" aria-label="Закрыть" onClick={onClose} /><section className={styles.modal}><header><div><span>Приглашение создано</span><h2>Передайте ссылку сотруднику</h2></div><button type="button" onClick={onClose}>×</button></header><div className={styles.modalBody}><p className={styles.modalHint}>Ссылка одноразовая и действует 7 дней. После регистрации сотрудник автоматически появится в активной команде.</p><label><span>Ссылка приглашения</span><input readOnly value={invitation.connectUrl} onFocus={(event) => event.currentTarget.select()} /></label></div><footer><button type="button" onClick={onClose}>Готово</button><button className={styles.modalPrimary} type="button" onClick={() => void copy()}>{copied ? "Скопировано" : "Скопировать ссылку"}</button></footer></section></div>;
 }

@@ -72,6 +72,7 @@ export interface TeamMemberRecord {
   status: TeamMemberStatus;
   joinedAt: string;
   updatedAt: string;
+  pendingInvitationId: string | null;
   activeDeals: number;
   activeTasks: number;
   todayTasks: number;
@@ -85,6 +86,31 @@ export interface TeamResponse {
   total: number;
   active: number;
   scope: "ORGANIZATION" | "OWN_TEAM";
+}
+
+export interface CreateTeamInvitationRequest {
+  name: string;
+  email: string;
+  role: Exclude<MembershipRole, "ADMIN">;
+}
+
+export interface TeamInvitationLinkResponse {
+  invitationId: string;
+  connectUrl: string;
+  expiresAt: string;
+}
+
+export interface PublicTeamInvitationResponse {
+  name: string;
+  email: string;
+  role: Exclude<MembershipRole, "ADMIN">;
+  organizationName: string;
+  expiresAt: string;
+  existingAccount: boolean;
+}
+
+export interface AcceptTeamInvitationRequest {
+  password: string;
 }
 
 export type TelegramNotificationAudience = "ALL" | "OWN" | "SELECTED" | "NONE";

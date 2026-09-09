@@ -154,6 +154,7 @@ model Organization {
   notificationOutbox     NotificationOutbox[]
   telegramRecipients     TelegramRecipient[]
   telegramConnectTokens  TelegramConnectToken[]
+  teamInvitations        TeamInvitation[]
 
   @@map("organizations")
 }
@@ -175,6 +176,8 @@ model User {
   telegramRecipients    TelegramRecipient[]
   telegramConnectTokens TelegramConnectToken[]
   telegramSelections    TelegramRecipientSelection[] @relation("TelegramSelectedUser")
+  receivedTeamInvitations TeamInvitation[]          @relation("TeamInvitationUser")
+  sentTeamInvitations     TeamInvitation[]          @relation("TeamInvitationSender")
 
   @@map("users")
 }
@@ -561,4 +564,23 @@ model Membership {
   @@index([organizationId])
   @@index([userId])
   @@map("memberships")
+}
+
+model TeamInvitation {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  invitedById    String    @map("invited_by_id") @db.Uuid
+  tokenHash      String    @unique @map("token_hash")
+  expiresAt      DateTime  @map("expires_at")
+  acceptedAt     DateTime? @map("accepted_at")
+  revokedAt      DateTime? @map("revoked_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation("TeamInvitationUser", fields: [userId], references: [id], onDelete: Cascade)
+  invitedBy      User         @relation("TeamInvitationSender", fields: [invitedById], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, createdAt])
+  @@index([userId, expiresAt])
+  @@map("team_invitations")
 }

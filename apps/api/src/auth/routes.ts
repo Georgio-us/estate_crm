@@ -2,20 +2,23 @@ import type { FastifyInstance, FastifyReply } from "fastify";
 
 import type {
   ApiErrorResponse,
+  AcceptTeamInvitationRequest,
   AuthenticatedUser,
   LoginRequest,
+  PublicTeamInvitationResponse,
   SessionResponse,
 } from "@estate-crm/contracts";
 import type { DatabaseConnection } from "@estate-crm/database";
 
 import type { ApiConfig } from "../config.js";
-import { verifyPassword } from "./password.js";
+import { hashPassword, verifyPassword } from "./password.js";
 import {
   createSessionToken,
   hashSessionToken,
   SESSION_COOKIE_NAME,
   sessionExpiry,
 } from "./session.js";
+import { hashInvitationToken } from "../team/invitations.js";
 
 const unauthorized: ApiErrorResponse = {
   error: "unauthorized",
@@ -174,5 +177,93 @@ export async function registerAuthRoutes(
 
     clearSessionCookie(reply, config);
     return { ok: true };
+  });
+
+  app.get<{ Params: { token: string }; Reply: PublicTeamInvitationResponse | ApiErrorResponse }>("/auth/invitations/:token", {
+    schema: {
+      params: {
+        type: "object",
+        required: ["token"],
+        properties: { token: { type: "string", minLength: 40, maxLength: 100 } },
+      },
+    },
+  }, async (request, reply) => {
+    const invitation = await database.client.teamInvitation.findUnique({
+      where: { tokenHash: hashInvitationToken(request.params.token) },
+      include: { user: true, organization: { select: { id: true, name: true } } },
+    });
+    if (!invitation || invitation.acceptedAt || invitation.revokedAt || invitation.expiresAt <= new Date()) {
+      return reply.status(404).send({ error: "invitation_not_found", message: "Приглашение недействительно или срок его действия истёк." });
+    }
+    const membership = await database.client.membership.findUnique({
+      where: { organizationId_userId: { organizationId: invitation.organizationId, userId: invitation.userId } },
+    });
+    if (!membership || membership.status !== "INVITED" || membership.role === "ADMIN") {
+      return reply.status(404).send({ error: "invitation_not_found", message: "Приглашение больше не ожидает активации." });
+    }
+    return {
+      name: invitation.user.name,
+      email: invitation.user.email,
+      role: membership.role,
+      organizationName: invitation.organization.name,
+      expiresAt: invitation.expiresAt.toISOString(),
+      existingAccount: Boolean(invitation.user.passwordHash),
+    };
+  });
+
+  app.post<{ Params: { token: string }; Body: AcceptTeamInvitationRequest; Reply: SessionResponse | ApiErrorResponse }>("/auth/invitations/:token/accept", {
+    schema: {
+      params: {
+        type: "object",
+        required: ["token"],
+        properties: { token: { type: "string", minLength: 40, maxLength: 100 } },
+      },
+      body: {
+        type: "object",
+        additionalProperties: false,
+        required: ["password"],
+        properties: { password: { type: "string", minLength: 8, maxLength: 256 } },
+      },
+    },
+  }, async (request, reply) => {
+    const invitation = await database.client.teamInvitation.findUnique({
+      where: { tokenHash: hashInvitationToken(request.params.token) },
+      include: { user: true, organization: { select: { id: true, name: true, slug: true } } },
+    });
+    if (!invitation || invitation.acceptedAt || invitation.revokedAt || invitation.expiresAt <= new Date()) {
+      return reply.status(404).send({ error: "invitation_not_found", message: "Приглашение недействительно или срок его действия истёк." });
+    }
+    const membership = await database.client.membership.findUnique({
+      where: { organizationId_userId: { organizationId: invitation.organizationId, userId: invitation.userId } },
+    });
+    if (!membership || membership.status !== "INVITED") {
+      return reply.status(409).send({ error: "invitation_used", message: "Это приглашение уже было активировано или отменено." });
+    }
+    if (invitation.user.passwordHash && !(await verifyPassword(request.body.password, invitation.user.passwordHash))) {
+      return reply.status(401).send({ error: "invalid_password", message: "Пароль существующей учётной записи указан неверно." });
+    }
+
+    const passwordHash = invitation.user.passwordHash ?? await hashPassword(request.body.password);
+    const sessionToken = createSessionToken();
+    const expiresAt = sessionExpiry(config.sessionDays);
+    await database.client.$transaction(async (transaction) => {
+      await transaction.user.update({ where: { id: invitation.userId }, data: { passwordHash } });
+      await transaction.membership.update({ where: { id: membership.id }, data: { status: "ACTIVE" } });
+      await transaction.teamInvitation.update({ where: { id: invitation.id }, data: { acceptedAt: new Date() } });
+      await transaction.teamInvitation.updateMany({
+        where: { organizationId: invitation.organizationId, userId: invitation.userId, id: { not: invitation.id }, acceptedAt: null, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      await transaction.session.create({ data: { tokenHash: hashSessionToken(sessionToken), userId: invitation.userId, expiresAt } });
+    });
+
+    const authenticatedUser: AuthenticatedUser = {
+      id: invitation.user.id,
+      email: invitation.user.email,
+      name: invitation.user.name,
+      organization: { ...invitation.organization, role: membership.role },
+    };
+    reply.setCookie(SESSION_COOKIE_NAME, sessionToken, cookieOptions(config));
+    return { user: authenticatedUser };
   });
 }

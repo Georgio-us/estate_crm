@@ -24,6 +24,7 @@ function testDatabase(role: "ADMIN" | "LEAD" | "MANAGER") {
           assignedTasks: [{ id: "task-1", title: "Позвонить", dueDate: new Date("2020-01-01T00:00:00.000Z"), dueTime: "10:00", contact: { name: "Анна" }, deal: { id: "deal-1", number: 1001, title: "Квартира" } }],
         },
       }]; } },
+      teamInvitation: { async findMany() { return []; } },
     },
     async ping() {}, async disconnect() {},
   } as unknown as DatabaseConnection;
@@ -43,6 +44,63 @@ test("team returns real organization members and workload", async () => {
   assert.equal(payload.members[0].overdueTasks, 1);
   assert.equal(payload.members[0].deals[0].number, 1001);
   assert.equal(payload.members[0].tasks[0].contactName, "Анна");
+  await app.close();
+});
+
+test("admin creates a real expiring invitation link", async () => {
+  const database = testDatabase("ADMIN") as unknown as { client: Record<string, unknown>; disconnect(): Promise<void> };
+  let invited = false;
+  const client = database.client as Record<string, any>;
+  client.user = {
+    async findUnique() { return null; },
+    async create({ data }: { data: { email: string; name: string } }) { return { id: "user-2", passwordHash: null, ...data }; },
+    async update() {},
+  };
+  client.membership.upsert = async () => { invited = true; };
+  client.teamInvitation.updateMany = async () => ({ count: 0 });
+  client.teamInvitation.create = async ({ data }: { data: { expiresAt: Date } }) => ({ id: "invite-1", ...data });
+  client.$transaction = async (callback: (transaction: typeof client) => unknown) => callback(client);
+
+  const app = await buildApp(config, database as unknown as DatabaseConnection);
+  const response = await app.inject({
+    method: "POST",
+    url: "/team/invitations",
+    headers: { cookie: "estate_crm_session=test-token" },
+    payload: { name: "Юлия", email: "YULIA@example.com", role: "LEAD" },
+  });
+  const payload = response.json();
+  assert.equal(response.statusCode, 201);
+  assert.equal(invited, true);
+  assert.equal(payload.invitationId, "invite-1");
+  assert.match(payload.connectUrl, /^http:\/\/localhost:3000\/invite\/[A-Za-z0-9_-]+$/);
+  await app.close();
+});
+
+test("invited employee activates membership and receives a session", async () => {
+  let activated = false;
+  let sessionCreated = false;
+  const client: Record<string, any> = {
+    teamInvitation: {
+      async findUnique() { return { id: "invite-1", organizationId: "org-1", userId: "user-2", acceptedAt: null, revokedAt: null, expiresAt: new Date(Date.now() + 60_000), user: { id: "user-2", name: "Юлия", email: "yulia@example.com", passwordHash: null }, organization: { id: "org-1", name: "Estate CRM", slug: "estate-crm" } }; },
+      async update() {}, async updateMany() {},
+    },
+    membership: {
+      async findUnique() { return { id: "membership-2", role: "LEAD", status: "INVITED" }; },
+      async update() { activated = true; },
+    },
+    user: { async update() {} },
+    session: { async create() { sessionCreated = true; } },
+  };
+  client.$transaction = async (callback: (transaction: typeof client) => unknown) => callback(client);
+  const database = { client, async ping() {}, async disconnect() {} } as unknown as DatabaseConnection;
+  const app = await buildApp(config, database);
+  const token = "a".repeat(43);
+  const response = await app.inject({ method: "POST", url: `/auth/invitations/${token}/accept`, payload: { password: "safe-password" } });
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().user.organization.role, "LEAD");
+  assert.equal(activated, true);
+  assert.equal(sessionCreated, true);
+  assert.ok(response.headers["set-cookie"]?.includes("estate_crm_session="));
   await app.close();
 });
 
