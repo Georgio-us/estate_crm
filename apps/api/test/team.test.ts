@@ -111,3 +111,52 @@ test("manager cannot read the organization team", async () => {
   assert.equal(response.json().error, "forbidden");
   await app.close();
 });
+
+test("admin suspension immediately revokes sessions and Telegram delivery", async () => {
+  const memberId = "7f398049-0273-4c80-9d36-56dc65069437";
+  const database = testDatabase("ADMIN") as unknown as { client: Record<string, any>; disconnect(): Promise<void> };
+  const client = database.client;
+  const writes: string[] = [];
+  client.membership.findUnique = async () => ({
+    id: "membership-2", organizationId: "org-1", userId: memberId, role: "LEAD", status: "ACTIVE",
+    user: { id: memberId, name: "Тимур", phone: null, _count: { assignedDeals: 2, assignedTasks: 1 } },
+  });
+  client.membership.count = async () => 2;
+  client.membership.update = async ({ data }: { data: { status: string } }) => { writes.push(`membership-${data.status}`); };
+  client.user = { async update() { writes.push("profile-updated"); } };
+  client.session.deleteMany = async () => { writes.push("sessions-revoked"); };
+  client.telegramRecipient = {
+    async updateMany({ data }: { data: { active: boolean } }) { writes.push(`telegram-${data.active ? "active" : "inactive"}`); },
+    async findUnique() { return null; },
+  };
+  client.activityEvent = { async create() { writes.push("audit-created"); } };
+  client.$transaction = async (callback: (transaction: typeof client) => unknown) => callback(client);
+
+  const app = await buildApp(config, database as unknown as DatabaseConnection);
+  const response = await app.inject({
+    method: "PATCH", url: `/team/${memberId}`, headers: { cookie: "estate_crm_session=test-token" },
+    payload: { status: "SUSPENDED", confirmAssignedWork: true },
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(writes, ["profile-updated", "membership-SUSPENDED", "sessions-revoked", "telegram-inactive", "audit-created"]);
+  await app.close();
+});
+
+test("admin must explicitly confirm suspension when employee still owns work", async () => {
+  const memberId = "7f398049-0273-4c80-9d36-56dc65069437";
+  const database = testDatabase("ADMIN") as unknown as { client: Record<string, any>; disconnect(): Promise<void> };
+  const client = database.client;
+  client.membership.findUnique = async () => ({
+    id: "membership-2", organizationId: "org-1", userId: memberId, role: "MANAGER", status: "ACTIVE",
+    user: { id: memberId, name: "Тимур", phone: null, _count: { assignedDeals: 1, assignedTasks: 3 } },
+  });
+  client.membership.count = async () => 1;
+
+  const app = await buildApp(config, database as unknown as DatabaseConnection);
+  const response = await app.inject({ method: "PATCH", url: `/team/${memberId}`, headers: { cookie: "estate_crm_session=test-token" }, payload: { status: "SUSPENDED" } });
+
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.json().error, "assigned_work_confirmation_required");
+  await app.close();
+});

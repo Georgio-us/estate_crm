@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { LogoMark } from "@/components/brand/LogoMark";
 import styles from "./integrations.module.css";
 
@@ -11,17 +12,6 @@ type IntegrationsResponse = { connections: IntegrationConnectionRecord[]; events
 type InboundLeadResult = { dealNumber: number; duplicate: boolean; reusedDeal: boolean };
 type GoogleSheetsSetup = { connectionId: string; webhookUrl: string; secret: string };
 type TelegramSetup = { connectUrl: string; expiresAt: string };
-type TelegramAudience = "ALL" | "OWN" | "SELECTED" | "NONE";
-type TelegramPreferences = {
-  connected: boolean;
-  role: "ADMIN" | "LEAD" | "MANAGER";
-  audience: TelegramAudience;
-  leadNotifications: boolean;
-  taskReminderNotifications: boolean;
-  taskOverdueNotifications: boolean;
-  selectedUserIds: string[];
-  members: Array<{ id: string; name: string; role: "ADMIN" | "LEAD" | "MANAGER" }>;
-};
 
 type Category = "Все" | "Реклама" | "Мессенджеры" | "Телефония" | "Данные";
 type Integration = { id: string; provider?: IntegrationProvider; name: string; category: Exclude<Category, "Все">; description: string; mark: string; brand: string; available: boolean };
@@ -84,48 +74,24 @@ function IntegrationPanel({ item, state, onCreated, onClose }: { item: Integrati
   return <div className={styles.panelLayer}><button className={styles.backdrop} type="button" aria-label="Закрыть" onClick={onClose} /><aside className={styles.panel}><header><BrandMark item={item} /><span><small>{item.category}</small><h2>{item.name}</h2></span><button type="button" aria-label="Закрыть" onClick={onClose}>×</button></header><div className={styles.panelBody}><StatusBadge item={item} state={state} /><p>{item.description}</p>
     {state?.lastEventAt && <section className={styles.connectionState}><span><i>✓</i><strong>Последнее событие обработано</strong></span><small>{new Date(state.lastEventAt).toLocaleString("ru")}</small></section>}
     {!item.available && <section className={styles.installInfo}><h3>Адаптер подготовлен</h3><p>Ядро CRM готово принять данные канала. Для реального подключения позже потребуются реквизиты провайдера; сейчас сервис честно не отмечен подключённым.</p><div><span>✓ Единая обработка лида</span><span>✓ Защита от дублей</span><span>✓ Очередь уведомлений</span><span>○ Внешние реквизиты</span></div></section>}
-    {item.id === "telegram" && <TelegramPreferencesPanel busy={busy} feedback={feedback} telegramSetup={telegramSetup} onConnect={connectTelegram} onFeedback={setFeedback} />}
+    {item.id === "telegram" && <TelegramConnectionPanel busy={busy} telegramSetup={telegramSetup} onConnect={connectTelegram} />}
     {item.id === "facebook" && <section className={styles.installInfo}><h3>Подключение Google Sheets</h3><p>Отдельный секрет защищает входящий адрес, а Meta Lead ID не позволяет минутному триггеру создать дубль.</p>{setup ? <div className={styles.credentials}><label><span>Webhook URL</span><input readOnly value={setup.webhookUrl} /></label><label><span>Секрет</span><input readOnly value={setup.secret} /></label></div> : <div><span>{state?.webhookConfigured ? "✓ Подключение настроено" : "○ Ключ ещё не создан"}</span><button className={styles.panelPrimary} disabled={busy} type="button" onClick={setupGoogleSheets}>{busy ? "Создаём…" : state?.webhookConfigured ? "Выпустить новый ключ" : "Создать ключ подключения"}</button></div>}</section>}
     {canTest && <form className={styles.testForm} onSubmit={submit}><h3>Проверить входящий маршрут</h3><label><span>Источник события</span><span className={styles.selectControl}><select value={provider} onChange={(event) => setProvider(event.target.value as typeof provider)}><option value="TEST">Тестовый шлюз</option><option value="META_LEAD_ADS">Facebook Lead Ads</option><option value="INSTAGRAM_DIRECT">Instagram Direct</option><option value="TELEPHONY">Телефония</option></select><i aria-hidden="true">⌄</i></span></label><label><span>Имя</span><input required value={name} onChange={(event) => setName(event.target.value)} placeholder="Тестовый клиент" /></label><label><span>Телефон</span><input required inputMode="tel" value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+380 63 123 45 67" /></label><label><span>Запрос</span><textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder="Интересуется покупкой квартиры" /></label>{feedback && <p className={styles.formFeedback}>{feedback}</p>}<button className={styles.panelPrimary} disabled={busy} type="submit">{busy ? "Обрабатываем…" : "Отправить тестовый лид"}</button></form>}
     {item.id === "csv" && <section className={styles.installInfo}><h3>Файловый обмен уже находится в воронке</h3><p>Импорт и экспорт CSV/XLSX запускаются из меню воронки и не требуют внешней авторизации.</p></section>}
   </div></aside></div>;
 }
 
-function TelegramPreferencesPanel({ busy, feedback, telegramSetup, onConnect, onFeedback }: { busy: boolean; feedback: string; telegramSetup: TelegramSetup | null; onConnect: () => Promise<void>; onFeedback: (message: string) => void }) {
-  const [preferences, setPreferences] = useState<TelegramPreferences | null>(null);
-  const [draft, setDraft] = useState<TelegramPreferences | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+function TelegramConnectionPanel({ busy, telegramSetup, onConnect }: { busy: boolean; telegramSetup: TelegramSetup | null; onConnect: () => Promise<void> }) {
+  const [connected, setConnected] = useState<boolean | null>(null);
   useEffect(() => {
     const controller = new AbortController();
     void fetch("/api/crm/integrations/telegram/preferences", { cache: "no-store", signal: controller.signal })
-      .then(async (response) => { const payload = await response.json() as TelegramPreferences & { message?: string }; if (!response.ok) throw new Error(payload.message || "Не удалось загрузить настройки Telegram."); setPreferences(payload); setDraft(payload); })
-      .catch((caught: unknown) => { if (!controller.signal.aborted) onFeedback(caught instanceof Error ? caught.message : "Не удалось загрузить настройки Telegram."); })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+      .then(async (response) => { const payload = await response.json() as { connected?: boolean }; if (response.ok) setConnected(Boolean(payload.connected)); else setConnected(false); })
+      .catch(() => { if (!controller.signal.aborted) setConnected(false); });
     return () => controller.abort();
-  }, [onFeedback]);
-
-  async function save() {
-    if (!draft) return;
-    setSaving(true); onFeedback("");
-    try {
-      const response = await fetch("/api/crm/integrations/telegram/preferences", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ audience: draft.audience, leadNotifications: draft.leadNotifications, taskReminderNotifications: draft.taskReminderNotifications, taskOverdueNotifications: draft.taskOverdueNotifications, selectedUserIds: draft.selectedUserIds }) });
-      const payload = await response.json() as TelegramPreferences & { message?: string };
-      if (!response.ok) throw new Error(payload.message || "Не удалось сохранить настройки.");
-      setPreferences(payload); setDraft(payload); onFeedback("Настройки Telegram сохранены.");
-    } catch (caught) { onFeedback(caught instanceof Error ? caught.message : "Не удалось сохранить настройки."); }
-    finally { setSaving(false); }
-  }
-
-  const connected = preferences?.connected ?? false;
-  const manager = draft?.role === "MANAGER";
-  const changed = Boolean(draft && preferences && JSON.stringify(draft) !== JSON.stringify(preferences));
+  }, []);
   return <>
-    <section className={styles.installInfo}><h3>{connected ? "Ваш Telegram подключён" : "Подключить уведомления"}</h3><p>Десять минут действует только ссылка активации. После подключения бот остаётся связан с вашим аккаунтом CRM.</p><div><span>✓ Новый лид приходит с номером сделки</span><span>✓ Напоминание за 30 минут до задачи</span><span>✓ Отдельный сигнал о просрочке</span><button className={styles.panelPrimary} disabled={busy} type="button" onClick={() => { void onConnect(); }}>{busy ? "Создаём ссылку…" : connected ? "Подключить другой Telegram" : "Подключить Telegram"}</button>{telegramSetup && <small>Если Telegram не открылся автоматически, <a href={telegramSetup.connectUrl}>откройте бота</a>.</small>}</div></section>
-    {loading ? <section className={styles.preferenceCard}><p>Загружаем настройки уведомлений…</p></section> : draft && connected ? <section className={styles.preferenceCard}><header><div><h3>Какие уведомления получать</h3><p>{manager ? "Менеджеру доступны только собственные задачи и лиды." : "Выберите всю команду, себя или отдельных сотрудников."}</p></div></header><label className={styles.preferenceField}><span>Охват</span><select value={draft.audience} onChange={(event) => setDraft({ ...draft, audience: event.target.value as TelegramAudience, selectedUserIds: event.target.value === "SELECTED" ? draft.selectedUserIds : [] })}>{!manager && <option value="ALL">Вся команда</option>}<option value="OWN">Только мои</option>{!manager && <option value="SELECTED">Выбранные сотрудники</option>}<option value="NONE">Не присылать</option></select></label>{draft.audience === "SELECTED" && <div className={styles.memberChoices}>{draft.members.map((member) => <label key={member.id}><input type="checkbox" checked={draft.selectedUserIds.includes(member.id)} onChange={(event) => setDraft({ ...draft, selectedUserIds: event.target.checked ? [...draft.selectedUserIds, member.id] : draft.selectedUserIds.filter((id) => id !== member.id) })} /><span><strong>{member.name}</strong><small>{member.role === "ADMIN" ? "Администратор" : member.role === "LEAD" ? "Руководитель" : "Менеджер"}</small></span></label>)}</div>}<div className={styles.notificationKinds}><ToggleRow label="Назначение и срок задачи" description="Сообщить сразу при назначении и за 30 минут до срока" checked={draft.taskReminderNotifications} onChange={(checked) => setDraft({ ...draft, taskReminderNotifications: checked })} /><ToggleRow label="Новые лиды" description="Короткое сообщение и номер сделки" checked={draft.leadNotifications} onChange={(checked) => setDraft({ ...draft, leadNotifications: checked })} /><ToggleRow label="Просроченные задачи" description="Отдельно сообщить после наступления срока" checked={draft.taskOverdueNotifications} onChange={(checked) => setDraft({ ...draft, taskOverdueNotifications: checked })} /></div><button className={styles.panelPrimary} type="button" disabled={saving || !changed || (draft.audience === "SELECTED" && !draft.selectedUserIds.length)} onClick={() => { void save(); }}>{saving ? "Сохраняем…" : "Сохранить настройки"}</button>{feedback && <p className={styles.preferenceFeedback}>{feedback}</p>}</section> : null}
+    <section className={styles.installInfo}><h3>{connected === null ? "Проверяем подключение…" : connected ? "Ваш Telegram подключён" : "Подключить Telegram"}</h3><p>Здесь CRM только связывает ваш профиль с ботом. Десять минут действует сама одноразовая ссылка; после активации подключение остаётся постоянным.</p><div><span>✓ Один бот для всей CRM</span><span>✓ Персональная связь с сотрудником</span><span>✓ Короткие ссылки на сделки и задачи</span><button className={styles.panelPrimary} disabled={busy} type="button" onClick={() => { void onConnect(); }}>{busy ? "Создаём ссылку…" : connected ? "Подключить другой Telegram" : "Подключить Telegram"}</button>{telegramSetup && <small>Если Telegram не открылся автоматически, <a href={telegramSetup.connectUrl}>откройте бота</a>.</small>}</div></section>
+    <section className={styles.installInfo}><h3>Настройки уведомлений находятся в команде</h3><p>Охват и виды уведомлений управляются в профиле сотрудника, а не в технической карточке подключения.</p><Link className={styles.teamSettingsLink} href="/team">Открыть команду →</Link></section>
   </>;
-}
-
-function ToggleRow({ label, description, checked, onChange }: { label: string; description: string; checked: boolean; onChange: (checked: boolean) => void }) {
-  return <label><span><strong>{label}</strong><small>{description}</small></span><input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} /></label>;
 }

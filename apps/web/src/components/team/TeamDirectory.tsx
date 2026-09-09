@@ -1,6 +1,9 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
+import { useCurrentUser } from "@/components/auth/AuthContext";
 import type { TeamMember, TeamRole, TeamStatus } from "@/types/crm";
 import styles from "./team.module.css";
 
@@ -39,9 +42,14 @@ type TeamApiResponse = {
 };
 
 type InvitationLink = { invitationId: string; connectUrl: string; expiresAt: string };
+type TelegramAudience = "ALL" | "OWN" | "SELECTED" | "NONE";
+type TelegramPreferences = { connected: boolean; role: ApiRole; audience: TelegramAudience; leadNotifications: boolean; taskReminderNotifications: boolean; taskOverdueNotifications: boolean; selectedUserIds: string[]; members: Array<{ id: string; name: string; role: ApiRole }> };
+type AuditEvent = { id: string; title: string; description: string | null; occurredAt: string; author: { id: string; name: string } | null };
 
 const roleFromApi: Record<ApiRole, TeamRole> = { ADMIN: "Администратор", LEAD: "Руководитель", MANAGER: "Менеджер" };
 const statusFromApi: Record<ApiStatus, TeamStatus> = { ACTIVE: "Активен", INVITED: "Приглашён", SUSPENDED: "Доступ отключён" };
+const roleToApi: Record<TeamRole, ApiRole> = { Администратор: "ADMIN", Руководитель: "LEAD", Менеджер: "MANAGER" };
+const statusToApi: Record<TeamStatus, ApiStatus> = { Активен: "ACTIVE", Приглашён: "INVITED", "Доступ отключён": "SUSPENDED" };
 
 function accessForRole(role: TeamRole): TeamMember["access"] {
   if (role === "Администратор") return { deals: true, contacts: true, properties: true, tasks: true, team: true, settings: true };
@@ -70,11 +78,12 @@ async function requestTeam(): Promise<TeamRow[]> {
 }
 
 export function TeamDirectory() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const currentUser = useCurrentUser();
   const [rows, setRows] = useState<TeamRow[]>([]);
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [loadError, setLoadError] = useState("");
-  const [tab, setTab] = useState<ModuleTab>("overview");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [invitationLink, setInvitationLink] = useState<InvitationLink | null>(null);
   const [search, setSearch] = useState("");
@@ -95,12 +104,16 @@ export function TeamDirectory() {
     return () => { active = false; };
   }, []);
 
+  const requestedTab = searchParams.get("tab");
+  const tab: ModuleTab = moduleTabs.some((item) => item.id === requestedTab) ? requestedTab as ModuleTab : "overview";
+  const selectedId = searchParams.get("member");
   const selected = rows.find((member) => member.id === selectedId);
 
-  function openMember(id: string) { setSelectedId(id); }
+  function setTab(nextTab: ModuleTab) { router.push(nextTab === "overview" ? "/team" : `/team?tab=${nextTab}`); }
+  function openMember(id: string) { router.push(`/team?member=${id}`); }
   async function refreshTeam() { setRows(await requestTeam()); }
 
-  if (selected) return <MemberPage member={selected} onBack={() => setSelectedId(null)} />;
+  if (selected) return <MemberPage key={`${selected.id}-${selected.name}-${selected.phone}-${selected.role}-${selected.status}`} member={selected} currentUserId={currentUser.id} currentUserRole={currentUser.organization.role} onBack={() => router.push("/team")} onUpdated={refreshTeam} />;
 
   return <section className={styles.page}>
     <header className={styles.topbar}><h1>Команда</h1><label className={styles.search}><span>⌕</span><input type="search" value={search} onFocus={() => setTab("people")} onChange={(event) => setSearch(event.target.value)} placeholder="Сотрудник или email" /></label><button className={styles.primaryButton} type="button" aria-label="Пригласить сотрудника" onClick={() => setInviteOpen(true)}><span>＋</span><b>Пригласить</b></button></header>
@@ -141,7 +154,7 @@ function People({ rows, search, role, status, onSearch, onRole, onStatus, onOpen
 
 function Roles({ rules }: { rules: Record<TeamRole, Record<AccessKey, Scope>> }) {
   const [selected, setSelected] = useState<TeamRole>("Менеджер"); const locked = selected === "Администратор";
-  return <section className={styles.roles}><aside><h3>Роли</h3><p>Наборы прав для участников</p>{roles.map((role) => <button className={selected === role ? styles.selectedRole : ""} type="button" onClick={() => setSelected(role)} key={role}><span><strong>{role}</strong><small>{role === "Администратор" ? "Полный доступ" : role === "Руководитель" ? "Своя команда и её данные" : "Только рабочие данные"}</small></span><i>›</i></button>)}</aside><div className={styles.matrix}><header><div><span>Системная роль</span><h3>{selected}</h3><p>{locked ? "Полный доступ нельзя ограничить" : "Базовая область данных для этой роли"}</p></div><span>{locked ? "Защищена" : "Сохранение — следующий этап"}</span></header><div className={styles.matrixRows}>{(Object.keys(accessLabels) as AccessKey[]).map((key) => <label key={key}><span><strong>{accessLabels[key].title}</strong><small>{accessLabels[key].description}</small></span><select disabled value={rules[selected][key]} aria-label={`${accessLabels[key].title}: ${rules[selected][key]}`}><option>Нет доступа</option><option>Только свои</option><option>Своя команда</option><option>Все данные</option></select></label>)}</div></div></section>;
+  return <section className={styles.roles}><aside><h3>Роли</h3><p>Наборы прав для участников</p>{roles.map((role) => <button className={selected === role ? styles.selectedRole : ""} type="button" onClick={() => setSelected(role)} key={role}><span><strong>{role}</strong><small>{role === "Администратор" ? "Полный доступ" : role === "Руководитель" ? "Своя команда и её данные" : "Только рабочие данные"}</small></span><i>›</i></button>)}</aside><div className={styles.matrix}><header><div><span>Системная роль</span><h3>{selected}</h3><p>{locked ? "Полный доступ нельзя ограничить" : "Базовая область данных для этой роли"}</p></div><span>{locked ? "Защищена" : "Роль назначается в профиле"}</span></header><div className={styles.matrixRows}>{(Object.keys(accessLabels) as AccessKey[]).map((key) => <label key={key}><span><strong>{accessLabels[key].title}</strong><small>{accessLabels[key].description}</small></span><select disabled value={rules[selected][key]} aria-label={`${accessLabels[key].title}: ${rules[selected][key]}`}><option>Нет доступа</option><option>Только свои</option><option>Своя команда</option><option>Все данные</option></select></label>)}</div></div></section>;
 }
 
 function Invites({ members, onResend, onCancel }: { members: TeamRow[]; onResend: (id: string) => Promise<void>; onCancel: (id: string) => Promise<void> }) {
@@ -152,11 +165,90 @@ function Invites({ members, onResend, onCancel }: { members: TeamRow[]; onResend
   return <section className={styles.invites}><div className={styles.sectionTitle}><div><h3>Приглашения</h3><p>Доступ ещё не активирован сотрудником</p></div><span>Ссылка действует 7 дней</span></div>{error && <p className={styles.inlineError} role="alert">{error}</p>}{invited.length ? <div className={styles.inviteList}>{invited.map((member) => <article key={member.id}><span className={styles.avatar}>{member.initials}</span><span><strong>{member.name}</strong><small>{member.email}</small></span><span><b>{member.role}</b><small>{member.lastActive}</small></span><div><button type="button" disabled={!member.pendingInvitationId || busyId === member.id} onClick={() => member.pendingInvitationId && void act(member.id, () => onResend(member.pendingInvitationId!))}>Новая ссылка</button><button type="button" disabled={!member.pendingInvitationId || busyId === member.id} onClick={() => member.pendingInvitationId && void act(member.id, () => onCancel(member.pendingInvitationId!))}>Отменить</button></div></article>)}</div> : <div className={styles.empty}><span>✓</span><h3>Нет ожидающих приглашений</h3><p>Все приглашённые сотрудники уже подключились.</p></div>}</section>;
 }
 
-function Audit() { return <section className={styles.audit}><div className={styles.sectionTitle}><div><h3>Журнал действий</h3><p>Изменения ролей, доступов и состава команды</p></div><span>Подключим вместе с управлением командой</span></div><div className={styles.empty}><span>↔</span><h3>Действий пока нет</h3><p>Здесь появятся реальные изменения, а не демонстрационные записи.</p></div></section>; }
+function Audit() {
+  const [events, setEvents] = useState<AuditEvent[] | null>(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch("/api/crm/team/audit", { cache: "no-store", signal: controller.signal })
+      .then(async (response) => { const payload = await response.json() as { events?: AuditEvent[]; message?: string }; if (!response.ok) throw new Error(payload.message || "Не удалось загрузить журнал."); setEvents(payload.events ?? []); })
+      .catch((caught: unknown) => { if (!controller.signal.aborted) setError(caught instanceof Error ? caught.message : "Не удалось загрузить журнал."); });
+    return () => controller.abort();
+  }, []);
+  return <section className={styles.audit}><div className={styles.sectionTitle}><div><h3>Журнал действий</h3><p>Изменения ролей, доступов и уведомлений</p></div><span>{events?.length ?? 0} событий</span></div>{error ? <div className={styles.empty}><h3>Журнал недоступен</h3><p>{error}</p></div> : events === null ? <div className={styles.empty}><h3>Загружаем журнал</h3></div> : events.length ? <div className={styles.auditList}>{events.map((event) => <article key={event.id}><span>↔</span><div><strong>{event.title}</strong><p>{event.description}</p><small>{event.author?.name ?? "Система"}</small></div><time>{new Date(event.occurredAt).toLocaleString("ru")}</time></article>)}</div> : <div className={styles.empty}><span>✓</span><h3>Изменений пока нет</h3><p>Первое изменение роли, профиля или доступа появится здесь.</p></div>}</section>;
+}
 
-function MemberPage({ member, onBack }: { member: TeamRow; onBack: () => void }) {
+function MemberPage({ member, currentUserId, currentUserRole, onBack, onUpdated }: { member: TeamRow; currentUserId: string; currentUserRole: ApiRole; onBack: () => void; onUpdated: () => Promise<void> }) {
   const [tab, setTab] = useState<MemberTab>("overview");
-  return <section className={styles.page}><header className={styles.topbar}><button className={styles.backLink} type="button" onClick={onBack}>← Команда</button><span className={styles.readOnlyNote}>Профиль из реальной учётной записи</span></header><main className={styles.memberPage}><div className={styles.memberHero}><span className={styles.heroAvatar}>{member.initials}</span><div><span>Участник команды</span><h2>{member.name}</h2><p>{member.email} · {member.role}</p></div><span className={`${styles.memberStatus} ${member.status === "Активен" ? styles.active : ""}`}>{member.status}</span></div><nav className={styles.tabs}>{(["overview", "deals", "tasks", "access"] as MemberTab[]).map((item) => <button className={tab === item ? styles.tabActive : ""} type="button" onClick={() => setTab(item)} key={item}>{item === "overview" ? "Обзор" : item === "deals" ? `Сделки ${member.activeDeals}` : item === "tasks" ? `Задачи ${member.activeTasks}` : "Доступ"}</button>)}</nav>{tab === "overview" && <div className={styles.memberOverview}><section><h3>Рабочая нагрузка</h3><div className={styles.memberMetrics}><div><strong>{member.activeDeals}</strong><span>активных сделок</span></div><div><strong>{member.activeTasks}</strong><span>активных задач</span></div><div><strong>{member.overdueTasks}</strong><span>просрочено</span></div></div></section><section><h3>Профиль</h3><div className={styles.profileRows}><label><span>Имя</span><input readOnly value={member.name} /></label><label><span>Email</span><input readOnly value={member.email} /></label><label><span>Телефон</span><input readOnly value={member.phone || "Не указан"} /></label><label><span>Роль</span><select disabled value={member.role}>{roles.map((role) => <option key={role}>{role}</option>)}</select></label><label><span>Статус</span><select disabled value={member.status}><option>Активен</option><option>Приглашён</option><option>Доступ отключён</option></select></label></div></section></div>}{tab === "deals" && <EntityList items={member.deals.map((deal) => ({ title: `Сделка #${deal.number} · ${deal.title}`, subtitle: deal.request, meta: "Активна" }))} empty="Активных сделок нет" />}{tab === "tasks" && <EntityList items={member.tasks.map((task) => ({ title: task.title, subtitle: task.contactName || task.dealTitle || "Без контакта", meta: task.dueDate ? `${task.dueDate}${task.dueTime ? `, ${task.dueTime}` : ""}` : "Без срока" }))} empty="Задач нет" />}{tab === "access" && <div className={styles.memberAccess}><header><h3>Права роли</h3><p>Сейчас показан базовый набор роли «{member.role}». Индивидуальные настройки подключим следующим этапом.</p></header>{(Object.keys(accessLabels) as AccessKey[]).map((key) => <label key={key}><span><strong>{accessLabels[key].title}</strong><small>{accessLabels[key].description}</small></span><input type="checkbox" checked={member.access[key]} disabled readOnly /></label>)}</div>}</main></section>;
+  const [name, setName] = useState(member.name);
+  const [phone, setPhone] = useState(member.phone ?? "");
+  const [role, setRole] = useState<TeamRole>(member.role);
+  const [status, setStatus] = useState<TeamStatus>(member.status);
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState("");
+  const [confirmSuspension, setConfirmSuspension] = useState(false);
+  const editable = currentUserRole === "ADMIN" && member.status !== "Приглашён";
+  const changed = name.trim() !== member.name || phone.trim() !== (member.phone ?? "") || role !== member.role || status !== member.status;
+
+  async function save(confirmAssignedWork = false) {
+    if (!editable || !changed) return;
+    if (status === "Доступ отключён" && member.status === "Активен" && (member.activeDeals > 0 || member.activeTasks > 0) && !confirmAssignedWork) { setConfirmSuspension(true); return; }
+    setSaving(true); setFeedback("");
+    try {
+      const response = await fetch(`/api/crm/team/${member.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: name.trim(), phone: phone.trim() || null, role: roleToApi[role], status: statusToApi[status], confirmAssignedWork }) });
+      const payload = await response.json() as { message?: string; error?: string };
+      if (!response.ok) {
+        if (payload.error === "assigned_work_confirmation_required") { setConfirmSuspension(true); return; }
+        throw new Error(payload.message || "Не удалось сохранить сотрудника.");
+      }
+      await onUpdated(); setConfirmSuspension(false); setFeedback("Изменения сохранены.");
+    } catch (caught) { setFeedback(caught instanceof Error ? caught.message : "Не удалось сохранить сотрудника."); }
+    finally { setSaving(false); }
+  }
+
+  return <section className={styles.page}><header className={styles.topbar}><button className={styles.backLink} type="button" onClick={onBack}>← Команда</button><span className={styles.readOnlyNote}>{editable ? "Управление профилем и доступом" : "Просмотр профиля"}</span>{editable && <button className={styles.saveMember} type="button" disabled={!changed || saving} onClick={() => { void save(); }}>{saving ? "Сохраняем…" : "Сохранить"}</button>}</header><main className={styles.memberPage}><div className={styles.memberHero}><span className={styles.heroAvatar}>{member.initials}</span><div><span>Участник команды</span><h2>{member.name}</h2><p>{member.email} · {member.role}</p></div><span className={`${styles.memberStatus} ${member.status === "Активен" ? styles.active : ""}`}>{member.status}</span></div>{feedback && <p className={styles.memberFeedback} role="status">{feedback}</p>}<nav className={styles.tabs}>{(["overview", "deals", "tasks", "access"] as MemberTab[]).map((item) => <button className={tab === item ? styles.tabActive : ""} type="button" onClick={() => setTab(item)} key={item}>{item === "overview" ? "Обзор" : item === "deals" ? `Сделки ${member.activeDeals}` : item === "tasks" ? `Задачи ${member.activeTasks}` : "Доступ и уведомления"}</button>)}</nav>{tab === "overview" && <div className={styles.memberOverview}><section><h3>Рабочая нагрузка</h3><div className={styles.memberMetrics}><div><strong>{member.activeDeals}</strong><span>активных сделок</span></div><div><strong>{member.activeTasks}</strong><span>активных задач</span></div><div><strong>{member.overdueTasks}</strong><span>просрочено</span></div></div></section><section><h3>Профиль</h3><div className={styles.profileRows}><label><span>Имя</span><input readOnly={!editable} value={name} onChange={(event) => setName(event.target.value)} /></label><label><span>Email</span><input readOnly value={member.email} /></label><label><span>Телефон</span><input readOnly={!editable} value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="Не указан" /></label><label><span>Роль</span><select disabled={!editable || member.id === currentUserId} value={role} onChange={(event) => setRole(event.target.value as TeamRole)}>{roles.map((item) => <option key={item}>{item}</option>)}</select></label><label><span>Статус</span><select disabled={!editable || member.id === currentUserId} value={status} onChange={(event) => setStatus(event.target.value as TeamStatus)}><option>Активен</option><option>Доступ отключён</option></select></label></div>{member.id === currentUserId && editable && <p className={styles.fieldNote}>Собственную роль и доступ должен изменять другой администратор. Это защищает рабочее пространство от случайной блокировки.</p>}</section></div>}{tab === "deals" && <EntityList items={member.deals.map((deal) => ({ title: `Сделка #${deal.number} · ${deal.title}`, subtitle: deal.request, meta: "Активна" }))} empty="Активных сделок нет" />}{tab === "tasks" && <EntityList items={member.tasks.map((task) => ({ title: task.title, subtitle: task.contactName || task.dealTitle || "Без контакта", meta: task.dueDate ? `${task.dueDate}${task.dueTime ? `, ${task.dueTime}` : ""}` : "Без срока" }))} empty="Задач нет" />}{tab === "access" && <div className={styles.accessStack}><div className={styles.memberAccess}><header><h3>Права роли</h3><p>Базовый набор роли «{role}». Изменение роли применяется после сохранения профиля.</p></header>{(Object.keys(accessLabels) as AccessKey[]).map((key) => <label key={key}><span><strong>{accessLabels[key].title}</strong><small>{accessLabels[key].description}</small></span><input type="checkbox" checked={accessForRole(role)[key]} disabled readOnly /></label>)}</div><MemberNotifications member={member} currentUserId={currentUserId} currentUserRole={currentUserRole} /></div>}</main>{confirmSuspension && <ConfirmSuspension member={member} busy={saving} onCancel={() => setConfirmSuspension(false)} onConfirm={() => { void save(true); }} />}</section>;
+}
+
+function ConfirmSuspension({ member, busy, onCancel, onConfirm }: { member: TeamRow; busy: boolean; onCancel: () => void; onConfirm: () => void }) {
+  return <div className={styles.modalLayer}><button className={styles.backdrop} type="button" aria-label="Закрыть" onClick={onCancel} /><section className={styles.modal}><header><div><span>Отключение доступа</span><h2>Приостановить доступ для {member.name}?</h2></div><button type="button" onClick={onCancel}>×</button></header><div className={styles.modalBody}><p className={styles.modalHint}>Сотрудник сразу выйдет из CRM и перестанет получать Telegram-уведомления.</p><div className={styles.suspensionFacts}><span><strong>{member.activeDeals}</strong> активных сделок</span><span><strong>{member.activeTasks}</strong> активных задач</span></div><p className={styles.modalHint}>Рабочие данные не удалятся. Их можно будет переназначить другому сотруднику.</p></div><footer><button type="button" onClick={onCancel}>Отмена</button><button className={styles.dangerButton} type="button" disabled={busy} onClick={onConfirm}>{busy ? "Отключаем…" : "Отключить доступ"}</button></footer></section></div>;
+}
+
+function MemberNotifications({ member, currentUserId, currentUserRole }: { member: TeamRow; currentUserId: string; currentUserRole: ApiRole }) {
+  const [saved, setSaved] = useState<TelegramPreferences | null>(null);
+  const [draft, setDraft] = useState<TelegramPreferences | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [feedback, setFeedback] = useState("");
+  const canManage = currentUserId === member.id || currentUserRole === "ADMIN" || (currentUserRole === "LEAD" && member.role !== "Администратор");
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch(`/api/crm/team/${member.id}/notifications`, { cache: "no-store", signal: controller.signal })
+      .then(async (response) => { const payload = await response.json() as TelegramPreferences & { message?: string }; if (!response.ok) throw new Error(payload.message || "Не удалось загрузить настройки уведомлений."); setSaved(payload); setDraft(payload); })
+      .catch((caught: unknown) => { if (!controller.signal.aborted) setFeedback(caught instanceof Error ? caught.message : "Не удалось загрузить настройки уведомлений."); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, [member.id]);
+  async function save() {
+    if (!draft) return;
+    setSaving(true); setFeedback("");
+    try {
+      const response = await fetch(`/api/crm/team/${member.id}/notifications`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ audience: draft.audience, leadNotifications: draft.leadNotifications, taskReminderNotifications: draft.taskReminderNotifications, taskOverdueNotifications: draft.taskOverdueNotifications, selectedUserIds: draft.selectedUserIds }) });
+      const payload = await response.json() as TelegramPreferences & { message?: string };
+      if (!response.ok) throw new Error(payload.message || "Не удалось сохранить уведомления.");
+      setSaved(payload); setDraft(payload); setFeedback("Настройки уведомлений сохранены.");
+    } catch (caught) { setFeedback(caught instanceof Error ? caught.message : "Не удалось сохранить уведомления."); }
+    finally { setSaving(false); }
+  }
+  if (loading) return <section className={styles.notificationPanel}><h3>Telegram-уведомления</h3><p>Загружаем настройки…</p></section>;
+  if (!draft) return <section className={styles.notificationPanel}><h3>Telegram-уведомления</h3><p>{feedback}</p></section>;
+  if (!draft.connected) return <section className={styles.notificationPanel}><header><div><h3>Telegram-уведомления</h3><p>Сотрудник ещё не связал свой Telegram с CRM.</p></div><span className={styles.disconnected}>Не подключён</span></header>{member.id === currentUserId ? <Link href="/integrations">Подключить Telegram →</Link> : <p>Попросите сотрудника войти под своим аккаунтом и подключить бота в разделе «Интеграции».</p>}</section>;
+  const manager = draft.role === "MANAGER";
+  const changed = JSON.stringify(draft) !== JSON.stringify(saved);
+  return <section className={styles.notificationPanel}><header><div><h3>Telegram-уведомления</h3><p>Что бот отправляет этому сотруднику и по чьей работе.</p></div><span className={styles.connected}>Подключён</span></header><label className={styles.notificationScope}><span>Охват событий</span><select disabled={!canManage} value={draft.audience} onChange={(event) => setDraft({ ...draft, audience: event.target.value as TelegramAudience, selectedUserIds: event.target.value === "SELECTED" ? draft.selectedUserIds : [] })}>{!manager && <option value="ALL">Вся команда</option>}<option value="OWN">Только свои</option>{!manager && <option value="SELECTED">Выбранные сотрудники</option>}<option value="NONE">Не присылать</option></select></label>{draft.audience === "SELECTED" && <div className={styles.notificationMembers}>{draft.members.map((item) => <label key={item.id}><input disabled={!canManage} type="checkbox" checked={draft.selectedUserIds.includes(item.id)} onChange={(event) => setDraft({ ...draft, selectedUserIds: event.target.checked ? [...draft.selectedUserIds, item.id] : draft.selectedUserIds.filter((id) => id !== item.id) })} /><span><strong>{item.name}</strong><small>{roleFromApi[item.role]}</small></span></label>)}</div>}<div className={styles.notificationKinds}><NotificationToggle disabled={!canManage} label="Назначение и срок задачи" description="Сразу при назначении и за 30 минут до срока" checked={draft.taskReminderNotifications} onChange={(checked) => setDraft({ ...draft, taskReminderNotifications: checked })} /><NotificationToggle disabled={!canManage} label="Новые лиды" description="Короткое сообщение с номером сделки" checked={draft.leadNotifications} onChange={(checked) => setDraft({ ...draft, leadNotifications: checked })} /><NotificationToggle disabled={!canManage} label="Просроченные задачи" description="Отдельный сигнал после наступления срока" checked={draft.taskOverdueNotifications} onChange={(checked) => setDraft({ ...draft, taskOverdueNotifications: checked })} /></div>{canManage && <button className={styles.saveNotifications} type="button" disabled={saving || !changed || (draft.audience === "SELECTED" && !draft.selectedUserIds.length)} onClick={() => { void save(); }}>{saving ? "Сохраняем…" : "Сохранить уведомления"}</button>}{feedback && <p className={styles.notificationFeedback}>{feedback}</p>}</section>;
+}
+
+function NotificationToggle({ label, description, checked, disabled, onChange }: { label: string; description: string; checked: boolean; disabled: boolean; onChange: (checked: boolean) => void }) {
+  return <label><span><strong>{label}</strong><small>{description}</small></span><input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} /></label>;
 }
 
 function EntityList({ items, empty }: { items: { title: string; subtitle: string; meta: string }[]; empty: string }) { return items.length ? <div className={styles.entityList}>{items.map((item, index) => <article key={`${item.title}-${index}`}><span>◇</span><span><strong>{item.title}</strong><small>{item.subtitle}</small></span><time>{item.meta}</time></article>)}</div> : <div className={styles.empty}><h3>{empty}</h3></div>; }

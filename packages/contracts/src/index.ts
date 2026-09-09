@@ -88,6 +88,26 @@ export interface TeamResponse {
   scope: "ORGANIZATION" | "OWN_TEAM";
 }
 
+export interface UpdateTeamMemberRequest {
+  name?: string;
+  phone?: string | null;
+  role?: MembershipRole;
+  status?: Extract<TeamMemberStatus, "ACTIVE" | "SUSPENDED">;
+  confirmAssignedWork?: boolean;
+}
+
+export interface TeamAuditRecord {
+  id: string;
+  title: string;
+  description: string | null;
+  occurredAt: string;
+  author: { id: string; name: string } | null;
+}
+
+export interface TeamAuditResponse {
+  events: TeamAuditRecord[];
+}
+
 export interface CreateTeamInvitationRequest {
   name: string;
   email: string;

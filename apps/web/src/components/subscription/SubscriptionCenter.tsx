@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import styles from "./subscription.module.css";
 
 type Tab = "overview" | "plans" | "extensions" | "usage" | "payments";
@@ -37,8 +38,11 @@ const usage = [
   { label: "Хранилище файлов", value: "1,8 из 10 ГБ", percent: 18, detail: "Записи и вложения" },
 ];
 
-export function SubscriptionCenter({ initialTab = "overview" }: { initialTab?: Tab }) {
-  const [tab, setTab] = useState<Tab>(initialTab);
+export function SubscriptionCenter() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const requestedTab = searchParams.get("tab");
+  const tab: Tab = tabs.some((item) => item.id === requestedTab) ? requestedTab as Tab : "overview";
   const [annual, setAnnual] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<PlanId>("base");
   const [notice, setNotice] = useState("");
@@ -48,6 +52,10 @@ export function SubscriptionCenter({ initialTab = "overview" }: { initialTab?: T
   function notify(message: string) {
     setNotice(message);
     window.setTimeout(() => setNotice(""), 2600);
+  }
+
+  function setTab(nextTab: Tab) {
+    router.push(nextTab === "overview" ? "/subscription" : `/subscription?tab=${nextTab}`);
   }
 
   return (
