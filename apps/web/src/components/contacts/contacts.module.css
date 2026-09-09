@@ -218,11 +218,14 @@
   .tableWrap td:nth-child(3) { align-self: center; text-align: right; }
   .tableWrap td:nth-child(3) .assigneeDot { margin-right: 5px; }
   .avatar { width: 44px; height: 44px; }
-  .drawer { width: 100vw; overflow-y: auto; }
-  .drawerHeader { min-height: 106px; padding: 18px; }
-  .contactTitleInput { width: calc(100vw - 140px); }
-  .drawerWorkspace { display: block; overflow: visible; }
-  .detailsPane, .activityPane { overflow: visible; border-right: 0; }
+  .drawer { width: 100%; max-width: 100%; overflow-x: hidden; overflow-y: auto; }
+  .drawerHeader { min-height: 106px; gap: 10px; padding: 18px; }
+  .identity { min-width: 0; flex: 1; }
+  .identity > div { min-width: 0; }
+  .headerActions { flex: 0 0 auto; }
+  .contactTitleInput { width: 100%; max-width: 100%; min-width: 0; }
+  .drawerWorkspace { display: block; width: 100%; min-width: 0; overflow: visible; }
+  .detailsPane, .activityPane { width: 100%; min-width: 0; overflow: visible; border-right: 0; }
   .activityPane { min-height: 540px; }
   .formGrid { grid-template-columns: 1fr; }
   .modalLayer { align-items: end; padding: 0; }

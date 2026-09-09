@@ -801,17 +801,19 @@
 }
 
 @media (max-width: 760px) {
-  .drawer { width: 100vw; overflow-y: auto; border-left: 0; }
-  .header { min-height: 104px; padding: 19px 18px 16px; }
-  .titleInput { width: calc(100vw - 96px); font-size: var(--font-size-heading-md); }
-  .titleValue { max-width: calc(100vw - 96px); font-size: var(--font-size-heading-md); }
+  .drawer { width: 100%; max-width: 100%; overflow-x: hidden; overflow-y: auto; border-left: 0; }
+  .header { min-height: 104px; gap: 10px; padding: 19px 18px 16px; }
+  .headerIdentity { width: 0; flex: 1; }
+  .headerActions { flex: 0 0 auto; }
+  .titleInput,
+  .titleValue { width: 100%; max-width: 100%; min-width: 0; font-size: var(--font-size-heading-md); }
   .taskSchedule { flex-wrap: wrap; }
   .quickDates { width: 100%; flex-basis: 100%; }
   .taskSchedule label { flex: 1; }
   .taskSchedule input, .taskSchedule input[type="time"] { width: 100%; }
-  .workspace { display: block; overflow: visible; }
+  .workspace { display: block; width: 100%; min-width: 0; overflow: visible; }
   .detailsPane,
-  .activityPane { overflow: visible; border-right: 0; }
+  .activityPane { width: 100%; min-width: 0; overflow: visible; border-right: 0; }
   .statusSection,
   .propertySection,
   .contactSection,

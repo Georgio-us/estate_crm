@@ -76,7 +76,9 @@ body {
 }
 
 button,
-input {
+input,
+select,
+textarea {
   font: inherit;
 }
 
@@ -91,4 +93,31 @@ a {
 
 ::selection {
   background: #dbeafe;
+}
+
+@media (max-width: 760px) {
+  :root {
+    --font-size-caption: 13px;
+    --font-size-body-sm: 14px;
+    --font-size-body: 15px;
+    --font-size-body-lg: 17px;
+    --font-size-heading-sm: 21px;
+    --font-size-heading-md: 28px;
+    --font-size-heading-lg: 34px;
+  }
+
+  html {
+    overflow-x: clip;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    overflow-x: clip;
+  }
+
+  body input:not([type="checkbox"]):not([type="radio"]),
+  body select:not([multiple]),
+  body textarea:not([readonly]) {
+    font-size: 16px;
+  }
 }
