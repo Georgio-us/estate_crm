@@ -673,6 +673,20 @@
   text-align: center;
 }
 
+.showMoreHistory {
+  width: 100%;
+  min-height: 42px;
+  margin-top: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  color: #386bbb;
+  cursor: pointer;
+  font-size: var(--font-size-body-sm);
+}
+
+.showMoreHistory:hover { background: var(--surface-muted); }
+
 .composer {
   position: absolute;
   z-index: 3;
@@ -823,6 +837,10 @@
   .activityToolbar { padding: 16px 18px; border-top: 8px solid var(--background); }
   .activityFeed { min-height: 360px; padding: 22px 18px 150px; }
   .composer { position: absolute; right: 14px; bottom: 14px; left: 14px; }
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .keyboardHint { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

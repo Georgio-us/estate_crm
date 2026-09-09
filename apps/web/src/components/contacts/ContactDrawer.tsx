@@ -5,6 +5,7 @@ import type { RelatedDeal } from "./ContactsDirectory";
 import styles from "./contacts.module.css";
 
 const icons = { note: "≡", task: "✓", change: "↔", source: "↗", object: "⌂" };
+const historyPageSize = 7;
 
 export function ContactDrawer({ contact, contacts, deals, activities, assignees, onSave, onAddNote, onLinkContact, onUnlinkContact, onCreateDeal, onCreateTask, onClose }: { contact: Contact; contacts: Contact[]; deals: RelatedDeal[]; activities: ActivityEvent[]; assignees: Array<{ id: string; name: string }>; onSave: (contact: Contact) => Promise<Contact>; onAddNote: (text: string) => Promise<void>; onLinkContact: (contactId: string, label?: string) => Promise<void>; onUnlinkContact: (contactId: string) => Promise<void>; onCreateDeal: () => void; onCreateTask: () => void; onClose: () => void }) {
   const [note, setNote] = useState("");
@@ -19,6 +20,7 @@ export function ContactDrawer({ contact, contacts, deals, activities, assignees,
   const [relationLabel, setRelationLabel] = useState("");
   const [relationError, setRelationError] = useState("");
   const [relationBusy, setRelationBusy] = useState(false);
+  const [visibleActivityCount, setVisibleActivityCount] = useState(historyPageSize);
   const editable = (value: Contact) => ({ name: value.name, phone: value.phone, email: value.email, telegram: value.telegram, source: value.source, assigneeId: value.assigneeId, comment: value.comment });
   const isDirty = JSON.stringify(editable(draft)) !== JSON.stringify(editable(contact));
   const emailIsValid = !draft.email || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email);
@@ -61,6 +63,7 @@ export function ContactDrawer({ contact, contacts, deals, activities, assignees,
   }
   const relatedContacts = contact.relatedContacts || [];
   const availableContacts = contacts.filter((item) => item.id !== contact.id && !relatedContacts.some((related) => related.id === item.id));
+  const visibleActivities = activities.slice(0, visibleActivityCount);
   async function submitNote() {
     if (!note.trim() || isNoteSaving) return;
     setIsNoteSaving(true);
@@ -94,7 +97,7 @@ export function ContactDrawer({ contact, contacts, deals, activities, assignees,
           </div>
           <div className={styles.activityPane}>
             <div className={styles.activityHeader}><div><h3>История взаимодействия</h3><span>{activities.length} событий по контакту</span></div><button type="button" onClick={onCreateTask}>＋ Задача</button></div>
-            <div className={styles.feed}><div className={styles.dateDivider}><span>История контакта</span></div>{activities.length ? <div className={styles.timeline}>{activities.map((event) => <article className={styles.event} key={event.id}><span className={styles.eventIcon}>{icons[event.category]}</span><div><strong>{event.title}</strong>{event.description && <p>{event.description}</p>}{event.author && <small>{event.author}</small>}</div><time>{event.occurredAt}</time></article>)}</div> : <div className={styles.emptyHistory}>История появится после первого действия</div>}</div>
+            <div className={styles.feed}><div className={styles.dateDivider}><span>История контакта</span></div>{activities.length ? <><div className={styles.timeline}>{visibleActivities.map((event) => <article className={styles.event} key={event.id}><span className={styles.eventIcon}>{icons[event.category]}</span><div><strong>{event.title}</strong>{event.description && <p>{event.description}</p>}{event.author && <small>{event.author}</small>}</div><time>{event.occurredAt}</time></article>)}</div>{activities.length > visibleActivityCount && <button className={styles.showMoreHistory} type="button" onClick={() => setVisibleActivityCount((count) => count + historyPageSize)}>Показать предыдущие · {activities.length - visibleActivityCount}</button>}</> : <div className={styles.emptyHistory}>История появится после первого действия</div>}</div>
             <div className={styles.composer}><span>Примечание</span><textarea value={note} onChange={(event) => setNote(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); void submitNote(); } }} placeholder="Добавить примечание о контакте…" />{noteError && <p className={styles.noteError} role="alert">{noteError}</p>}<div><button type="button">＋</button><button className={styles.saveButton} type="button" disabled={!note.trim() || isNoteSaving} onClick={() => { void submitNote(); }}>{isNoteSaving ? "Сохраняем…" : "Сохранить"}</button></div></div>
           </div>
         </div>

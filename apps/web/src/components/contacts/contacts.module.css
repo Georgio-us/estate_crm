@@ -51,7 +51,9 @@
 .tableWrap th { height: 48px; padding: 0 12px; border-bottom: 1px solid var(--border); color: var(--text-subtle); font-size: var(--font-size-caption); font-weight: var(--font-weight-medium); text-align: left; }
 .tableWrap td { height: 76px; padding: 11px 12px; color: #595955; vertical-align: middle; }
 .tableWrap tbody tr { border-bottom: 1px solid var(--border); cursor: pointer; }
-.tableWrap tbody tr:hover { background: var(--contacts-surface-hover); }
+@media (hover: hover) and (pointer: fine) {
+  .tableWrap tbody tr:hover { background: var(--contacts-surface-hover); }
+}
 .contactCell { display: flex; align-items: center; gap: 10px; }
 .contactCell > span:last-child { display: grid; gap: 4px; }
 .tableWrap td > span:not(.avatar):not(.sourceTag):not(.assigneeDot):not(.task):not(.muted) { display: grid; gap: 4px; }
@@ -139,6 +141,8 @@
 .event small, .event time { color: var(--text-subtle); font-size: var(--font-size-caption); }
 .event time { padding-top: 3px; }
 .emptyHistory { padding: 80px 10px; color: var(--text-subtle); font-size: var(--font-size-caption); text-align: center; }
+.showMoreHistory { width: 100%; min-height: 42px; margin-top: 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: #fff; color: #376bbf; cursor: pointer; font-size: var(--font-size-body-sm); }
+.showMoreHistory:hover { background: var(--surface-muted); }
 .composer { position: absolute; z-index: 3; right: 19px; bottom: 17px; left: 19px; min-height: 112px; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: #fff; box-shadow: var(--shadow-panel); }
 .composer > span { display: block; height: 33px; padding: 10px 13px 0; border-bottom: 1px solid var(--border); font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); }
 .composer textarea { width: 100%; min-height: 44px; padding: 9px 13px 3px; resize: none; border: 0; outline: 0; color: var(--text); font-size: var(--font-size-body-sm); }
@@ -203,14 +207,18 @@
   .content { padding: 30px 16px 0; }
   .heading h2 { font-size: var(--font-size-heading-md); }
   .workspace { margin-top: 22px; padding-bottom: 50px; }
-  .filters { align-items: flex-start; flex-wrap: wrap; padding: 12px 0; }
-  .filter { flex: 1 1 145px; }
-  .resultCount { width: 100%; margin-left: 0; }
+  .filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 12px 0; }
+  .filter { display: grid; height: auto; min-height: 64px; align-content: center; gap: 2px; padding: 8px 10px; }
+  .filter select { width: 100%; min-width: 0; }
+  .resultCount { width: auto; margin-left: 0; }
+  .resetButton { justify-self: end; }
+  .tableRegion { margin-inline: -16px; }
   .tableWrap { overflow: visible; }
   .tableRegion::before { top: 0; }
   .tableWrap table, .tableWrap tbody { display: block; width: 100%; min-width: 0; }
   .tableWrap thead { display: none; }
-  .tableWrap tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px 18px; padding: 18px 0; border-bottom: 1px solid var(--border); }
+  .tableWrap tr { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px 18px; padding: 18px 16px; border-bottom: 1px solid var(--border); }
+  .tableWrap tbody tr:active { background: var(--contacts-surface-hover); }
   .tableWrap td { display: block; height: auto; padding: 0; border: 0; }
   .tableWrap td:first-child { grid-column: 1 / -1; }
   .tableWrap td:nth-child(2), .tableWrap td:nth-child(3) { display: block; }
@@ -233,4 +241,5 @@
   .modal > footer > span { display: none; }
   .modal > footer div { width: 100%; justify-content: flex-end; }
 }
+@media (hover: none) and (pointer: coarse) { .keyboardHint { display: none; } }
 @media (prefers-reduced-motion: reduce) { .drawer { animation: none; } }

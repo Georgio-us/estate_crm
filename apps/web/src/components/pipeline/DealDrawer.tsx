@@ -32,6 +32,7 @@ type ActivityFilter = "all" | ActivityCategory;
 const propertyTypes = ["Квартира", "Дом", "Участок", "Коммерческая недвижимость"];
 const districts = ["Приморский", "Киевский", "Пересыпский", "Хаджибейский"];
 const roomOptions = ["1", "2", "3", "4+"];
+const historyPageSize = 7;
 const sourceLabels: Record<Deal["source"], string> = { Meta: "Meta", Website: "Сайт", Manual: "Не указан" };
 
 const activityIcons: Record<ActivityCategory, string> = {
@@ -83,6 +84,7 @@ export function DealDrawer({
   const [dealMenuOpen, setDealMenuOpen] = useState(false);
   const [contactMenuOpen, setContactMenuOpen] = useState(false);
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
+  const [visibleActivityCount, setVisibleActivityCount] = useState(historyPageSize);
   const composerRef = useRef<HTMLTextAreaElement>(null);
 
   const comparable = (value: Deal) => ({ title: value.title, phone: value.phone, assigneeId: value.assigneeId, budget: value.budget, operation: value.operation, propertyType: value.propertyType, district: value.district, rooms: value.rooms, request: value.request, comment: value.comment, source: value.source });
@@ -137,6 +139,7 @@ export function DealDrawer({
     () => activityFilter === "all" ? activities : activities.filter((event) => event.category === activityFilter),
     [activities, activityFilter],
   );
+  const displayedActivities = visibleActivities.slice(0, visibleActivityCount);
   const relatedContacts = deal.relatedContacts || [];
   const availableContacts = contacts.filter((contact) => contact.id !== deal.contactId && !relatedContacts.some((linked) => linked.id === contact.id));
 
@@ -363,7 +366,10 @@ export function DealDrawer({
 
               <div className={styles.thread}>
                 {visibleActivities.length ? (
-                  visibleActivities.map((event) => <TimelineItem event={event} key={event.id} />)
+                  <>
+                    {displayedActivities.map((event) => <TimelineItem event={event} key={event.id} />)}
+                    {visibleActivities.length > visibleActivityCount && <button className={styles.showMoreHistory} type="button" onClick={() => setVisibleActivityCount((count) => count + historyPageSize)}>Показать предыдущие · {visibleActivities.length - visibleActivityCount}</button>}
+                  </>
                 ) : (
                   <div className={styles.emptyThread}>Для выбранного фильтра событий пока нет</div>
                 )}
@@ -449,7 +455,7 @@ function InlineTextEditor({ label, value, placeholder, onSave }: { label: string
         if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); save(); }
         if (event.key === "Escape") { event.stopPropagation(); setDraft(value); setIsEditing(false); }
       }} />
-      <div><span>Enter — сохранить · Shift+Enter — новая строка</span><button type="button" onClick={() => { setDraft(value); setIsEditing(false); }}>Отмена</button><button type="button" onClick={save}>Сохранить</button></div>
+      <div><span className={styles.keyboardHint}>Enter — сохранить · Shift+Enter — новая строка</span><button type="button" onClick={() => { setDraft(value); setIsEditing(false); }}>Отмена</button><button type="button" onClick={save}>Сохранить</button></div>
     </div>
   );
 }
