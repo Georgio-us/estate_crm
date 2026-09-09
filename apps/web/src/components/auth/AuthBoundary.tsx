@@ -52,7 +52,8 @@ export function AuthBoundary({ children }: { children: ReactNode }) {
       }
 
       if (nextState.status === "unauthorized") {
-        router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+        const returnPath = `${window.location.pathname}${window.location.search}`;
+        router.replace(`/login?next=${encodeURIComponent(returnPath)}`);
         return;
       }
 
