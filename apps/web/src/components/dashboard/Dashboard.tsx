@@ -52,6 +52,8 @@ export function Dashboard() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [completingTaskId, setCompletingTaskId] = useState<string | null>(null);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const notificationStorageKey = `estate-crm:seen-notifications:${user.organization.id}:${user.id}`;
+  const [seenNotificationSignature, setSeenNotificationSignature] = useState(() => typeof window === "undefined" ? "" : window.localStorage.getItem(notificationStorageKey) || "");
 
   async function reloadDashboard() {
     setLoadState("loading");
@@ -83,6 +85,8 @@ export function Dashboard() {
   const overdueCount = tasks.filter((task) => task.period === "overdue").length;
   const todayCount = tasks.filter((task) => task.period === "today").length;
   const notificationCount = overdueCount + dashboard.deals.unassigned + dashboard.deals.withoutTask;
+  const notificationSignature = `${focusTasks.map((task) => task.id).join(",")}:${dashboard.deals.unassigned}:${dashboard.deals.withoutTask}`;
+  const unreadNotificationCount = notificationCount > 0 && seenNotificationSignature !== notificationSignature ? notificationCount : 0;
   const completedToday = tasks.filter((task) => task.period === "completed").length;
   const priorityTask = focusTasks[0];
   const selectedTask = tasks.find((task) => task.id === selectedTaskId);
@@ -90,6 +94,15 @@ export function Dashboard() {
   const todayLabel = new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long" }).format(new Date());
 
   const recentActivities = dashboard.activities.slice(0, 6);
+
+  function toggleNotifications() {
+    const opening = !notificationsOpen;
+    setNotificationsOpen(opening);
+    if (opening && notificationCount > 0) {
+      window.localStorage.setItem(notificationStorageKey, notificationSignature);
+      setSeenNotificationSignature(notificationSignature);
+    }
+  }
 
   async function completeTask(result: string) {
     if (!completingTask) return;
@@ -114,14 +127,14 @@ export function Dashboard() {
       <header className={styles.topbar}>
         <h1>Главная</h1>
         <div className={styles.notifications}>
-          <button className={styles.notificationButton} type="button" aria-label={`Уведомления: ${notificationCount} новых`} aria-expanded={notificationsOpen} onClick={() => setNotificationsOpen((current) => !current)}>
+          <button className={styles.notificationButton} type="button" aria-label={`Уведомления: ${unreadNotificationCount} новых`} aria-expanded={notificationsOpen} onClick={toggleNotifications}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4" /></svg>
-            {notificationCount > 0 && <span>{notificationCount}</span>}
+            {unreadNotificationCount > 0 && <span>{unreadNotificationCount}</span>}
           </button>
           {notificationsOpen && <>
             <button className={styles.notificationBackdrop} type="button" aria-label="Закрыть уведомления" onClick={() => setNotificationsOpen(false)} />
             <aside className={styles.notificationPanel} aria-label="Последние уведомления">
-              <header><div><strong>Уведомления</strong><span>{notificationCount} новых</span></div><button type="button" onClick={() => setNotificationsOpen(false)}>Закрыть</button></header>
+              <header><div><strong>Уведомления</strong><span>{notificationCount} активных</span></div><button type="button" onClick={() => setNotificationsOpen(false)}>Закрыть</button></header>
               {overdueCount > 0 && <button className={styles.notificationItem} type="button" onClick={() => { if (priorityTask) openTask(priorityTask); setNotificationsOpen(false); }}>
                 <i className={styles.notificationDanger}>!</i><span><strong>Просрочена задача</strong><small>{priorityTask?.title}{priorityTask?.contactName ? ` · ${priorityTask.contactName}` : ""}</small><time>Сейчас</time></span>
               </button>}

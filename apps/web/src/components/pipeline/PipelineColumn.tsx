@@ -10,9 +10,10 @@ interface PipelineColumnProps {
   onAddTask: (dealId: string) => void;
   onLifecycle: (dealId: string, status: "WON" | "LOST" | "ARCHIVED") => Promise<void>;
   onAddDeal: () => void;
+  readDealIds: Set<string>;
 }
 
-export function PipelineColumn({ stage, onOpenDeal, onAddTask, onLifecycle, onAddDeal }: PipelineColumnProps) {
+export function PipelineColumn({ stage, onOpenDeal, onAddTask, onLifecycle, onAddDeal, readDealIds }: PipelineColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
     id: `stage:${stage.id}`,
     data: { type: "stage", stageId: stage.id },
@@ -34,7 +35,7 @@ export function PipelineColumn({ stage, onOpenDeal, onAddTask, onLifecycle, onAd
       <SortableContext items={stage.deals.map((deal) => deal.id)} strategy={verticalListSortingStrategy}>
         <div className={styles.cardList}>
           {stage.deals.map((deal) => (
-            <DealCard deal={deal} stageId={stage.id} key={deal.id} onOpen={() => onOpenDeal(deal.id)} onAddTask={() => onAddTask(deal.id)} onLifecycle={(status) => onLifecycle(deal.id, status)} />
+            <DealCard deal={deal} stageId={stage.id} key={deal.id} unread={stage.title.toLocaleLowerCase("ru").includes("неразобран") && !readDealIds.has(deal.id)} onOpen={() => onOpenDeal(deal.id)} onAddTask={() => onAddTask(deal.id)} onLifecycle={(status) => onLifecycle(deal.id, status)} />
           ))}
           <button className={styles.quickAdd} type="button" onClick={onAddDeal}>＋ Добавить сделку</button>
         </div>

@@ -10,6 +10,7 @@ interface DealCardProps {
   onOpen: () => void;
   onAddTask: () => void;
   onLifecycle: (status: "WON" | "LOST" | "ARCHIVED") => Promise<void>;
+  unread?: boolean;
 }
 
 const sourceLabels: Record<Deal["source"], string> = {
@@ -27,7 +28,7 @@ function taskCountLabel(count: number) {
   return `${count} задач`;
 }
 
-export function DealCard({ deal, stageId, onOpen, onAddTask, onLifecycle }: DealCardProps) {
+export function DealCard({ deal, stageId, onOpen, onAddTask, onLifecycle, unread = false }: DealCardProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const {
@@ -44,7 +45,7 @@ export function DealCard({ deal, stageId, onOpen, onAddTask, onLifecycle }: Deal
 
   return (
     <article
-      className={`${styles.card} ${isDragging ? styles.cardDragging : ""}`}
+      className={`${styles.card} ${unread ? styles.cardUnread : ""} ${isDragging ? styles.cardDragging : ""}`}
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       onClick={onOpen}

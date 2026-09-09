@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   closestCorners,
   DragOverlay,
@@ -202,6 +202,31 @@ export function PipelineBoard() {
   const [transferOpen, setTransferOpen] = useState(false);
   const [pipelineView, setPipelineView] = useState<"active" | "closed">("active");
   const [notice, setNotice] = useState("");
+  const readDealsStorageKey = `estate-crm:read-deals:${user.organization.id}:${user.id}`;
+  const [readDealIds, setReadDealIds] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return new Set();
+    try {
+      const saved = JSON.parse(window.localStorage.getItem(readDealsStorageKey) || "[]") as string[];
+      return new Set(saved);
+    } catch {
+      return new Set();
+    }
+  });
+
+  const markDealRead = useCallback((dealId: string) => {
+    setReadDealIds((current) => {
+      if (current.has(dealId)) return current;
+      const next = new Set(current);
+      next.add(dealId);
+      window.localStorage.setItem(readDealsStorageKey, JSON.stringify([...next]));
+      return next;
+    });
+  }, [readDealsStorageKey]);
+
+  function openDeal(dealId: string, stageId: string) {
+    markDealRead(dealId);
+    setSelected({ dealId, stageId });
+  }
 
   useEffect(() => {
     let active = true;
@@ -218,6 +243,7 @@ export function PipelineBoard() {
           const stage = dealId ? pipeline.stages.find((item) => item.deals.some((deal) => deal.id === dealId)) : undefined;
           if (dealId && stage) {
             deepLinkHandledRef.current = true;
+            markDealRead(dealId);
             setSelected({ dealId, stageId: stage.id, taskId: parameters.get("task") || undefined });
           }
         }
@@ -225,7 +251,7 @@ export function PipelineBoard() {
       () => { if (active) setLoadState("error"); },
     );
     return () => { active = false; };
-  }, [pipelineView]);
+  }, [markDealRead, pipelineView]);
 
   useEffect(() => {
     if (!pipelineMenuOpen) return;
@@ -802,7 +828,8 @@ export function PipelineBoard() {
             <PipelineColumn
               stage={stage}
               key={stage.id}
-              onOpenDeal={(dealId) => setSelected({ dealId, stageId: stage.id })}
+              readDealIds={readDealIds}
+              onOpenDeal={(dealId) => openDeal(dealId, stage.id)}
               onAddTask={(dealId) => setSelected({ dealId, stageId: stage.id, composer: "task" })}
               onLifecycle={(dealId, status) => runDealLifecycle(dealId, status)}
               onAddDeal={() => setNewDealStageId(stage.id)}

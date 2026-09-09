@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useCurrentUser } from "@/components/auth/AuthContext";
 import { LogoMark } from "@/components/brand/LogoMark";
 import { useTasks } from "@/components/tasks/TasksContext";
@@ -35,7 +35,9 @@ interface SidebarProps {
 export function Sidebar({ collapsed, mobileOpen, onMobileClose, onToggle }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const profileRef = useRef<HTMLDivElement>(null);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const user = useCurrentUser();
   const { tasks } = useTasks();
   const activeTaskCount = tasks.filter((task) => task.period !== "completed").length;
@@ -55,6 +57,15 @@ export function Sidebar({ collapsed, mobileOpen, onMobileClose, onToggle }: Side
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase())
     .join("");
+
+  useEffect(() => {
+    if (!profileOpen) return;
+    function closeProfile(event: PointerEvent) {
+      if (!profileRef.current?.contains(event.target as Node)) setProfileOpen(false);
+    }
+    document.addEventListener("pointerdown", closeProfile);
+    return () => document.removeEventListener("pointerdown", closeProfile);
+  }, [profileOpen]);
 
   async function logout() {
     setLoggingOut(true);
@@ -109,21 +120,27 @@ export function Sidebar({ collapsed, mobileOpen, onMobileClose, onToggle }: Side
         </div>
       </nav>
 
-      <div className={styles.profile}>
-        <span className={styles.avatar}>{initials || "—"}</span>
-        <span className={styles.profileText}>
-          <strong>{user.name}</strong>
-          <small>{roleLabel}</small>
-        </span>
+      <div className={styles.profile} ref={profileRef}>
         <button
           className={styles.profileMore}
           disabled={loggingOut}
           type="button"
-          aria-label="Выйти из CRM"
-          onClick={() => void logout()}
+          aria-label="Открыть меню аккаунта"
+          aria-expanded={profileOpen}
+          onClick={() => setProfileOpen((current) => !current)}
         >
-          {collapsed ? "↪" : "Выйти"}
+          <span className={styles.avatar}>{initials || "—"}</span>
+          <span className={styles.profileText}>
+            <strong>{user.name}</strong>
+            <small>{roleLabel}</small>
+          </span>
+          <span className={styles.profileChevron} aria-hidden="true">⌃</span>
         </button>
+        {profileOpen && <div className={styles.profileMenu}>
+          <div><strong>{user.name}</strong><small>{user.email}</small></div>
+          <button type="button" disabled={loggingOut} onClick={() => void logout()}>Сменить аккаунт</button>
+          <button type="button" disabled={loggingOut} onClick={() => void logout()}>Выйти</button>
+        </div>}
       </div>
     </aside>
   );
