@@ -26,6 +26,18 @@ function parseDueDate(value: string | null | undefined) {
   return value ? new Date(`${value}T00:00:00.000Z`) : null;
 }
 
+async function cancelPendingTaskNotifications(database: DatabaseConnection, organizationId: string, taskId: string) {
+  await database.client.notificationOutbox.updateMany({
+    where: {
+      organizationId,
+      channel: "TELEGRAM",
+      status: "PENDING",
+      dedupeKey: { startsWith: `task:${taskId}:` },
+    },
+    data: { status: "CANCELLED" },
+  });
+}
+
 function mapTask(task: {
   id: string;
   title: string;
@@ -149,6 +161,7 @@ export async function registerTaskRoutes(app: FastifyInstance, database: Databas
       },
       include: taskInclude,
     });
+    await cancelPendingTaskNotifications(database, user.organization.id, existing.id);
     await database.client.activityEvent.create({ data: { organizationId: user.organization.id, contactId: task.contact?.id, dealId: task.deal?.id, authorId: user.id, category: "TASK", title: nextStatus === "COMPLETED" && existing.status !== "COMPLETED" ? "Задача выполнена" : "Задача обновлена", description: task.result || task.title } });
     return { task: mapTask(task) };
   });
@@ -161,6 +174,7 @@ export async function registerTaskRoutes(app: FastifyInstance, database: Databas
     const existing = await database.client.task.findFirst({ where: { id: request.params.taskId, organizationId: user.organization.id }, include: taskInclude });
     if (!existing) return reply.status(404).send({ error: "task_not_found", message: "Задача не найдена." });
     const task = await database.client.task.update({ where: { id: existing.id }, data: { status: "COMPLETED", result: optionalText(request.body.result) || "Выполнено", completedAt: existing.completedAt ?? new Date() }, include: taskInclude });
+    await cancelPendingTaskNotifications(database, user.organization.id, existing.id);
     await database.client.activityEvent.create({ data: { organizationId: user.organization.id, contactId: task.contact?.id, dealId: task.deal?.id, authorId: user.id, category: "TASK", title: "Задача выполнена", description: task.result } });
     return { task: mapTask(task) };
   });

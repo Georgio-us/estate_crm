@@ -6,7 +6,7 @@ import test from "node:test";
 import type { DatabaseConnection } from "@estate-crm/database";
 
 import { buildApp } from "../src/app.js";
-import { buildTelegramNotification, deliverPendingTelegramNotifications, telegramWebhookSecret } from "../src/telegram/service.js";
+import { buildTelegramNotification, deliverPendingTelegramNotifications, enqueueDueTaskNotifications, telegramWebhookSecret } from "../src/telegram/service.js";
 
 const organizationId = "28f400f2-7130-420f-b88c-d0cf5107b864";
 const userId = "3b9ae340-7445-4a14-8b1d-d030c882c775";
@@ -37,6 +37,35 @@ test("Telegram notification remains compatible with older queued records without
   const message = buildTelegramNotification({ title: "Новый лид", actionUrl: "/?deal=deal-42" }, config.webAppUrl);
 
   assert.equal(message.text, "🔔 Новый лид\n\nОткройте карточку в Estate CRM.");
+});
+
+test("task notification contains its deadline and opens the exact task", () => {
+  const message = buildTelegramNotification({
+    title: "Задача скоро",
+    body: "Позвонить клиенту",
+    eventType: "task.reminder",
+    actionUrl: "/?deal=deal-42&task=task-7",
+    payload: { dealNumber: 1017, dueDate: "2026-09-09", dueTime: "10:30" },
+  }, config.webAppUrl);
+
+  assert.equal(message.text, "⏰ Задача скоро · Сделка #1017\n\nПозвонить клиенту\nСрок: 9 сентября, 10:30");
+  assert.equal(message.reply_markup.inline_keyboard[0]?.[0]?.text, "Открыть задачу");
+  assert.equal(message.reply_markup.inline_keyboard[0]?.[0]?.url, "https://crm.example.test/?deal=deal-42&task=task-7");
+});
+
+test("task scheduler enqueues a reminder once with a stable deduplication key", async () => {
+  let createdRows: Array<Record<string, unknown>> = [];
+  const database = { client: {
+    organization: { async findMany() { return [{ id: organizationId, timezone: "UTC", tasks: [{ id: "task-7", title: "Позвонить клиенту", dueDate: new Date("2026-09-09T00:00:00.000Z"), dueTime: "10:30", assigneeId: userId, updatedAt: new Date("2026-09-09T08:00:00.000Z"), deal: { id: "deal-42", number: 1017 } }] }]; } },
+    notificationOutbox: { async createMany(args: { data: Array<Record<string, unknown>>; skipDuplicates: boolean }) { createdRows = args.data; assert.equal(args.skipDuplicates, true); } },
+  }, async ping() {}, async disconnect() {} } as unknown as DatabaseConnection;
+
+  await enqueueDueTaskNotifications(database, new Date("2026-09-09T10:05:00.000Z"));
+
+  assert.equal(createdRows.length, 1);
+  assert.equal(createdRows[0]?.eventType, "task.reminder");
+  assert.equal(createdRows[0]?.dedupeKey, "task:task-7:2026-09-09T08:00:00.000Z:task.reminder");
+  assert.equal(createdRows[0]?.actionUrl, "/?deal=deal-42&task=task-7");
 });
 
 test("CRM creates an expiring Telegram deep link and stores only its hash", async () => {
@@ -80,6 +109,7 @@ test("signed Telegram webhook consumes the one-time token and binds the chat", a
     integrationConnection: { async upsert() { writes.push("connection-ready"); } },
   };
   const database = { client: {
+    membership: { async findUnique() { return { role: "ADMIN" as const }; } },
     telegramConnectToken: {
       async findFirst(args: { where: { tokenHash: string } }) {
         assert.equal(args.where.tokenHash, createHash("sha256").update(rawConnectToken).digest("hex"));
@@ -102,6 +132,45 @@ test("signed Telegram webhook consumes the one-time token and binds the chat", a
   assert.equal(fetchMock.mock.callCount(), 1);
   await app.close();
   mock.restoreAll();
+});
+
+test("admin can select which team members produce Telegram notifications", async () => {
+  const selectedUserId = "7f398049-0273-4c80-9d36-56dc65069437";
+  let savedAudience = "";
+  let savedSelections: string[] = [];
+  const memberships = [
+    { role: "ADMIN" as const, createdAt: new Date(), user: { id: userId, name: "Администратор" } },
+    { role: "MANAGER" as const, createdAt: new Date(), user: { id: selectedUserId, name: "Менеджер" } },
+  ];
+  const transaction = {
+    telegramRecipient: { async update(args: { data: { audience: string } }) { savedAudience = args.data.audience; } },
+    telegramRecipientSelection: {
+      async deleteMany() {},
+      async createMany(args: { data: Array<{ userId: string }> }) { savedSelections = args.data.map((item) => item.userId); },
+    },
+  };
+  const database = { client: {
+    session: { async findUnique() { return session(); } },
+    telegramRecipient: { async findUnique() { return { id: "recipient-1" }; } },
+    membership: {
+      async count() { return 1; },
+      async findMany() { return memberships; },
+    },
+    async $transaction(callback: (tx: typeof transaction) => Promise<unknown>) { return callback(transaction); },
+  }, async ping() {}, async disconnect() {} } as unknown as DatabaseConnection;
+  const app = await buildApp(config, database);
+  const response = await app.inject({
+    method: "PATCH",
+    url: "/integrations/telegram/preferences",
+    headers: { cookie: "estate_crm_session=test-token" },
+    payload: { audience: "SELECTED", leadNotifications: true, taskReminderNotifications: false, taskOverdueNotifications: true, selectedUserIds: [selectedUserId] },
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(savedAudience, "SELECTED");
+  assert.deepEqual(savedSelections, [selectedUserId]);
+  assert.deepEqual(response.json().selectedUserIds, [selectedUserId]);
+  await app.close();
 });
 
 test("outbox delivery sends once and marks both recipient delivery and notification as sent", async () => {

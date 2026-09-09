@@ -120,6 +120,13 @@ enum TelegramRecipientScope {
   OWN
 }
 
+enum TelegramNotificationAudience {
+  ALL
+  OWN
+  SELECTED
+  NONE
+}
+
 enum NotificationDeliveryStatus {
   PENDING
   SENT
@@ -167,6 +174,7 @@ model User {
   assignedTasks         Task[]                 @relation("TaskAssignee")
   telegramRecipients    TelegramRecipient[]
   telegramConnectTokens TelegramConnectToken[]
+  telegramSelections    TelegramRecipientSelection[] @relation("TelegramSelectedUser")
 
   @@map("users")
 }
@@ -380,6 +388,7 @@ model NotificationOutbox {
   body           String
   actionUrl      String?                  @map("action_url")
   payload        Json?
+  dedupeKey      String?                  @map("dedupe_key")
   status         NotificationOutboxStatus @default(PENDING)
   attempts       Int                      @default(0)
   nextAttemptAt  DateTime?                @map("next_attempt_at")
@@ -390,6 +399,7 @@ model NotificationOutbox {
   deliveries     NotificationDelivery[]
 
   @@index([organizationId, status, createdAt])
+  @@unique([organizationId, channel, dedupeKey])
   @@map("notification_outbox")
 }
 
@@ -401,17 +411,34 @@ model TelegramRecipient {
   username       String?
   firstName      String?                @map("first_name")
   scope          TelegramRecipientScope
+  audience       TelegramNotificationAudience @default(OWN)
+  leadNotifications Boolean               @default(true) @map("lead_notifications")
+  taskReminderNotifications Boolean       @default(true) @map("task_reminder_notifications")
+  taskOverdueNotifications Boolean        @default(true) @map("task_overdue_notifications")
   active         Boolean                @default(true)
   connectedAt    DateTime               @default(now()) @map("connected_at")
   updatedAt      DateTime               @updatedAt @map("updated_at")
   organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user           User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   deliveries     NotificationDelivery[]
+  selectedUsers  TelegramRecipientSelection[]
 
   @@unique([organizationId, userId])
   @@unique([organizationId, chatId])
   @@index([organizationId, active])
   @@map("telegram_recipients")
+}
+
+model TelegramRecipientSelection {
+  id          String            @id @default(uuid()) @db.Uuid
+  recipientId String            @map("recipient_id") @db.Uuid
+  userId      String            @map("user_id") @db.Uuid
+  recipient   TelegramRecipient @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  user        User              @relation("TelegramSelectedUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([recipientId, userId])
+  @@index([userId])
+  @@map("telegram_recipient_selections")
 }
 
 model TelegramConnectToken {

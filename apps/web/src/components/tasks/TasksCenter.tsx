@@ -30,7 +30,7 @@ export function TasksCenter() {
   const [kind, setKind] = useState<"all" | TaskKind>("all");
   const [search, setSearch] = useState("");
   const [completingId, setCompletingId] = useState<string | null>(null);
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(() => typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("task"));
   const [isCreating, setIsCreating] = useState(false);
 
   const completingTask = tasks.find((task) => task.id === completingId);

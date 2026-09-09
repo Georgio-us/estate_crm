@@ -21,6 +21,8 @@ type TelegramApiResponse<T = unknown> = {
 
 type TelegramNotification = {
   title: string;
+  body?: string;
+  eventType?: string;
   actionUrl: string | null;
   payload?: unknown;
 };
@@ -59,22 +61,40 @@ export function buildTelegramNotification(
   webAppUrl: string,
 ): { text: string; reply_markup: { inline_keyboard: Array<Array<{ text: string; url: string }>> } } {
   const dealNumber = readDealNumber(notification.payload);
-  const title = dealNumber === null ? notification.title : `${notification.title} · #${dealNumber}`;
+  const dealLabel = dealNumber === null ? "" : ` · ${notification.eventType?.startsWith("task.") ? "Сделка " : ""}#${dealNumber}`;
+  const taskNotification = notification.eventType?.startsWith("task.") ?? false;
+  const dueLabel = taskNotification ? formatTaskDueLabel(notification.payload) : null;
+  const icon = notification.eventType === "task.overdue" ? "🔴" : taskNotification ? "⏰" : "🔔";
+  const details = taskNotification
+    ? [notification.body?.trim(), dueLabel ? `Срок: ${dueLabel}` : null].filter(Boolean).join("\n")
+    : "Откройте карточку в Estate CRM.";
 
   return {
-    text: `🔔 ${title}\n\nОткройте карточку в Estate CRM.`,
+    text: `${icon} ${notification.title}${dealLabel}\n\n${details}`,
     reply_markup: {
-      inline_keyboard: [[{ text: "Открыть лид", url: resolveCrmUrl(webAppUrl, notification.actionUrl) }]],
+      inline_keyboard: [[{ text: taskNotification ? "Открыть задачу" : "Открыть лид", url: resolveCrmUrl(webAppUrl, notification.actionUrl) }]],
     },
   };
 }
 
+function readPayloadValue(payload: unknown, key: string): unknown {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return undefined;
+  return (payload as Record<string, unknown>)[key];
+}
+
 function readDealNumber(payload: unknown): string | null {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
-  const dealNumber = (payload as Record<string, unknown>).dealNumber;
+  const dealNumber = readPayloadValue(payload, "dealNumber");
   if (typeof dealNumber === "number" && Number.isSafeInteger(dealNumber) && dealNumber > 0) return String(dealNumber);
   if (typeof dealNumber === "string" && /^\d+$/.test(dealNumber)) return dealNumber;
   return null;
+}
+
+function formatTaskDueLabel(payload: unknown): string | null {
+  const dueDate = readPayloadValue(payload, "dueDate");
+  const dueTime = readPayloadValue(payload, "dueTime");
+  if (typeof dueDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) return null;
+  const dateLabel = new Date(`${dueDate}T00:00:00.000Z`).toLocaleDateString("ru-RU", { day: "numeric", month: "long", timeZone: "UTC" });
+  return typeof dueTime === "string" && /^\d{2}:\d{2}$/.test(dueTime) ? `${dateLabel}, ${dueTime}` : dateLabel;
 }
 
 export async function sendTelegramMessage(
@@ -113,6 +133,98 @@ function readAssigneeId(payload: unknown): string | null {
   return typeof assigneeId === "string" ? assigneeId : null;
 }
 
+type RecipientPreference = {
+  userId: string;
+  scope: "ORGANIZATION" | "OWN";
+  audience?: "ALL" | "OWN" | "SELECTED" | "NONE";
+  leadNotifications?: boolean;
+  taskReminderNotifications?: boolean;
+  taskOverdueNotifications?: boolean;
+  selectedUsers?: Array<{ userId: string }>;
+};
+
+function recipientAccepts(notification: TelegramNotification, recipient: RecipientPreference, assigneeId: string | null): boolean {
+  const eventType = notification.eventType || "";
+  if (eventType.startsWith("lead.") && recipient.leadNotifications === false) return false;
+  if (eventType === "task.reminder" && recipient.taskReminderNotifications === false) return false;
+  if (eventType === "task.overdue" && recipient.taskOverdueNotifications === false) return false;
+  const audience = recipient.scope === "OWN" ? (recipient.audience === "NONE" ? "NONE" : "OWN") : recipient.audience ?? "ALL";
+  if (audience === "NONE") return false;
+  if (audience === "ALL") return true;
+  if (!assigneeId) return false;
+  if (audience === "OWN") return recipient.userId === assigneeId;
+  return recipient.selectedUsers?.some((selection) => selection.userId === assigneeId) ?? false;
+}
+
+function localClockMillis(now: Date, timezone: string): number {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(now);
+  const value = (type: Intl.DateTimeFormatPartTypes) => Number(parts.find((part) => part.type === type)?.value || 0);
+  return Date.UTC(value("year"), value("month") - 1, value("day"), value("hour"), value("minute"));
+}
+
+export async function enqueueDueTaskNotifications(database: DatabaseConnection, now = new Date()): Promise<void> {
+  const organizations = await database.client.organization.findMany({
+    select: {
+      id: true,
+      timezone: true,
+      tasks: {
+        where: { status: "ACTIVE", dueDate: { not: null } },
+        select: {
+          id: true,
+          title: true,
+          dueDate: true,
+          dueTime: true,
+          assigneeId: true,
+          updatedAt: true,
+          deal: { select: { id: true, number: true } },
+        },
+      },
+    },
+  });
+
+  const rows = organizations.flatMap((organization) => {
+    const currentLocalTime = localClockMillis(now, organization.timezone);
+    return organization.tasks.flatMap((task) => {
+      if (!task.dueDate) return [];
+      const dueDate = task.dueDate.toISOString().slice(0, 10);
+      const dueTime = task.dueTime || "23:59";
+      const [year, month, day] = dueDate.split("-").map(Number);
+      const [hour, minute] = dueTime.split(":").map(Number);
+      const dueLocalTime = Date.UTC(year || 0, (month || 1) - 1, day || 1, hour || 0, minute || 0);
+      const remainingMinutes = Math.floor((dueLocalTime - currentLocalTime) / 60_000);
+      const eventType = remainingMinutes <= 0 ? "task.overdue" : task.dueTime && remainingMinutes <= 30 ? "task.reminder" : null;
+      if (!eventType) return [];
+      const version = task.updatedAt.toISOString();
+      return [{
+        organizationId: organization.id,
+        channel: "TELEGRAM" as const,
+        eventType,
+        title: eventType === "task.overdue" ? "Задача просрочена" : "Задача скоро",
+        body: task.title,
+        actionUrl: task.deal ? `/?deal=${task.deal.id}&task=${task.id}` : `/tasks?task=${task.id}`,
+        dedupeKey: `task:${task.id}:${version}:${eventType}`,
+        payload: {
+          taskId: task.id,
+          dealId: task.deal?.id ?? null,
+          dealNumber: task.deal?.number ?? null,
+          assigneeId: task.assigneeId,
+          dueDate,
+          dueTime: task.dueTime,
+        },
+      }];
+    });
+  });
+  if (rows.length) await database.client.notificationOutbox.createMany({ data: rows, skipDuplicates: true });
+}
+
 function retryAt(attempts: number): Date {
   const seconds = Math.min(300, 5 * (2 ** Math.max(0, attempts - 1)));
   return new Date(Date.now() + seconds * 1_000);
@@ -128,7 +240,7 @@ export async function deliverPendingTelegramNotifications(
   const notifications = await database.client.notificationOutbox.findMany({
     where: {
       channel: "TELEGRAM",
-      eventType: { in: ["lead.created", "lead.repeated"] },
+      eventType: { in: ["lead.created", "lead.repeated", "task.reminder", "task.overdue"] },
       status: "PENDING",
       OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }],
     },
@@ -140,11 +252,17 @@ export async function deliverPendingTelegramNotifications(
     const assigneeId = readAssigneeId(notification.payload);
     const availableRecipients = await database.client.telegramRecipient.findMany({
       where: { organizationId: notification.organizationId, active: true },
+      include: { selectedUsers: { select: { userId: true } } },
     });
-    const recipients = availableRecipients.filter((recipient) => (
-      recipient.scope === "ORGANIZATION" || (assigneeId !== null && recipient.userId === assigneeId)
-    ));
-    if (!recipients.length) continue;
+    const recipients = availableRecipients.filter((recipient) => recipientAccepts(notification, recipient, assigneeId));
+    if (!availableRecipients.length) continue;
+    if (!recipients.length) {
+      await database.client.notificationOutbox.update({
+        where: { id: notification.id },
+        data: { status: "CANCELLED", nextAttemptAt: null, lastError: null },
+      });
+      continue;
+    }
 
     await database.client.notificationDelivery.createMany({
       data: recipients.map((recipient) => ({ notificationId: notification.id, recipientId: recipient.id })),
@@ -220,10 +338,15 @@ export function startTelegramRuntime(
   }
 
   let running = false;
+  let nextTaskScanAt = 0;
   const tick = async () => {
     if (running) return;
     running = true;
     try {
+      if (Date.now() >= nextTaskScanAt) {
+        await enqueueDueTaskNotifications(database);
+        nextTaskScanAt = Date.now() + 30_000;
+      }
       await deliverPendingTelegramNotifications(database, botToken, webAppUrl, logger);
     } catch (error) {
       logger.error({ error }, "Telegram outbox worker failed");

@@ -43,6 +43,27 @@ export interface ApiErrorResponse {
   message: string;
 }
 
+export type TelegramNotificationAudience = "ALL" | "OWN" | "SELECTED" | "NONE";
+
+export interface TelegramNotificationPreferencesResponse {
+  connected: boolean;
+  role: MembershipRole;
+  audience: TelegramNotificationAudience;
+  leadNotifications: boolean;
+  taskReminderNotifications: boolean;
+  taskOverdueNotifications: boolean;
+  selectedUserIds: string[];
+  members: Array<{ id: string; name: string; role: MembershipRole }>;
+}
+
+export interface UpdateTelegramNotificationPreferencesRequest {
+  audience: TelegramNotificationAudience;
+  leadNotifications: boolean;
+  taskReminderNotifications: boolean;
+  taskOverdueNotifications: boolean;
+  selectedUserIds: string[];
+}
+
 export type ContactSource = "META" | "WEBSITE" | "MANUAL";
 
 export interface ContactAssignee {

@@ -40,12 +40,14 @@ test("creating a task links it to the deal contact and writes deal history", asy
 
 test("completing a task persists the result and writes history", async () => {
   let updatedData: Record<string, unknown> = {};
+  let cancelledNotifications = false;
   const database = { client: {
     session: { async findUnique() { return { id: "session-1", expiresAt: new Date(Date.now() + 60_000), user: sessionUser }; } },
     task: {
       async findFirst() { return taskRecord(); },
       async update({ data }: { data: Record<string, unknown> }) { updatedData = data; return taskRecord({ status: "COMPLETED" as const, result: data.result, completedAt: now }); },
     },
+    notificationOutbox: { async updateMany() { cancelledNotifications = true; return { count: 1 }; } },
     activityEvent: { async create() {} },
   }, async ping() {}, async disconnect() {} } as unknown as DatabaseConnection;
   const app = await buildApp(config, database);
@@ -55,5 +57,6 @@ test("completing a task persists the result and writes history", async () => {
   assert.equal(updatedData.status, "COMPLETED");
   assert.equal(updatedData.result, "Договорились о встрече");
   assert.equal(response.json().task.status, "COMPLETED");
+  assert.equal(cancelledNotifications, true);
   await app.close();
 });
