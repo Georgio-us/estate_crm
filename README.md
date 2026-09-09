@@ -108,9 +108,12 @@ Healthcheck path: /health
 ```text
 WEB_APP_ORIGIN=https://estatecrm-crmdelmar.up.railway.app
 DATABASE_URL=${{Postgres.DATABASE_URL}}
+APP_URL=https://estatecrm-crmdelmar.up.railway.app
+TELEGRAM_BOT_TOKEN=<sealed shared variable>
+TELEGRAM_BOT_USERNAME=<shared bot username without @>
 ```
 
-`PORT` устанавливается Railway автоматически. `HOST` по умолчанию уже равен `0.0.0.0`.
+`PORT` и `RAILWAY_PUBLIC_DOMAIN` устанавливаются Railway автоматически. `HOST` по умолчанию уже равен `0.0.0.0`. При необходимости публичный адрес API можно явно переопределить переменной `API_PUBLIC_URL`.
 
 Миграции production-базы выполняются отдельным pre-deploy шагом API:
 

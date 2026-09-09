@@ -133,8 +133,8 @@ export async function ingestInboundLead(
         eventType: reusedDeal ? "lead.repeated" : "lead.created",
         title: reusedDeal ? "Повторное обращение" : "Новый лид",
         body: `${providerLabels[lead.provider]} · ${name}`,
-        actionUrl: `/pipeline?deal=${deal.id}`,
-        payload: { provider: lead.provider, contactId: contact.id, dealId: deal.id },
+        actionUrl: `/?deal=${deal.id}`,
+        payload: { provider: lead.provider, contactId: contact.id, dealId: deal.id, assigneeId: deal.assigneeId },
       },
     });
     await transaction.integrationEvent.update({

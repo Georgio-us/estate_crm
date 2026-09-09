@@ -14,6 +14,7 @@ import { registerIntegrationRoutes } from "./integrations/routes.js";
 import { registerPipelineRoutes } from "./pipeline/routes.js";
 import { registerPropertyRoutes } from "./properties/routes.js";
 import { registerTaskRoutes } from "./tasks/routes.js";
+import { registerTelegramRoutes } from "./telegram/routes.js";
 
 export async function buildApp(
   config: ApiConfig,
@@ -63,6 +64,7 @@ export async function buildApp(
   await registerPropertyRoutes(app, database);
   await registerDashboardRoutes(app, database);
   await registerIntegrationRoutes(app, database);
+  await registerTelegramRoutes(app, config, database);
 
   app.setErrorHandler((error, request, reply) => {
     if (typeof error === "object" && error !== null && "validation" in error && error.validation) {

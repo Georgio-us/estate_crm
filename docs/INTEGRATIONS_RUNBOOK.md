@@ -4,7 +4,7 @@
 
 The CRM has one canonical inbound-lead pipeline. Provider adapters normalize their payload into a provider/event ID, contact name and phone, and optional request text.
 
-Processing is organization-scoped and transactional. It records the integration event, resolves a contact by normalized phone, reuses the newest active deal when one exists, otherwise creates a deal in the default first stage, appends deal history, and queues a Telegram notification. The notification outbox is durable, but no Telegram delivery worker is enabled yet.
+Processing is organization-scoped and transactional. It records the integration event, resolves a contact by normalized phone, reuses the newest active deal when one exists, otherwise creates a deal in the default first stage, appends deal history, and queues a Telegram notification. The durable Telegram delivery worker sends each queued notification independently and retries temporary failures with exponential backoff.
 
 `organization + provider + external event ID` is unique. Provider retries therefore do not create duplicate contacts, deals, history, or notifications, including concurrent retries.
 
@@ -26,16 +26,26 @@ The Apps Script source of truth is [`docs/google-apps-script/Code.gs`](google-ap
 
 If Apps Script retries after a timeout, the Meta Lead ID remains the external event ID, so the CRM returns the existing result instead of creating another contact, deal, activity, or notification.
 
+## Estate CRM Telegram notifications
+
+The shared bot is configured only on `estate_crm_api` through sealed Railway variables `TELEGRAM_BOT_TOKEN` and `TELEGRAM_BOT_USERNAME`. Railway's `RAILWAY_PUBLIC_DOMAIN` is used to register `POST /webhooks/telegram` automatically; `API_PUBLIC_URL` is an optional explicit override.
+
+A signed-in CRM user opens **Интеграции → Telegram → Подключить Telegram**. The API creates a random one-time token valid for ten minutes, stores only its SHA-256 hash, and opens the bot through a Telegram deep link. `/start` consumes that token once and binds the Telegram chat to the CRM user and organization. No chat IDs or owner lists are stored in environment variables.
+
+CRM roles control delivery scope. Admins and team leads receive organization-wide lead notifications. Managers receive only notifications for deals assigned to them. The message intentionally contains no lead form fields or telephone number: only `Новый лид` / `Повторное обращение` and an **Открыть лид** button that targets `/?deal=<deal-id>` in the CRM.
+
+`notification_outbox` remains the source of truth. Per-recipient results live in `notification_deliveries`, so a retry for one failed recipient does not duplicate a message already delivered to another. After five failed attempts the delivery and its outbox item are marked failed instead of retrying forever. If no eligible Telegram recipient is connected, the item remains pending and is delivered after an eligible user connects.
+
 ## Deliberately not enabled
 
-- No Estate CRM Telegram worker was created. The client's pre-existing Apps Script → Telegram route continues to deliver independently.
 - No direct Meta Developer application, Meta webhook subscription, Instagram permission, or telephony account was created.
 - No plaintext provider secret is stored in the database or Railway; only the webhook secret hash is persisted by the CRM.
 - The Meta Lead Ads connection is `CONNECTED` for Delmar through Google Sheets. Other provider cards remain `CREDENTIALS_REQUIRED`; a simulated event does not connect an external service.
+- The client's pre-existing Apps Script → Telegram route remains independent. Keeping it enabled together with the CRM bot intentionally produces two separate notifications until the old route is switched off.
 
-## Later: direct Meta and Telegram delivery
+## Later: direct Meta delivery
 
-When direct Meta access is available, add a second transport adapter that validates the provider signature and maps a lead to the same canonical input. Then add an outbox worker and a Telegram transport using either the existing client bot or a new shared bot. Only at that point are Meta tokens, webhook verification data, and Telegram credentials required in the deployment secret store.
+When direct Meta access is available, add a second transport adapter that validates the provider signature and maps a lead to the same canonical input. Meta tokens and webhook verification data will then be required in the deployment secret store; Telegram delivery does not depend on that future adapter.
 
 Sending qualification outcomes back to Meta is a separate outbound integration, not part of lead ingestion. It requires semantic CRM outcomes, a dedicated Meta event outbox, customer-specific Meta authorization, idempotent delivery, retries, and an operational delivery log. It is intentionally deferred because the current client workflow does not require it for basic CRM operation.
 

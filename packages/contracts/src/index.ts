@@ -377,6 +377,11 @@ export interface GoogleSheetsIntegrationSetupResponse {
   secret: string;
 }
 
+export interface TelegramIntegrationSetupResponse {
+  connectUrl: string;
+  expiresAt: string;
+}
+
 export interface GoogleSheetsMetaLeadRequest {
   externalId: string;
   name: string;

@@ -115,6 +115,17 @@ enum NotificationOutboxStatus {
   CANCELLED
 }
 
+enum TelegramRecipientScope {
+  ORGANIZATION
+  OWN
+}
+
+enum NotificationDeliveryStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
 model Organization {
   id                     String                  @id @default(uuid()) @db.Uuid
   name                   String
@@ -134,24 +145,28 @@ model Organization {
   integrationConnections IntegrationConnection[]
   integrationEvents      IntegrationEvent[]
   notificationOutbox     NotificationOutbox[]
+  telegramRecipients     TelegramRecipient[]
+  telegramConnectTokens  TelegramConnectToken[]
 
   @@map("organizations")
 }
 
 model User {
-  id                 String          @id @default(uuid()) @db.Uuid
-  email              String          @unique
-  name               String
-  phone              String?
-  passwordHash       String?         @map("password_hash")
-  createdAt          DateTime        @default(now()) @map("created_at")
-  updatedAt          DateTime        @updatedAt @map("updated_at")
-  memberships        Membership[]
-  sessions           Session[]
-  assignedContacts   Contact[]       @relation("ContactAssignee")
-  assignedDeals      Deal[]          @relation("DealAssignee")
-  authoredActivities ActivityEvent[] @relation("ActivityAuthor")
-  assignedTasks      Task[]          @relation("TaskAssignee")
+  id                    String                 @id @default(uuid()) @db.Uuid
+  email                 String                 @unique
+  name                  String
+  phone                 String?
+  passwordHash          String?                @map("password_hash")
+  createdAt             DateTime               @default(now()) @map("created_at")
+  updatedAt             DateTime               @updatedAt @map("updated_at")
+  memberships           Membership[]
+  sessions              Session[]
+  assignedContacts      Contact[]              @relation("ContactAssignee")
+  assignedDeals         Deal[]                 @relation("DealAssignee")
+  authoredActivities    ActivityEvent[]        @relation("ActivityAuthor")
+  assignedTasks         Task[]                 @relation("TaskAssignee")
+  telegramRecipients    TelegramRecipient[]
+  telegramConnectTokens TelegramConnectToken[]
 
   @@map("users")
 }
@@ -372,9 +387,65 @@ model NotificationOutbox {
   createdAt      DateTime                 @default(now()) @map("created_at")
   sentAt         DateTime?                @map("sent_at")
   organization   Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  deliveries     NotificationDelivery[]
 
   @@index([organizationId, status, createdAt])
   @@map("notification_outbox")
+}
+
+model TelegramRecipient {
+  id             String                 @id @default(uuid()) @db.Uuid
+  organizationId String                 @map("organization_id") @db.Uuid
+  userId         String                 @map("user_id") @db.Uuid
+  chatId         String                 @map("chat_id")
+  username       String?
+  firstName      String?                @map("first_name")
+  scope          TelegramRecipientScope
+  active         Boolean                @default(true)
+  connectedAt    DateTime               @default(now()) @map("connected_at")
+  updatedAt      DateTime               @updatedAt @map("updated_at")
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries     NotificationDelivery[]
+
+  @@unique([organizationId, userId])
+  @@unique([organizationId, chatId])
+  @@index([organizationId, active])
+  @@map("telegram_recipients")
+}
+
+model TelegramConnectToken {
+  id             String                 @id @default(uuid()) @db.Uuid
+  organizationId String                 @map("organization_id") @db.Uuid
+  userId         String                 @map("user_id") @db.Uuid
+  tokenHash      String                 @unique @map("token_hash")
+  scope          TelegramRecipientScope
+  expiresAt      DateTime               @map("expires_at")
+  usedAt         DateTime?              @map("used_at")
+  createdAt      DateTime               @default(now()) @map("created_at")
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt, usedAt])
+  @@map("telegram_connect_tokens")
+}
+
+model NotificationDelivery {
+  id             String                     @id @default(uuid()) @db.Uuid
+  notificationId String                     @map("notification_id") @db.Uuid
+  recipientId    String                     @map("recipient_id") @db.Uuid
+  status         NotificationDeliveryStatus @default(PENDING)
+  attempts       Int                        @default(0)
+  nextAttemptAt  DateTime?                  @map("next_attempt_at")
+  lastError      String?                    @map("last_error")
+  sentAt         DateTime?                  @map("sent_at")
+  createdAt      DateTime                   @default(now()) @map("created_at")
+  notification   NotificationOutbox         @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  recipient      TelegramRecipient          @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@unique([notificationId, recipientId])
+  @@index([status, nextAttemptAt])
+  @@map("notification_deliveries")
 }
 
 model Task {
