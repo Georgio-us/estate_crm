@@ -464,21 +464,9 @@
 }
 
 .cardUnread {
-  border-color: #85a9e8;
+  border: 2px solid #78a1e6;
   background: linear-gradient(135deg, #ffffff 55%, #f0f5ff);
-  box-shadow: 0 0 0 2px rgba(83, 128, 207, .14), 0 6px 18px rgba(50, 91, 163, .12);
-}
-
-.cardUnread::before {
-  position: absolute;
-  top: 10px;
-  left: -4px;
-  width: 7px;
-  height: 7px;
-  border: 2px solid var(--background);
-  border-radius: 50%;
-  background: #3f73cf;
-  content: "";
+  box-shadow: 0 0 0 3px rgba(83, 128, 207, .16), 0 8px 22px rgba(50, 91, 163, .14);
 }
 
 .cardDragging {
@@ -624,7 +612,6 @@
 .task.overdue { background: #faeaea; color: #ae4848; }
 .task.normal b, .task.due b, .task.overdue b { color: inherit; }
 
-.task::before,
 .noTask::before {
   margin-right: 5px;
   content: "○";
@@ -858,6 +845,13 @@
   .toolbar > div:first-child { width: 100%; }
   .toolbarActions { width: 100%; justify-content: space-between; }
   .viewSwitch { display: flex; }
+
+  .cardFooter { align-items: flex-start; gap: 10px; }
+  .assignee { width: 30px; height: 30px; font-size: var(--font-size-body-sm); }
+  .task { min-height: 46px; gap: 3px; padding: 7px 10px; }
+  .task b { font-size: var(--font-size-caption); }
+  .task span { font-size: var(--font-size-body-sm); }
+  .noTask { display: flex; min-height: 30px; align-items: center; font-size: var(--font-size-body-sm); }
 
   .board {
     min-height: calc(100vh - var(--topbar-height) - 116px);
