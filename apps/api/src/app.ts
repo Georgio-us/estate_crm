@@ -14,6 +14,7 @@ import { registerIntegrationRoutes } from "./integrations/routes.js";
 import { registerPipelineRoutes } from "./pipeline/routes.js";
 import { registerPropertyRoutes } from "./properties/routes.js";
 import { registerTaskRoutes } from "./tasks/routes.js";
+import { registerTeamRoutes } from "./team/routes.js";
 import { registerTelegramRoutes } from "./telegram/routes.js";
 
 export async function buildApp(
@@ -61,6 +62,7 @@ export async function buildApp(
   await registerPipelineRoutes(app, database);
   await registerActivityRoutes(app, database);
   await registerTaskRoutes(app, database);
+  await registerTeamRoutes(app, database);
   await registerPropertyRoutes(app, database);
   await registerDashboardRoutes(app, database);
   await registerIntegrationRoutes(app, database);

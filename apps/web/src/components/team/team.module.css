@@ -614,6 +614,10 @@
 .empty p { margin: 0; }
 
 .backLink { margin-right: auto; color: var(--text); font-weight: var(--font-weight-semibold); }
+.readOnlyNote { color: var(--text-muted); font-size: var(--font-size-body-sm); }
+.decisions button:disabled { cursor: default; }
+.profileRows input:read-only,
+.profileRows select:disabled { color: var(--text); opacity: 1; }
 .memberPage { max-width: 1180px; }
 .memberHero { display: flex; align-items: center; gap: var(--space-5); }
 .memberHero > div { flex: 1; }

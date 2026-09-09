@@ -43,6 +43,50 @@ export interface ApiErrorResponse {
   message: string;
 }
 
+export type TeamMemberStatus = "INVITED" | "ACTIVE" | "SUSPENDED";
+
+export interface TeamDealSummary {
+  id: string;
+  number: number;
+  title: string;
+  request: string;
+}
+
+export interface TeamTaskSummary {
+  id: string;
+  title: string;
+  dueDate: string | null;
+  dueTime: string | null;
+  contactName: string | null;
+  dealId: string | null;
+  dealNumber: number | null;
+  dealTitle: string | null;
+}
+
+export interface TeamMemberRecord {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  role: MembershipRole;
+  status: TeamMemberStatus;
+  joinedAt: string;
+  updatedAt: string;
+  activeDeals: number;
+  activeTasks: number;
+  todayTasks: number;
+  overdueTasks: number;
+  deals: TeamDealSummary[];
+  tasks: TeamTaskSummary[];
+}
+
+export interface TeamResponse {
+  members: TeamMemberRecord[];
+  total: number;
+  active: number;
+  scope: "ORGANIZATION" | "OWN_TEAM";
+}
+
 export type TelegramNotificationAudience = "ALL" | "OWN" | "SELECTED" | "NONE";
 
 export interface TelegramNotificationPreferencesResponse {
