@@ -7,6 +7,7 @@ import { useTasks } from "@/components/tasks/TasksContext";
 import { NewTaskModal } from "@/components/tasks/NewTaskModal";
 import { TaskDetailsModal } from "@/components/tasks/TaskDetailsModal";
 import { CompleteTaskModal } from "@/components/tasks/CompleteTaskModal";
+import { TaskKindIcon, UiIcon } from "@/components/ui/UiIcon";
 import { localDateKey } from "@/lib/tasks";
 import type { TaskKind } from "@/types/crm";
 import styles from "./calendar.module.css";
@@ -16,7 +17,6 @@ type CalendarMode = "month" | "week";
 const TODAY_KEY = localDateKey();
 const weekDayNames = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 const monthNames = ["Январь", "Февраль", "Март", "Апрель", "Май", "Июнь", "Июль", "Август", "Сентябрь", "Октябрь", "Ноябрь", "Декабрь"];
-const kindIcons: Record<TaskKind, string> = { Звонок: "☎", Встреча: "□", Сообщение: "↗", Другое: "✓" };
 const kindTone: Record<TaskKind, string> = { Звонок: "call", Встреча: "meeting", Сообщение: "message", Другое: "other" };
 
 function dateKey(date: Date) {
@@ -124,7 +124,7 @@ export function CalendarView() {
     <section className={styles.page}>
       <header className={styles.topbar}>
         <h1>Календарь</h1>
-        <label className={styles.search}><span aria-hidden="true">⌕</span><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Задача, контакт или сделка" /></label>
+        <label className={styles.search}><UiIcon name="search" /><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Задача, контакт или сделка" /></label>
         <button className={styles.primaryButton} type="button" aria-label="Новая задача" onClick={() => setIsCreating(true)}><span aria-hidden="true">＋</span><span className={styles.actionLabel}>Новая задача</span></button>
       </header>
 
@@ -168,7 +168,7 @@ export function CalendarView() {
               {selectedTasks.length ? selectedTasks.map((task) => (
                 <article className={`${styles.agendaItem} ${task.period === "completed" ? styles.completedAgenda : ""}`} key={task.id}>
                   <button className={styles.checkButton} type="button" aria-label={task.period === "completed" ? `Задача выполнена: ${task.title}` : `Выполнить задачу: ${task.title}`} disabled={task.period === "completed"} onClick={() => setCompletingTaskId(task.id)}>{task.period === "completed" ? "✓" : ""}</button>
-                  <button className={styles.agendaMain} type="button" onClick={() => setSelectedTaskId(task.id)}><span><i>{kindIcons[task.kind]}</i>{task.kind}<time>{task.dueTime || "Без времени"}</time></span><strong>{task.title}</strong><small>{task.assignee}</small></button>
+                  <button className={styles.agendaMain} type="button" onClick={() => setSelectedTaskId(task.id)}><span><i><TaskKindIcon kind={task.kind} /></i>{task.kind}<time>{task.dueTime || "Без времени"}</time></span><strong>{task.title}</strong><small>{task.assignee}</small></button>
                   {(task.contactName || task.dealTitle) && <div className={styles.relations}>{task.contactName && <Link href={`/contacts?contact=${task.contactId}`}>{task.contactName}</Link>}{task.dealTitle && task.dealId && <Link href={`/?deal=${task.dealId}&task=${task.id}`}>Открыть сделку · {task.dealTitle}</Link>}</div>}
                 </article>
               )) : <div className={styles.emptyDay}><span>○</span><h4>На этот день задач нет</h4><p>Можно оставить день свободным или запланировать действие.</p><button type="button" onClick={() => setIsCreating(true)}>＋ Добавить задачу</button></div>}

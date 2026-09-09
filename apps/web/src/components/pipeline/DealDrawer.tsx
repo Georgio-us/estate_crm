@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { UiIcon } from "@/components/ui/UiIcon";
 import { localDateKey } from "@/lib/tasks";
 import type { ActivityCategory, ActivityEvent, CrmTask, Deal, DealStatus } from "@/types/crm";
 import { isValidPhone } from "@/lib/phone";
@@ -299,7 +300,7 @@ export function DealDrawer({
                   <a href={`tel:${(draft.phone || "").replaceAll(" ", "")}`}>Позвонить</a>
                 </div>}
               </div>
-              <PropertyInput label="Телефон" icon="☎" value={draft.phone || ""} onChange={(value) => updateDraft({ phone: value })} />
+              <PropertyInput label="Телефон" icon={<UiIcon name="phone" />} value={draft.phone || ""} onChange={(value) => updateDraft({ phone: value })} />
               <SourceSelect value={draft.source} onChange={(value) => updateDraft({ source: value })} />
             </section>
 
@@ -402,7 +403,7 @@ export function DealDrawer({
   );
 }
 
-function PropertyInput({ label, icon, value, placeholder, readOnly = false, onChange }: { label: string; icon: string; value: string; placeholder?: string; readOnly?: boolean; onChange: (value: string) => void }) {
+function PropertyInput({ label, icon, value, placeholder, readOnly = false, onChange }: { label: string; icon: ReactNode; value: string; placeholder?: string; readOnly?: boolean; onChange: (value: string) => void }) {
   return <label className={styles.propertyRow}><span className={styles.propertyLabel}><i>{icon}</i>{label}</span><input value={value} placeholder={placeholder} readOnly={readOnly} onChange={(event) => onChange(event.target.value)} /></label>;
 }
 

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { LogoMark } from "@/components/brand/LogoMark";
+import { UiIcon, type UiIconName } from "@/components/ui/UiIcon";
 import styles from "./integrations.module.css";
 
 type IntegrationProvider = "TEST" | "META_LEAD_ADS" | "INSTAGRAM_DIRECT" | "TELEPHONY" | "TELEGRAM";
@@ -14,15 +15,15 @@ type GoogleSheetsSetup = { connectionId: string; webhookUrl: string; secret: str
 type TelegramSetup = { connectUrl: string; expiresAt: string };
 
 type Category = "Все" | "Реклама" | "Мессенджеры" | "Телефония" | "Данные";
-type Integration = { id: string; provider?: IntegrationProvider; name: string; category: Exclude<Category, "Все">; description: string; mark: string; brand: string; available: boolean };
+type Integration = { id: string; provider?: IntegrationProvider; name: string; category: Exclude<Category, "Все">; description: string; icon: UiIconName; brand: string; available: boolean };
 const categories: Category[] = ["Все", "Реклама", "Мессенджеры", "Телефония", "Данные"];
 const integrations: Integration[] = [
-  { id: "facebook", provider: "META_LEAD_ADS", name: "Meta Lead Ads · Google Sheets", category: "Реклама", description: "Рабочий маршрут Delmar: Meta → Google Sheets → Estate CRM.", mark: "f", brand: "facebook", available: true },
-  { id: "instagram", provider: "INSTAGRAM_DIRECT", name: "Instagram Direct", category: "Мессенджеры", description: "Будущий адаптер обращений из Direct без привязки ядра CRM к Meta.", mark: "◎", brand: "instagram", available: false },
-  { id: "telephony", provider: "TELEPHONY", name: "Телефония", category: "Телефония", description: "Единый адаптер для входящих и пропущенных звонков.", mark: "☎", brand: "phone", available: false },
-  { id: "telegram", provider: "TELEGRAM", name: "Telegram", category: "Мессенджеры", description: "Новые лиды, сроки и просрочки со ссылкой на нужную карточку CRM.", mark: "➤", brand: "telegram", available: true },
-  { id: "test", provider: "TEST", name: "Тестовый шлюз", category: "Данные", description: "Проверка полного маршрута лида без внешних аккаунтов и ключей.", mark: "↗", brand: "webhook", available: true },
-  { id: "csv", name: "CSV / Excel", category: "Данные", description: "Импорт и экспорт сделок из файлов.", mark: "CSV", brand: "csv", available: true },
+  { id: "facebook", provider: "META_LEAD_ADS", name: "Meta Lead Ads · Google Sheets", category: "Реклама", description: "Рабочий маршрут Delmar: Meta → Google Sheets → Estate CRM.", icon: "facebook", brand: "facebook", available: true },
+  { id: "instagram", provider: "INSTAGRAM_DIRECT", name: "Instagram Direct", category: "Мессенджеры", description: "Будущий адаптер обращений из Direct без привязки ядра CRM к Meta.", icon: "instagram", brand: "instagram", available: false },
+  { id: "telephony", provider: "TELEPHONY", name: "Телефония", category: "Телефония", description: "Единый адаптер для входящих и пропущенных звонков.", icon: "phone", brand: "phone", available: false },
+  { id: "telegram", provider: "TELEGRAM", name: "Telegram", category: "Мессенджеры", description: "Новые лиды, сроки и просрочки со ссылкой на нужную карточку CRM.", icon: "telegram", brand: "telegram", available: true },
+  { id: "test", provider: "TEST", name: "Тестовый шлюз", category: "Данные", description: "Проверка полного маршрута лида без внешних аккаунтов и ключей.", icon: "webhook", brand: "webhook", available: true },
+  { id: "csv", name: "CSV / Excel", category: "Данные", description: "Импорт и экспорт сделок из файлов.", icon: "csv", brand: "csv", available: true },
 ];
 const providerNames: Record<IntegrationProvider, string> = { TEST: "Тестовый шлюз", META_LEAD_ADS: "Facebook Lead Ads", INSTAGRAM_DIRECT: "Instagram Direct", TELEPHONY: "Телефония", TELEGRAM: "Telegram" };
 
@@ -46,11 +47,11 @@ export function IntegrationsMarketplace() {
   const processed = data?.connections.reduce((sum, item) => sum + item.processedCount, 0) ?? 0;
 
   return <section className={styles.page}>
-    <header className={styles.topbar}><h1>Интеграции</h1><label className={styles.topSearch}><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Найти интеграцию" /></label><button className={styles.primaryButton} type="button" onClick={() => setSelectedId("test")}>＋ Тестовый лид</button></header>
+    <header className={styles.topbar}><h1>Интеграции</h1><label className={styles.topSearch}><UiIcon name="search" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Найти интеграцию" /></label><button className={styles.primaryButton} type="button" onClick={() => setSelectedId("test")}>＋ Тестовый лид</button></header>
     <main className={styles.content}>
-      <section className={styles.hero}><div className={styles.heroCopy}><span className={styles.eyebrow}>Интеграционный шлюз</span><h2>Каналы подключаются как модули</h2><p>CRM отделяет приём обращения, обработку лида и доставку уведомлений. Внешние доступы подключаются следующим слоем.</p><button type="button" onClick={() => setSelectedId("test")}>Проверить маршрут <span>→</span></button></div><div className={styles.heroVisual} aria-hidden="true"><span className={`${styles.heroTile} ${styles.facebook}`}>f<small>Lead Ads</small></span><span className={`${styles.heroTile} ${styles.telegram}`}>➤<small>Telegram</small></span><i className={styles.connectorOne} /><i className={styles.connectorTwo} /><span className={styles.crmNode}><LogoMark /><small>Estate CRM</small></span></div></section>
+      <section className={styles.hero}><div className={styles.heroCopy}><span className={styles.eyebrow}>Интеграционный шлюз</span><h2>Каналы подключаются как модули</h2><p>CRM отделяет приём обращения, обработку лида и доставку уведомлений. Внешние доступы подключаются следующим слоем.</p><button type="button" onClick={() => setSelectedId("test")}>Проверить маршрут <span>→</span></button></div><div className={styles.heroVisual} aria-hidden="true"><div className={styles.moduleMosaic}><span className={`${styles.moduleTile} ${styles.facebook}`}><UiIcon name="facebook" /><small>Лиды</small></span><span className={`${styles.moduleTile} ${styles.instagram}`}><UiIcon name="instagram" /><small>Instagram</small></span><span className={styles.crmTile}><LogoMark /><small>Estate CRM</small></span><span className={`${styles.moduleTile} ${styles.telegram}`}><UiIcon name="telegram" /><small>Telegram</small></span><span className={`${styles.moduleTile} ${styles.phone}`}><UiIcon name="phone" /><small>Телефония</small></span></div></div></section>
       <section className={styles.statusStrip}><div><strong>{connected}</strong><span>реально подключено</span></div><div><strong>{processed}</strong><span>обращений обработано</span></div><div><strong>{data?.pendingNotifications ?? 0}</strong><span>уведомлений в очереди</span></div><div className={error ? "" : styles.healthy}><strong>{loading ? "…" : error ? "!" : "●"}</strong><span>{loading ? "Проверяем состояние" : error || "Ядро работает"}</span></div></section>
-      <section className={styles.catalog}><header><div><span className={styles.eyebrow}>Модули</span><h3>Интеграции CRM</h3><p>Статусы ниже приходят из базы, а не из макета.</p></div><span>{visible.length} решений</span></header><div className={styles.controls}><label className={styles.catalogSearch}><span>⌕</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Поиск" /></label><nav>{categories.map((item) => <button className={category === item ? styles.activeCategory : ""} type="button" onClick={() => setCategory(item)} key={item}>{item}</button>)}</nav></div>
+      <section className={styles.catalog}><header><div><span className={styles.eyebrow}>Модули</span><h3>Интеграции CRM</h3><p>Статусы ниже приходят из базы, а не из макета.</p></div><span>{visible.length} решений</span></header><div className={styles.controls}><label className={styles.catalogSearch}><UiIcon name="search" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Поиск" /></label><nav>{categories.map((item) => <button className={category === item ? styles.activeCategory : ""} type="button" onClick={() => setCategory(item)} key={item}>{item}</button>)}</nav></div>
         <div className={styles.marketGrid}>{visible.map((item) => { const state = item.provider ? states.get(item.provider) : undefined; const ready = state?.status === "READY" || state?.status === "CONNECTED"; return <button className={styles.marketCard} type="button" onClick={() => setSelectedId(item.id)} key={item.id}><div className={`${styles.cardArt} ${styles[item.brand]}`}><BrandMark item={item} /><span>{item.category}</span></div><div className={styles.cardBody}><span><strong>{item.name}</strong>{ready && <i>✓</i>}</span><p>{item.description}</p><footer><StatusBadge item={item} state={state} /><b>Открыть →</b></footer></div></button>; })}</div>
       </section>
       {data?.events.length ? <section className={styles.syncLog}><h3>Последние входящие события</h3>{data.events.slice(0, 8).map((event) => <div key={event.id}><span><strong>{providerNames[event.provider]}</strong> · {event.contactName ?? "Контакт"}{event.dealNumber ? ` · сделка #${event.dealNumber}` : ""}</span><time>{new Date(event.receivedAt).toLocaleString("ru")}</time></div>)}</section> : null}
@@ -59,7 +60,7 @@ export function IntegrationsMarketplace() {
   </section>;
 }
 
-function BrandMark({ item }: { item: Integration }) { return <span className={`${styles.brandMark} ${styles[item.brand]}`}>{item.mark}</span>; }
+function BrandMark({ item }: { item: Integration }) { return <span className={`${styles.brandMark} ${styles[item.brand]}`}><UiIcon name={item.icon} /></span>; }
 function StatusBadge({ item, state }: { item: Integration; state?: IntegrationConnectionRecord }) { const ready = state?.status === "READY" || state?.status === "CONNECTED"; const label = state?.status === "CONNECTED" ? "● Подключено" : state?.status === "READY" ? "● Готово" : item.available ? "Доступно" : "Нужны доступы"; return <span className={`${styles.availability} ${ready ? styles.connectedBadge : styles.expertBadge}`}>{label}</span>; }
 
 function IntegrationPanel({ item, state, onCreated, onClose }: { item: Integration; state?: IntegrationConnectionRecord; onCreated: () => Promise<void>; onClose: () => void }) {

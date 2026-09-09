@@ -85,8 +85,8 @@ export default function LoginPage() {
         </form>
       </section>
       <aside className={styles.loginAside}>
-        <div><span>CRM Del Mar</span><h2>Все обращения, сделки и задачи команды — в одном рабочем пространстве.</h2></div>
-        <small>Безопасный доступ для сотрудников агентства</small>
+        <div><span>Агентство недвижимости Delmar</span><h2>Все обращения, сделки и задачи — в одном рабочем пространстве.</h2></div>
+        <small>Безопасный доступ для сотрудников агентства.</small>
       </aside>
     </main>
   );

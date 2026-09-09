@@ -95,11 +95,15 @@
 }
 
 .navIcon {
-  width: 18px;
+  display: grid;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  place-items: center;
   color: currentColor;
-  font-size: var(--font-size-body-lg);
-  text-align: center;
 }
+
+.navIcon svg { width: 20px; height: 20px; }
 
 .navBadge {
   min-width: 20px;

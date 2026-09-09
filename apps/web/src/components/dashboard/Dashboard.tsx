@@ -7,6 +7,7 @@ import { CompleteTaskModal } from "@/components/tasks/CompleteTaskModal";
 import { TaskDetailsModal } from "@/components/tasks/TaskDetailsModal";
 import { useTasks } from "@/components/tasks/TasksContext";
 import { useCurrentUser } from "@/components/auth/AuthContext";
+import { TaskKindIcon } from "@/components/ui/UiIcon";
 import type { ActivityCategory, CrmTask } from "@/types/crm";
 import styles from "./dashboard.module.css";
 
@@ -16,13 +17,6 @@ const activityIcons: Record<ActivityCategory, string> = {
   change: "↔",
   source: "↗",
   object: "◇",
-};
-
-const taskKindIcons: Record<CrmTask["kind"], string> = {
-  Звонок: "☎",
-  Встреча: "□",
-  Сообщение: "↗",
-  Другое: "✓",
 };
 
 interface DashboardData {
@@ -187,7 +181,7 @@ export function Dashboard() {
                 {focusTasks.length ? focusTasks.slice(0, 4).map((task) => (
                   <article className={styles.taskRow} key={task.id}>
                     <button className={`${styles.taskCheck} ${task.period === "overdue" ? styles.taskCheckOverdue : ""}`} type="button" aria-label={`Выполнить: ${task.title}`} onClick={() => setCompletingTaskId(task.id)} />
-                    <span className={styles.taskIcon}>{taskKindIcons[task.kind]}</span>
+                    <span className={styles.taskIcon}><TaskKindIcon kind={task.kind} /></span>
                     <button className={styles.taskText} type="button" onClick={() => openTask(task)}><strong>{task.title}</strong><span>{task.contactName || "Без контакта"}{task.dealNumber ? ` · Сделка #${task.dealNumber}` : ""}</span></button>
                     <time className={task.period === "overdue" ? styles.overdue : ""}>{task.period === "overdue" ? "Просрочено" : task.dueTime || "Сегодня"}</time>
                   </article>

@@ -6,23 +6,26 @@ import { useEffect, useRef, useState } from "react";
 import { useCurrentUser } from "@/components/auth/AuthContext";
 import { LogoMark } from "@/components/brand/LogoMark";
 import { useTasks } from "@/components/tasks/TasksContext";
+import { UiIcon, type UiIconName } from "@/components/ui/UiIcon";
 import styles from "./layout.module.css";
 
-const primaryItems = [
-  ["⌂", "Главная", "/home"],
-  ["▥", "Воронка", "/"],
-  ["◎", "Контакты", "/contacts"],
-  ["◇", "Объекты", "/objects"],
-  ["✓", "Задачи", "/tasks"],
-  ["□", "Календарь", "/calendar"],
+type NavigationItem = { icon: UiIconName; label: string; href: string };
+
+const primaryItems: NavigationItem[] = [
+  { icon: "home", label: "Главная", href: "/home" },
+  { icon: "pipeline", label: "Воронка", href: "/" },
+  { icon: "contacts", label: "Контакты", href: "/contacts" },
+  { icon: "properties", label: "Объекты", href: "/objects" },
+  { icon: "tasks", label: "Задачи", href: "/tasks" },
+  { icon: "calendar", label: "Календарь", href: "/calendar" },
 ];
 
-const secondaryItems = [
-  ["↗", "Интеграции", "/integrations"],
-  ["♙", "Команда", "/team"],
-  ["≡", "Документация", "/documentation"],
-  ["◫", "Подписка", "/subscription"],
-  ["⚙", "Настройки", "/settings"],
+const secondaryItems: NavigationItem[] = [
+  { icon: "integrations", label: "Интеграции", href: "/integrations" },
+  { icon: "team", label: "Команда", href: "/team" },
+  { icon: "documentation", label: "Документация", href: "/documentation" },
+  { icon: "subscription", label: "Подписка", href: "/subscription" },
+  { icon: "settings", label: "Настройки", href: "/settings" },
 ];
 
 interface SidebarProps {
@@ -46,7 +49,7 @@ export function Sidebar({ collapsed, mobileOpen, onMobileClose, onToggle }: Side
     : user.organization.role === "LEAD"
       ? "Руководитель"
       : "Менеджер";
-  const visibleSecondaryItems = secondaryItems.filter(([, label]) => {
+  const visibleSecondaryItems = secondaryItems.filter(({ label }) => {
     if (label === "Команда" && user.organization.role === "MANAGER") return false;
     if ((label === "Подписка" || label === "Настройки") && user.organization.role !== "ADMIN") return false;
     return true;
@@ -94,14 +97,14 @@ export function Sidebar({ collapsed, mobileOpen, onMobileClose, onToggle }: Side
 
       <nav className={styles.navigation} aria-label="Основная навигация">
         <div className={styles.navGroup}>
-          {primaryItems.map(([icon, label, href]) => (
+          {primaryItems.map(({ icon, label, href }) => (
             <Link
               className={`${styles.navItem} ${(href === "/" ? pathname === "/" : pathname.startsWith(href)) ? styles.navItemActive : ""}`}
               href={href}
               key={label}
               onClick={onMobileClose}
             >
-              <span className={styles.navIcon}>{icon}</span>
+              <span className={styles.navIcon}><UiIcon name={icon} /></span>
               <span>{label}</span>
               {label === "Задачи" && activeTaskCount > 0 && <span className={styles.navBadge}>{activeTaskCount}</span>}
             </Link>
@@ -111,9 +114,9 @@ export function Sidebar({ collapsed, mobileOpen, onMobileClose, onToggle }: Side
         <div className={styles.navLabel}>Управление</div>
 
         <div className={styles.navGroup}>
-          {visibleSecondaryItems.map(([icon, label, href]) => (
+          {visibleSecondaryItems.map(({ icon, label, href }) => (
             <Link className={`${styles.navItem} ${href !== "#" && pathname.startsWith(href) ? styles.navItemActive : ""}`} href={href} key={label} onClick={onMobileClose}>
-              <span className={styles.navIcon}>{icon}</span>
+              <span className={styles.navIcon}><UiIcon name={icon} /></span>
               <span>{label}</span>
             </Link>
           ))}

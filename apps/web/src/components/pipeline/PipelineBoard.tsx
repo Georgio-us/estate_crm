@@ -21,6 +21,7 @@ import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { useRouter } from "next/navigation";
 import { useCurrentUser } from "@/components/auth/AuthContext";
 import { LogoMark } from "@/components/brand/LogoMark";
+import { UiIcon } from "@/components/ui/UiIcon";
 import { useTasks } from "@/components/tasks/TasksContext";
 import { normalizePhone } from "@/lib/phone";
 import { localDateKey } from "@/lib/tasks";
@@ -779,7 +780,7 @@ export function PipelineBoard() {
         <h1>Воронка</h1>
 
         <label className={styles.search}>
-          <span aria-hidden="true">⌕</span>
+          <UiIcon name="search" />
           <input type="search" placeholder="Поиск по сделкам" value={query} onChange={(event) => setQuery(event.target.value)} />
         </label>
 

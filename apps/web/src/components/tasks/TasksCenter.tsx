@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useCurrentUser } from "@/components/auth/AuthContext";
+import { TaskKindIcon, UiIcon } from "@/components/ui/UiIcon";
 import { localDateKey } from "@/lib/tasks";
 import type { CrmTask, TaskKind, TaskPeriod } from "@/types/crm";
 import { CompleteTaskModal } from "./CompleteTaskModal";
@@ -19,8 +20,6 @@ const periodLabels: Record<TaskPeriod, string> = {
   upcoming: "Предстоящие",
   completed: "Выполненные",
 };
-
-const kindIcons: Record<TaskKind, string> = { Звонок: "☎", Встреча: "□", Сообщение: "↗", Другое: "✓" };
 
 export function TasksCenter() {
   const user = useCurrentUser();
@@ -73,7 +72,7 @@ export function TasksCenter() {
     <section className={styles.page}>
       <header className={styles.topbar}>
         <h1>Задачи</h1>
-        <label className={styles.search}><span>⌕</span><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Задача, контакт или сделка" /></label>
+        <label className={styles.search}><UiIcon name="search" /><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Задача, контакт или сделка" /></label>
         <button className={styles.primaryButton} type="button" aria-label="Новая задача" onClick={() => setIsCreating(true)}>
           <span aria-hidden="true">＋</span><span className={styles.actionLabel}>Новая задача</span>
         </button>
@@ -118,7 +117,7 @@ function TaskRow({ task, onOpen, onComplete }: { task: CrmTask; onOpen: () => vo
   return (
     <article className={`${styles.taskRow} ${isCompleted ? styles.taskCompleted : ""}`}>
       <button className={styles.checkButton} type="button" aria-label={isCompleted ? "Задача выполнена" : `Выполнить: ${task.title}`} disabled={isCompleted} onClick={onComplete}>{isCompleted ? "✓" : ""}</button>
-      <span className={styles.kindIcon}>{kindIcons[task.kind]}</span>
+      <span className={styles.kindIcon}><TaskKindIcon kind={task.kind} /></span>
       <button className={styles.taskMain} type="button" onClick={onOpen}><strong>{task.title}</strong><span>{task.kind}{task.result && ` · ${task.result}`}</span></button>
       <div className={styles.relation}>{task.contactName ? <Link href={`/contacts?contact=${task.contactId}`}>{task.contactName}</Link> : <span>Без контакта</span>}{task.dealNumber && task.dealId && <Link href={`/?deal=${task.dealId}&task=${task.id}`}>Открыть сделку #{task.dealNumber}</Link>}</div>
       <span className={styles.taskAssignee}><i>{task.assignee.slice(0, 1)}</i>{task.assignee}</span>

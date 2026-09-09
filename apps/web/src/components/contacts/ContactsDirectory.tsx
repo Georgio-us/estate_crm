@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useCurrentUser } from "@/components/auth/AuthContext";
 import { mapApiActivity, type ApiActivity } from "@/lib/activity";
 import type { ActivityEvent, Contact, Deal } from "@/types/crm";
 import { NewDealModal, type NewDealDraft } from "@/components/pipeline/NewDealModal";
 import { NewTaskModal } from "@/components/tasks/NewTaskModal";
 import { useTasks } from "@/components/tasks/TasksContext";
+import { UiIcon } from "@/components/ui/UiIcon";
 import { ContactDrawer } from "./ContactDrawer";
 import { NewContactModal, type NewContactDraft } from "./NewContactModal";
 import styles from "./contacts.module.css";
@@ -300,7 +301,7 @@ export function ContactsDirectory() {
     <section className={styles.page}>
       <header className={styles.topbar}>
         <h1>Контакты</h1>
-        <label className={styles.search}><span>⌕</span><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Имя, телефон, email или Telegram" /></label>
+        <label className={styles.search}><UiIcon name="search" /><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Имя, телефон, email или Telegram" /></label>
         <button className={styles.primaryButton} type="button" aria-label="Новый контакт" onClick={() => setIsCreating(true)}>
           <span aria-hidden="true">＋</span><span className={styles.actionLabel}>Новый контакт</span>
         </button>
@@ -343,7 +344,7 @@ export function ContactsDirectory() {
                 </table>
               </div>
             </div>
-          ) : hasFilters ? <StatusState symbol="⌕" title="Контакты не найдены" text="Измените запрос или сбросьте фильтры." action="Сбросить фильтры" onAction={resetFilters} /> : <StatusState symbol="＋" title="Контактов пока нет" text="Создайте первый контакт — он сохранится в базе этого пространства." action="Создать контакт" onAction={() => setIsCreating(true)} />}
+          ) : hasFilters ? <StatusState symbol={<UiIcon name="search" />} title="Контакты не найдены" text="Измените запрос или сбросьте фильтры." action="Сбросить фильтры" onAction={resetFilters} /> : <StatusState symbol="＋" title="Контактов пока нет" text="Создайте первый контакт — он сохранится в базе этого пространства." action="Создать контакт" onAction={() => setIsCreating(true)} />}
         </section>
       </div>
 
@@ -359,7 +360,7 @@ function Filter({ label, value, options, optionLabels = {}, onChange }: { label:
   return <label className={styles.filter}><span>{label}</span><select value={value} onChange={(event) => onChange(event.target.value)}><option value="all">Все</option>{options.map((option) => <option value={option} key={option}>{optionLabels[option] || option}</option>)}</select></label>;
 }
 
-function StatusState({ symbol, title, text, action, onAction }: { symbol: string; title: string; text: string; action?: string; onAction?: () => void }) {
+function StatusState({ symbol, title, text, action, onAction }: { symbol: ReactNode; title: string; text: string; action?: string; onAction?: () => void }) {
   return <div className={styles.empty}><span>{symbol}</span><h3>{title}</h3><p>{text}</p>{action && onAction && <button type="button" onClick={onAction}>{action}</button>}</div>;
 }
 

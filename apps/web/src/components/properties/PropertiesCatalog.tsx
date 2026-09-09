@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { UiIcon } from "@/components/ui/UiIcon";
 import type { PropertyCategory, PropertyListing, PropertyMarket, PropertyStatus } from "@/types/crm";
 import { NewPropertyModal, type NewPropertyDraft } from "./NewPropertyModal";
 import { PropertyDrawer } from "./PropertyDrawer";
@@ -129,7 +130,7 @@ export function PropertiesCatalog() {
       <header className={styles.topbar}>
         <h1>Объекты</h1>
         <label className={styles.search}>
-          <span>⌕</span>
+          <UiIcon name="search" />
           <input value={search} onChange={(event) => setSearch(event.target.value)} type="search" placeholder="Адрес, ЖК или номер объекта" />
         </label>
         <button className={styles.primaryButton} type="button" aria-label="Новый объект" onClick={() => setIsCreating(true)}>
@@ -167,7 +168,7 @@ export function PropertiesCatalog() {
             <PropertyTable properties={visibleProperties} onOpen={setSelectedId} />
           )
         ) : (
-          <div className={styles.emptyState}><span>⌕</span><h3>Объекты не найдены</h3><p>Измените параметры поиска или сбросьте фильтры.</p><button type="button" onClick={resetFilters}>Сбросить фильтры</button></div>
+          <div className={styles.emptyState}><span><UiIcon name="search" /></span><h3>Объекты не найдены</h3><p>Измените параметры поиска или сбросьте фильтры.</p><button type="button" onClick={resetFilters}>Сбросить фильтры</button></div>
         )}
       </div>
 

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { useCurrentUser } from "@/components/auth/AuthContext";
+import { UiIcon } from "@/components/ui/UiIcon";
 import type { TeamMember, TeamRole, TeamStatus } from "@/types/crm";
 import styles from "./team.module.css";
 
@@ -116,7 +117,7 @@ export function TeamDirectory() {
   if (selected) return <MemberPage key={`${selected.id}-${selected.name}-${selected.phone}-${selected.role}-${selected.status}`} member={selected} currentUserId={currentUser.id} currentUserRole={currentUser.organization.role} onBack={() => router.push("/team")} onUpdated={refreshTeam} />;
 
   return <section className={styles.page}>
-    <header className={styles.topbar}><h1>Команда</h1><label className={styles.search}><span>⌕</span><input type="search" value={search} onFocus={() => setTab("people")} onChange={(event) => setSearch(event.target.value)} placeholder="Сотрудник или email" /></label><button className={styles.primaryButton} type="button" aria-label="Пригласить сотрудника" onClick={() => setInviteOpen(true)}><span>＋</span><b>Пригласить</b></button></header>
+    <header className={styles.topbar}><h1>Команда</h1><label className={styles.search}><UiIcon name="search" /><input type="search" value={search} onFocus={() => setTab("people")} onChange={(event) => setSearch(event.target.value)} placeholder="Сотрудник или email" /></label><button className={styles.primaryButton} type="button" aria-label="Пригласить сотрудника" onClick={() => setInviteOpen(true)}><span>＋</span><b>Пригласить</b></button></header>
     <main className={styles.content}>
       <div className={styles.heading}><div><span className={styles.eyebrow}>Рабочее пространство</span><h2>Управление командой</h2><p>Люди, нагрузка, роли и доступ к данным CRM.</p></div><span>{rows.filter((member) => member.status === "Активен").length} активных сотрудников</span></div>
       <nav className={styles.tabs} aria-label="Разделы команды">{moduleTabs.map((item) => <button className={tab === item.id ? styles.tabActive : ""} type="button" onClick={() => setTab(item.id)} key={item.id}>{item.label}{item.id === "invites" && rows.some((member) => member.status === "Приглашён") && <i>{rows.filter((member) => member.status === "Приглашён").length}</i>}</button>)}</nav>

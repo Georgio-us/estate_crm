@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { UiIcon } from "@/components/ui/UiIcon";
 import styles from "./documentation.module.css";
 
 type Status = "ready" | "partial" | "planned";
@@ -220,7 +221,7 @@ export function DocumentationCenter() {
       <header className={styles.topbar}>
         <h1>Документация</h1>
         <label className={styles.search}>
-          <span aria-hidden="true">⌕</span>
+          <UiIcon name="search" />
           <input type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Найти инструкцию" />
         </label>
       </header>

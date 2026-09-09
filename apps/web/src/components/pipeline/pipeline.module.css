@@ -54,11 +54,7 @@
   font-size: var(--font-size-body-sm);
 }
 
-.search > span {
-  flex: 0 0 auto;
-  font-size: 21px;
-  line-height: 1;
-}
+.search > svg { width: 22px; height: 22px; flex: 0 0 auto; }
 
 .iconButton,
 .primaryButton,
