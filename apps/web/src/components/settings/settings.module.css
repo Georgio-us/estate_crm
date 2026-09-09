@@ -83,6 +83,7 @@
 .saveBar { display: flex; align-items: center; justify-content: flex-end; gap: 18px; padding: 24px 0; }
 .saveBar span { color: var(--text-subtle); font-size: var(--font-size-caption); }
 .saveBar button { height: var(--control-height); padding: 0 15px; border: 0; border-radius: var(--radius-md); background: var(--text); color: #fff; cursor: pointer; font-weight: var(--font-weight-semibold); }
+.saveBar button:disabled { cursor: default; opacity: .45; }
 .ruleList { border-bottom: 1px solid var(--border); }
 .ruleList > label { display: flex; min-height: 90px; align-items: center; justify-content: space-between; gap: 24px; border-bottom: 1px solid var(--border); }
 .ruleList > label > span, .actionCard > span, .session > span, .profileHeader > span, .dangerZone > span { display: grid; gap: 4px; }
@@ -112,6 +113,7 @@
 .session { display: grid; min-height: 74px; grid-template-columns: 38px 1fr auto; align-items: center; gap: 12px; border-top: 1px solid var(--border); }
 .session > i { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 9px; background: #f0f0ee; font-style: normal; }
 .session b { color: var(--text-subtle); font-size: var(--font-size-caption); font-weight: normal; }
+.session > button { min-height: 34px; padding: 0 11px; border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: #fff; color: #a34444; cursor: pointer; }
 .dangerText { margin-top: 18px; padding: 0; border: 0; background: transparent; color: #b34649; cursor: pointer; }
 .dangerZone { display: flex; min-height: 128px; align-items: center; justify-content: space-between; gap: 28px; margin-top: 50px; padding: 26px; border: 1px solid #ead4d4; border-radius: var(--radius-lg); background: #fcf7f7; }
 .dangerZone button { height: var(--control-height); flex: 0 0 auto; padding: 0 14px; border: 1px solid #d89b9d; border-radius: var(--radius-md); background: #fff; color: #ad4044; cursor: pointer; }

@@ -22,7 +22,7 @@ function session(role: "ADMIN" | "LEAD" | "MANAGER") {
   return { id: "session-1", expiresAt: new Date(Date.now() + 60_000), user: sessionUser(role) };
 }
 
-test("manager list queries are limited to records assigned to the current user", async () => {
+test("manager list queries include own records and the shared active unassigned queue", async () => {
   const captured: Record<string, unknown> = {};
   const database = {
     client: {
@@ -51,13 +51,20 @@ test("manager list queries are limited to records assigned to the current user",
     assert.equal(response.statusCode, 200);
   }
 
-  assert.deepEqual(captured.deals, { status: "ACTIVE", assigneeId: managerId });
-  assert.deepEqual(captured.contacts, { organizationId, assigneeId: managerId });
+  assert.deepEqual(captured.deals, { status: "ACTIVE", organizationId, OR: [{ assigneeId: managerId }, { assigneeId: null, status: "ACTIVE" }] });
+  assert.deepEqual(captured.contacts, {
+    organizationId,
+    OR: [
+      { assigneeId: managerId },
+      { deals: { some: { status: "ACTIVE", assigneeId: managerId } } },
+      { deals: { some: { status: "ACTIVE", assigneeId: null } } },
+    ],
+  });
   assert.deepEqual(captured.tasks, { organizationId, assigneeId: managerId });
   await app.close();
 });
 
-test("manager cannot open or mutate another employee's records by direct id", async () => {
+test("manager direct-id queries keep organization and ownership or unassigned scopes", async () => {
   const scopes: Array<Record<string, unknown>> = [];
   const database = {
     client: {
@@ -81,7 +88,17 @@ test("manager cannot open or mutate another employee's records by direct id", as
     assert.equal(response.statusCode, 404);
   }
   assert.equal(scopes.length, 3);
-  assert.ok(scopes.every((where) => where.organizationId === organizationId && where.assigneeId === managerId));
+  assert.deepEqual(scopes[0], { id: "14a292bd-d84e-447c-b71a-aa185b809b88", organizationId, OR: [{ assigneeId: managerId }, { assigneeId: null, status: "ACTIVE" }] });
+  assert.deepEqual(scopes[1], {
+    id: "201f180c-d032-49a0-8aa7-04db19095eb2",
+    organizationId,
+    OR: [
+      { assigneeId: managerId },
+      { deals: { some: { status: "ACTIVE", assigneeId: managerId } } },
+      { deals: { some: { status: "ACTIVE", assigneeId: null } } },
+    ],
+  });
+  assert.deepEqual(scopes[2], { id: "3a93e90c-769d-4716-9b4c-9ab6fa153244", organizationId, assigneeId: managerId });
   await app.close();
 });
 

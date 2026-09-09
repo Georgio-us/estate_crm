@@ -144,6 +144,8 @@ export async function registerAuthRoutes(
         tokenHash: hashSessionToken(token),
         userId: user.id,
         expiresAt: sessionExpiry(config.sessionDays),
+        userAgent: request.headers["user-agent"] ?? null,
+        ipAddress: request.ip,
       },
     });
 
@@ -254,7 +256,7 @@ export async function registerAuthRoutes(
         where: { organizationId: invitation.organizationId, userId: invitation.userId, id: { not: invitation.id }, acceptedAt: null, revokedAt: null },
         data: { revokedAt: new Date() },
       });
-      await transaction.session.create({ data: { tokenHash: hashSessionToken(sessionToken), userId: invitation.userId, expiresAt } });
+      await transaction.session.create({ data: { tokenHash: hashSessionToken(sessionToken), userId: invitation.userId, expiresAt, userAgent: request.headers["user-agent"] ?? null, ipAddress: request.ip } });
     });
 
     const authenticatedUser: AuthenticatedUser = {

@@ -204,6 +204,9 @@ export function PipelineBoard() {
   const [transferOpen, setTransferOpen] = useState(false);
   const [pipelineView, setPipelineView] = useState<"active" | "closed">("active");
   const [notice, setNotice] = useState("");
+  const [assignmentPromptOpen, setAssignmentPromptOpen] = useState(false);
+  const [assignmentChoiceId, setAssignmentChoiceId] = useState("");
+  const [assignmentActionPending, setAssignmentActionPending] = useState(false);
   const readDealsStorageKey = `estate-crm:read-deals:${user.organization.id}:${user.id}`;
   const [readDealIds, setReadDealIds] = useState<Set<string>>(() => {
     if (typeof window === "undefined") return new Set();
@@ -243,6 +246,14 @@ export function PipelineBoard() {
           const parameters = new URLSearchParams(window.location.search);
           const newDealContact = parameters.get("newDealContact");
           const dealId = parameters.get("deal");
+          const filter = parameters.get("filter");
+          if (filter === "unassigned") {
+            setAssigneeFilter("Не назначен");
+            setFiltersOpen(true);
+          } else if (filter === "without-task") {
+            setTaskFilter("Без задачи");
+            setFiltersOpen(true);
+          }
           const stage = dealId ? pipeline.stages.find((item) => item.deals.some((deal) => deal.id === dealId)) : undefined;
           if (newDealContact && contactOptions.some((contact) => contact.id === newDealContact) && pipeline.stages[0]) {
             deepLinkHandledRef.current = true;
@@ -330,6 +341,18 @@ export function PipelineBoard() {
     } catch (cause) {
       setNotice(cause instanceof Error ? cause.message : "Не удалось изменить состояние сделки");
     }
+  }
+
+  async function deleteClosedDeals(dealIds: string[]) {
+    const response = await fetch("/api/crm/deals/bulk-delete", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ dealIds }),
+    });
+    const payload = await response.json() as { deleted?: number; message?: string };
+    if (!response.ok) throw new Error(payload.message || "Не удалось удалить сделки.");
+    setStages((current) => current.map((stage) => ({ ...stage, deals: stage.deals.filter((deal) => !dealIds.includes(deal.id)) })));
+    setNotice(`Удалено закрытых сделок: ${payload.deleted || dealIds.length}`);
   }
 
   const sensors = useSensors(
@@ -448,6 +471,63 @@ export function PipelineBoard() {
     const refreshedActivities = await requestDealActivities(savedDeal.id);
     setActivities((current) => ({ ...current, [savedDeal.id]: refreshedActivities }));
     return { deal: savedDeal, stageId: payload.stageId };
+  }
+
+  function closeDealDrawer() {
+    setAssignmentPromptOpen(false);
+    setAssignmentChoiceId("");
+    setSelected(null);
+    if (window.location.search) router.replace("/");
+  }
+
+  function requestDealClose() {
+    if (!selectedDeal || selectedDeal.assigneeId || pipelineView !== "active") {
+      closeDealDrawer();
+      return;
+    }
+    setAssignmentChoiceId("");
+    setAssignmentPromptOpen(true);
+  }
+
+  async function assignBeforeClose(assigneeId: string) {
+    if (!selectedDeal || !selectedStage) return;
+    const assignee = teamAssignees.find((item) => item.id === assigneeId);
+    if (!assignee) return;
+    setAssignmentActionPending(true);
+    try {
+      await saveDeal({ ...selectedDeal, assigneeId: assignee.id, assignee: assignee.name }, selectedStage.id);
+      setNotice(assignee.id === user.id ? "Сделка назначена вам" : `Ответственный: ${assignee.name}`);
+      closeDealDrawer();
+    } catch (cause) {
+      setNotice(cause instanceof Error ? cause.message : "Не удалось назначить ответственного");
+    } finally {
+      setAssignmentActionPending(false);
+    }
+  }
+
+  async function deferAssignment() {
+    if (!selectedDeal) return;
+    const title = `Назначить ответственного по сделке #${selectedDeal.number}`;
+    setAssignmentActionPending(true);
+    try {
+      const alreadyExists = selectedTasks.some((task) => task.title === title);
+      if (!alreadyExists) {
+        await createTask({
+          title,
+          kind: "Другое",
+          dueDate: localDateKey(),
+          dealId: selectedDeal.id,
+          contactId: selectedDeal.contactId,
+          assigneeId: user.id,
+        });
+      }
+      setNotice(alreadyExists ? "Задача о назначении уже активна" : "Задача о назначении поставлена на сегодня");
+      closeDealDrawer();
+    } catch (cause) {
+      setNotice(cause instanceof Error ? cause.message : "Не удалось поставить задачу");
+    } finally {
+      setAssignmentActionPending(false);
+    }
   }
 
   async function updateContactPhone(phone: string) {
@@ -847,7 +927,7 @@ export function PipelineBoard() {
         <DragOverlay dropAnimation={{ duration: 150, easing: "ease-out" }}>
           {activeDeal ? <DealCardPreview deal={activeDeal} /> : null}
         </DragOverlay>
-      </DndContext> : <DealList stages={filteredStages} closed={pipelineView === "closed"} onRestore={(dealId) => runDealLifecycle(dealId, "ACTIVE")} onOpenDeal={(dealId, stageId) => setSelected({ dealId, stageId })} />}
+      </DndContext> : <DealList stages={filteredStages} closed={pipelineView === "closed"} canDeleteClosed={user.organization.role !== "MANAGER"} onDeleteClosed={deleteClosedDeals} onRestore={(dealId) => runDealLifecycle(dealId, "ACTIVE")} onOpenDeal={openDeal} />}
 
       {selectedDeal && selectedStage && (
         <DealDrawer
@@ -870,11 +950,33 @@ export function PipelineBoard() {
           onCompleteTask={completeTask}
           onLifecycle={(status) => runDealLifecycle(selectedDeal.id, status)}
           onOpenContact={(contactId) => router.push(`/contacts?contact=${contactId}`)}
-          onClose={() => {
-            setSelected(null);
-            if (window.location.search) router.replace("/");
-          }}
+          onClose={requestDealClose}
         />
+      )}
+
+      {assignmentPromptOpen && selectedDeal && (
+        <div className={styles.assignmentLayer} role="dialog" aria-modal="true" aria-labelledby="assignment-title">
+          <div className={styles.assignmentBackdrop} />
+          <section className={styles.assignmentModal}>
+            <span className={styles.assignmentEyebrow}>Сделка #{selectedDeal.number}</span>
+            <h3 id="assignment-title">Кто будет вести эту сделку?</h3>
+            <p>Вы открыли лид без ответственного. Зафиксируйте решение, чтобы он не потерялся после первого касания.</p>
+            <div className={styles.assignmentActions}>
+              <button className={styles.assignmentPrimary} type="button" disabled={assignmentActionPending} onClick={() => { void assignBeforeClose(user.id); }}>Я буду ответственным</button>
+              {user.organization.role !== "MANAGER" && (
+                <div className={styles.assignmentDelegate}>
+                  <select aria-label="Выберите ответственного" value={assignmentChoiceId} disabled={assignmentActionPending} onChange={(event) => setAssignmentChoiceId(event.target.value)}>
+                    <option value="">Назначить коллегу…</option>
+                    {teamAssignees.filter((item) => item.id !== user.id).map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}
+                  </select>
+                  <button type="button" disabled={!assignmentChoiceId || assignmentActionPending} onClick={() => { void assignBeforeClose(assignmentChoiceId); }}>Назначить</button>
+                </div>
+              )}
+              <button className={styles.assignmentLater} type="button" disabled={assignmentActionPending} onClick={() => { void deferAssignment(); }}>Решить позже — поставить задачу на сегодня</button>
+              <button className={styles.assignmentReturn} type="button" disabled={assignmentActionPending} onClick={() => setAssignmentPromptOpen(false)}>Вернуться в карточку</button>
+            </div>
+          </section>
+        </div>
       )}
 
       {transferOpen && (
@@ -902,10 +1004,25 @@ export function PipelineBoard() {
   );
 }
 
-function DealList({ stages, closed = false, onRestore, onOpenDeal }: { stages: PipelineStage[]; closed?: boolean; onRestore?: (dealId: string) => Promise<void>; onOpenDeal: (dealId: string, stageId: string) => void }) {
+function DealList({ stages, closed = false, canDeleteClosed = false, onDeleteClosed, onRestore, onOpenDeal }: { stages: PipelineStage[]; closed?: boolean; canDeleteClosed?: boolean; onDeleteClosed?: (dealIds: string[]) => Promise<void>; onRestore?: (dealId: string) => Promise<void>; onOpenDeal: (dealId: string, stageId: string) => void }) {
   const rows = stages.flatMap((stage) => stage.deals.map((deal) => ({ deal, stage })));
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [deleting, setDeleting] = useState(false);
 
   if (!rows.length) return <div className={styles.emptyDeals}><strong>Сделки не найдены</strong><span>Измените запрос или сбросьте фильтры.</span></div>;
 
-  return <div className={styles.listView}><header><span>Контакт</span><span>Сделка и запрос</span><span>Этап</span><span>Ответственный</span><span>{closed ? "Состояние" : "Следующая задача"}</span></header>{rows.map(({ deal, stage }) => <div className={styles.listRow} role="button" tabIndex={0} onClick={() => onOpenDeal(deal.id, stage.id)} onKeyDown={(event) => { if (event.key === "Enter") onOpenDeal(deal.id, stage.id); }} key={deal.id}><span className={styles.listContact}><i>{deal.contactName.slice(0, 1)}</i><span><strong>{deal.contactName}</strong><small>Сделка #{deal.number} · {deal.phone}</small></span></span><span className={styles.listRequest}><strong>{deal.title || deal.request}</strong><small>{deal.request || "Запрос не указан"} · {deal.budget || "Бюджет не указан"}</small></span><span className={styles.listStage}><i style={{ backgroundColor: stage.color }} />{stage.title}</span><span>{deal.assignee}</span>{closed ? <span className={`${styles.lifecycleBadge} ${styles[`lifecycle${deal.status}`]}`}>{deal.status === "WON" ? "Успешно" : deal.status === "LOST" ? "Неуспешно" : "Архив"}</span> : <span className={`${styles.listTask} ${deal.taskState ? styles[deal.taskState] : ""}`}>{deal.task || "Нет задачи"}</span>}{closed && onRestore ? <button className={styles.restoreButton} type="button" title="Вернуть сделку в работу" aria-label="Вернуть сделку в работу" onClick={(event) => { event.stopPropagation(); void onRestore(deal.id); }}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h10a6 6 0 1 1-5.2 9" /><path d="m8 5-4 4 4 4" /></svg></button> : <b>›</b>}</div>)}</div>;
+  async function removeSelected() {
+    if (!onDeleteClosed || !selectedIds.length || !window.confirm(`Удалить выбранные закрытые сделки (${selectedIds.length}) без возможности восстановления? Контакты сохранятся.`)) return;
+    setDeleting(true);
+    try {
+      await onDeleteClosed(selectedIds);
+      setSelectedIds([]);
+    } catch (cause) {
+      window.alert(cause instanceof Error ? cause.message : "Не удалось удалить сделки.");
+    } finally {
+      setDeleting(false);
+    }
+  }
+
+  return <div className={styles.listView}>{closed && canDeleteClosed && <div className={styles.closedBulkBar}><label><input type="checkbox" checked={selectedIds.length === rows.length} onChange={(event) => setSelectedIds(event.target.checked ? rows.map(({ deal }) => deal.id) : [])} /> Выбрать все</label><button type="button" disabled={!selectedIds.length || deleting} onClick={() => { void removeSelected(); }}>{deleting ? "Удаляем…" : `Удалить${selectedIds.length ? ` (${selectedIds.length})` : ""}`}</button></div>}<header><span>Контакт</span><span>Сделка и запрос</span><span>Этап</span><span>Ответственный</span><span>{closed ? "Состояние" : "Следующая задача"}</span></header>{rows.map(({ deal, stage }) => <div className={styles.listRow} role="button" tabIndex={0} onClick={() => onOpenDeal(deal.id, stage.id)} onKeyDown={(event) => { if (event.key === "Enter") onOpenDeal(deal.id, stage.id); }} key={deal.id}>{closed && canDeleteClosed && <label className={styles.closedSelector} onClick={(event) => event.stopPropagation()}><input type="checkbox" aria-label={`Выбрать сделку #${deal.number}`} checked={selectedIds.includes(deal.id)} onChange={(event) => setSelectedIds((current) => event.target.checked ? [...current, deal.id] : current.filter((id) => id !== deal.id))} /></label>}<span className={styles.listContact}><i>{deal.contactName.slice(0, 1)}</i><span><strong>{deal.contactName}</strong><small>Сделка #{deal.number} · {deal.phone}</small></span></span><span className={styles.listRequest}><strong>{deal.title || deal.request}</strong><small>{deal.request || "Запрос не указан"} · {deal.budget || "Бюджет не указан"}</small></span><span className={styles.listStage}><i style={{ backgroundColor: stage.color }} />{stage.title}</span><span>{deal.assignee}</span>{closed ? <span className={`${styles.lifecycleBadge} ${styles[`lifecycle${deal.status}`]}`}>{deal.status === "WON" ? "Успешно" : deal.status === "LOST" ? "Неуспешно" : "Архив"}</span> : <span className={`${styles.listTask} ${deal.taskState ? styles[deal.taskState] : ""}`}>{deal.task || "Нет задачи"}</span>}{closed && onRestore ? <button className={styles.restoreButton} type="button" title="Вернуть сделку в работу" aria-label="Вернуть сделку в работу" onClick={(event) => { event.stopPropagation(); void onRestore(deal.id); }}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h10a6 6 0 1 1-5.2 9" /><path d="m8 5-4 4 4 4" /></svg></button> : <b>›</b>}</div>)}</div>;
 }

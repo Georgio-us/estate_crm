@@ -13,6 +13,7 @@ import { registerDashboardRoutes } from "./dashboard/routes.js";
 import { registerIntegrationRoutes } from "./integrations/routes.js";
 import { registerPipelineRoutes } from "./pipeline/routes.js";
 import { registerPropertyRoutes } from "./properties/routes.js";
+import { registerSettingsRoutes } from "./settings/routes.js";
 import { registerTaskRoutes } from "./tasks/routes.js";
 import { registerTeamRoutes } from "./team/routes.js";
 import { registerTelegramRoutes } from "./telegram/routes.js";
@@ -64,6 +65,7 @@ export async function buildApp(
   await registerTaskRoutes(app, database);
   await registerTeamRoutes(app, config, database);
   await registerPropertyRoutes(app, database);
+  await registerSettingsRoutes(app, database);
   await registerDashboardRoutes(app, database);
   await registerIntegrationRoutes(app, database);
   await registerTelegramRoutes(app, config, database);

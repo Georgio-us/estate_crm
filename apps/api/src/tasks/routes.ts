@@ -11,7 +11,7 @@ import type {
 } from "@estate-crm/contracts";
 import type { DatabaseConnection } from "@estate-crm/database";
 
-import { canAssignTo, dataScope, effectiveAssigneeId } from "../auth/authorization.js";
+import { canAssignTo, contactScope, dataScope, dealScope, effectiveAssigneeId } from "../auth/authorization.js";
 import { requireUser } from "../auth/require-user.js";
 
 const taskInclude = {
@@ -117,14 +117,14 @@ async function resolveRelations(database: DatabaseConnection, user: Authenticate
   let contactId = body.contactId ?? null;
   if (body.dealId) {
     const deal = await database.client.deal.findFirst({
-      where: { id: body.dealId, ...dataScope(user) },
+      where: { id: body.dealId, ...dealScope(user) },
       select: { id: true, contactId: true, relatedContacts: { select: { contactId: true } } },
     });
     if (!deal) return { error: "deal_not_found" as const };
     if (contactId && contactId !== deal.contactId && !deal.relatedContacts.some((item) => item.contactId === contactId)) return { error: "contact_not_in_deal" as const };
     contactId ??= deal.contactId;
   } else if (contactId) {
-    const contact = await database.client.contact.findFirst({ where: { id: contactId, ...dataScope(user) }, select: { id: true } });
+    const contact = await database.client.contact.findFirst({ where: { id: contactId, ...contactScope(user) }, select: { id: true } });
     if (!contact) return { error: "contact_not_found" as const };
   }
   if (body.assigneeId) {

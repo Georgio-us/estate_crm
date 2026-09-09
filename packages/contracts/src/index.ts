@@ -38,6 +38,51 @@ export interface SessionResponse {
   user: AuthenticatedUser;
 }
 
+export interface WorkspaceSettingsResponse {
+  workspace: {
+    name: string;
+    companyName: string | null;
+    phone: string | null;
+    email: string | null;
+    timezone: string;
+    currency: "USD" | "EUR";
+  };
+  profile: {
+    name: string;
+    email: string;
+    phone: string | null;
+  };
+}
+
+export interface UpdateWorkspaceSettingsRequest {
+  name: string;
+  companyName?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  timezone: string;
+  currency: "USD" | "EUR";
+}
+
+export interface UpdateProfileRequest {
+  name: string;
+  phone?: string | null;
+}
+
+export interface SessionRecord {
+  id: string;
+  current: boolean;
+  device: string;
+  browser: string;
+  ipAddress: string | null;
+  createdAt: string;
+  lastSeenAt: string;
+  expiresAt: string;
+}
+
+export interface SessionListResponse {
+  sessions: SessionRecord[];
+}
+
 export interface ApiErrorResponse {
   error: string;
   message: string;

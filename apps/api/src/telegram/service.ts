@@ -63,11 +63,14 @@ export function buildTelegramNotification(
   const dealNumber = readDealNumber(notification.payload);
   const dealLabel = dealNumber === null ? "" : ` · ${notification.eventType?.startsWith("task.") ? "Сделка " : ""}#${dealNumber}`;
   const taskNotification = notification.eventType?.startsWith("task.") ?? false;
+  const dealAssignment = notification.eventType === "deal.assigned";
   const dueLabel = taskNotification ? formatTaskDueLabel(notification.payload) : null;
-  const icon = notification.eventType === "task.overdue" ? "🔴" : notification.eventType === "task.assigned" ? "📌" : taskNotification ? "⏰" : "🔔";
+  const icon = notification.eventType === "task.overdue" ? "🔴" : notification.eventType === "task.assigned" || dealAssignment ? "📌" : taskNotification ? "⏰" : "🔔";
   const details = taskNotification
     ? [notification.body?.trim(), dueLabel ? `Срок: ${dueLabel}` : null].filter(Boolean).join("\n")
-    : "Откройте карточку в Estate CRM.";
+    : dealAssignment
+      ? [notification.body?.trim(), "Откройте карточку в Estate CRM."].filter(Boolean).join("\n")
+      : "Откройте карточку в Estate CRM.";
 
   return {
     text: `${icon} ${notification.title}${dealLabel}\n\n${details}`,
@@ -145,6 +148,7 @@ type RecipientPreference = {
 
 function recipientAccepts(notification: TelegramNotification, recipient: RecipientPreference, assigneeId: string | null): boolean {
   const eventType = notification.eventType || "";
+  if (eventType === "deal.assigned") return Boolean(assigneeId) && recipient.userId === assigneeId;
   if (eventType.startsWith("lead.") && recipient.leadNotifications === false) return false;
   if (["task.assigned", "task.reminder"].includes(eventType) && recipient.taskReminderNotifications === false) return false;
   if (eventType === "task.overdue" && recipient.taskOverdueNotifications === false) return false;
@@ -240,7 +244,7 @@ export async function deliverPendingTelegramNotifications(
   const notifications = await database.client.notificationOutbox.findMany({
     where: {
       channel: "TELEGRAM",
-      eventType: { in: ["lead.created", "lead.repeated", "task.assigned", "task.reminder", "task.overdue"] },
+      eventType: { in: ["lead.created", "lead.repeated", "deal.assigned", "task.assigned", "task.reminder", "task.overdue"] },
       status: "PENDING",
       OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }],
     },

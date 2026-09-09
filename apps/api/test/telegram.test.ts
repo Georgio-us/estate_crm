@@ -53,6 +53,20 @@ test("task notification contains its deadline and opens the exact task", () => {
   assert.equal(message.reply_markup.inline_keyboard[0]?.[0]?.url, "https://crm.example.test/?deal=deal-42&task=task-7");
 });
 
+test("deal assignment notification identifies the deal and opens its card", () => {
+  const message = buildTelegramNotification({
+    title: "Вам назначена сделка",
+    body: "Квартира у моря",
+    eventType: "deal.assigned",
+    actionUrl: "/?deal=deal-42",
+    payload: { dealNumber: 1017, assigneeId: userId },
+  }, config.webAppUrl);
+
+  assert.equal(message.text, "📌 Вам назначена сделка · #1017\n\nКвартира у моря\nОткройте карточку в Estate CRM.");
+  assert.equal(message.reply_markup.inline_keyboard[0]?.[0]?.text, "Открыть лид");
+  assert.equal(message.reply_markup.inline_keyboard[0]?.[0]?.url, "https://crm.example.test/?deal=deal-42");
+});
+
 test("task scheduler enqueues a reminder once with a stable deduplication key", async () => {
   let createdRows: Array<Record<string, unknown>> = [];
   const database = { client: {

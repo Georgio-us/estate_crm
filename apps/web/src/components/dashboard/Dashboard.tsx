@@ -132,10 +132,10 @@ export function Dashboard() {
               {overdueCount > 0 && <button className={styles.notificationItem} type="button" onClick={() => { if (priorityTask) openTask(priorityTask); setNotificationsOpen(false); }}>
                 <i className={styles.notificationDanger}>!</i><span><strong>Просрочена задача</strong><small>{priorityTask?.title}{priorityTask?.contactName ? ` · ${priorityTask.contactName}` : ""}</small><time>Сейчас</time></span>
               </button>}
-              {dashboard.deals.unassigned > 0 && <Link className={styles.notificationItem} href="/" onClick={() => setNotificationsOpen(false)}>
+              {dashboard.deals.unassigned > 0 && <Link className={styles.notificationItem} href="/?filter=unassigned" onClick={() => setNotificationsOpen(false)}>
                 <i className={styles.notificationWarning}>♙</i><span><strong>Без ответственного</strong><small>{dashboard.deals.unassigned} сделок ожидают назначения менеджера</small><time>Сейчас</time></span>
               </Link>}
-              {dashboard.deals.withoutTask > 0 && <Link className={styles.notificationItem} href="/" onClick={() => setNotificationsOpen(false)}>
+              {dashboard.deals.withoutTask > 0 && <Link className={styles.notificationItem} href="/?filter=without-task" onClick={() => setNotificationsOpen(false)}>
                 <i className={styles.notificationLead}>↗</i><span><strong>Нет следующего шага</strong><small>В {dashboard.deals.withoutTask} сделках не поставлена активная задача</small><time>Сейчас</time></span>
               </Link>}
               {notificationCount === 0 && <div className={styles.notificationEmpty}>Новых ситуаций, требующих внимания, нет.</div>}
@@ -160,8 +160,8 @@ export function Dashboard() {
             </div>
             <div className={styles.commandStats}>
               <Link href="/tasks"><strong>{todayCount}</strong><span>задачи<br />на сегодня</span></Link>
-              <Link href="/"><strong>{dashboard.deals.unassigned}</strong><span>сделки без<br />ответственного</span></Link>
-              <Link href="/"><strong>{dashboard.deals.withoutTask}</strong><span>сделки без<br />следующего шага</span></Link>
+              <Link href="/?filter=unassigned"><strong>{dashboard.deals.unassigned}</strong><span>сделки без<br />ответственного</span></Link>
+              <Link href="/?filter=without-task"><strong>{dashboard.deals.withoutTask}</strong><span>сделки без<br />следующего шага</span></Link>
             </div>
           </section>
 
@@ -193,8 +193,8 @@ export function Dashboard() {
               <PanelHeader title="Требует внимания" subtitle="Ситуации, где работа может остановиться" />
               <div className={styles.attentionList}>
                 <Attention href="/tasks" value={overdueCount} title="Просроченная задача" detail="Нужно зафиксировать результат" tone="red" />
-                <Attention href="/" value={dashboard.deals.unassigned} title="Без ответственного" detail="Новые сделки ждут менеджера" tone="orange" />
-                <Attention href="/" value={dashboard.deals.withoutTask} title="Без следующего шага" detail="В сделках не назначена задача" tone="blue" />
+                <Attention href="/?filter=unassigned" value={dashboard.deals.unassigned} title="Без ответственного" detail="Новые сделки ждут менеджера" tone="orange" />
+                <Attention href="/?filter=without-task" value={dashboard.deals.withoutTask} title="Без следующего шага" detail="В сделках не назначена задача" tone="blue" />
               </div>
             </section>
           </div>

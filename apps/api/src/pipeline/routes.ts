@@ -14,7 +14,7 @@ import type {
 } from "@estate-crm/contracts";
 import type { DatabaseConnection } from "@estate-crm/database";
 
-import { canAssignTo, canConfigureOrganization, dataScope, effectiveAssigneeId, hasOrganizationWideDataAccess } from "../auth/authorization.js";
+import { canAssignTo, canConfigureOrganization, contactScope, dealScope, effectiveAssigneeId, hasOrganizationWideDataAccess } from "../auth/authorization.js";
 import { requireUser } from "../auth/require-user.js";
 import { parsePhone } from "../lib/phone.js";
 
@@ -116,10 +116,10 @@ export async function registerPipelineRoutes(
       include: {
         deals: {
           where: request.query.view === "all"
-            ? (hasOrganizationWideDataAccess(user) ? undefined : { assigneeId: user.id })
+            ? dealScope(user)
             : request.query.view === "closed"
-              ? { status: { not: "ACTIVE" }, ...(hasOrganizationWideDataAccess(user) ? {} : { assigneeId: user.id }) }
-              : { status: "ACTIVE", ...(hasOrganizationWideDataAccess(user) ? {} : { assigneeId: user.id }) },
+              ? { status: { not: "ACTIVE" }, ...dealScope(user) }
+              : { status: "ACTIVE", ...dealScope(user) },
           orderBy: [{ position: "asc" }, { createdAt: "desc" }],
           include: {
             contact: { select: { id: true, name: true, phone: true } },
@@ -341,7 +341,7 @@ export async function registerPipelineRoutes(
     }
 
     let contact = request.body.contactId ? await database.client.contact.findFirst({
-      where: { id: request.body.contactId, ...dataScope(user) },
+      where: { id: request.body.contactId, ...contactScope(user) },
     }) : null;
 
     if (!contact && request.body.contactId) {
@@ -450,7 +450,7 @@ export async function registerPipelineRoutes(
     if (!user) return reply;
 
     const existing = await database.client.deal.findFirst({
-      where: { id: request.params.dealId, ...dataScope(user) },
+      where: { id: request.params.dealId, ...dealScope(user) },
       include: { stage: { select: { id: true, title: true } } },
     });
     if (!existing) return reply.status(404).send({ error: "deal_not_found", message: "Сделка не найдена." });
@@ -478,7 +478,9 @@ export async function registerPipelineRoutes(
 
     const nextAssigneeId = request.body.assigneeId === undefined
       ? existing.assigneeId
-      : effectiveAssigneeId(user, request.body.assigneeId);
+      : !hasOrganizationWideDataAccess(user) && existing.assigneeId === null && request.body.assigneeId === null
+        ? null
+        : effectiveAssigneeId(user, request.body.assigneeId);
 
     const updated = await database.client.deal.update({
       where: { id: existing.id },
@@ -543,7 +545,65 @@ export async function registerPipelineRoutes(
       },
     });
 
+    if (updated.assignee && updated.assignee.id !== existing.assigneeId) {
+      await database.client.notificationOutbox.create({
+        data: {
+          organizationId: user.organization.id,
+          channel: "TELEGRAM",
+          eventType: "deal.assigned",
+          title: "Вам назначена сделка",
+          body: updated.title || updated.request || updated.contact.name,
+          actionUrl: `/?deal=${updated.id}`,
+          dedupeKey: `deal:${updated.id}:${updated.updatedAt.toISOString()}:deal.assigned`,
+          payload: {
+            dealId: updated.id,
+            dealNumber: updated.number,
+            assigneeId: updated.assignee.id,
+          },
+        },
+      });
+    }
+
     return { deal: mapDeal(updated), stageId: updated.stageId };
+  });
+
+  app.post<{
+    Body: { dealIds: string[] };
+    Reply: { deleted: number } | ApiErrorResponse;
+  }>("/deals/bulk-delete", {
+    schema: {
+      body: {
+        type: "object",
+        additionalProperties: false,
+        required: ["dealIds"],
+        properties: { dealIds: { type: "array", minItems: 1, maxItems: 100, uniqueItems: true, items: { type: "string", format: "uuid" } } },
+      },
+    },
+  }, async (request, reply) => {
+    const user = await requireUser(request, reply, database);
+    if (!user) return reply;
+    if (!hasOrganizationWideDataAccess(user)) {
+      return reply.status(403).send({ error: "forbidden", message: "Удалять закрытые сделки может только администратор или руководитель." });
+    }
+
+    const deals = await database.client.deal.findMany({
+      where: { id: { in: request.body.dealIds }, organizationId: user.organization.id },
+      select: { id: true, number: true, title: true, contactId: true, status: true },
+    });
+    if (deals.length !== request.body.dealIds.length) {
+      return reply.status(404).send({ error: "deal_not_found", message: "Одна или несколько сделок не найдены." });
+    }
+    if (deals.some((deal) => deal.status === "ACTIVE")) {
+      return reply.status(409).send({ error: "active_deal", message: "Активные сделки нельзя удалить. Сначала закройте их." });
+    }
+
+    await database.client.$transaction(async (transaction) => {
+      await transaction.activityEvent.createMany({
+        data: deals.map((deal) => ({ organizationId: user.organization.id, contactId: deal.contactId, authorId: user.id, category: "CHANGE" as const, title: "Закрытая сделка удалена", description: `Сделка #${deal.number} · ${deal.title}` })),
+      });
+      await transaction.deal.deleteMany({ where: { id: { in: request.body.dealIds }, organizationId: user.organization.id, status: { not: "ACTIVE" } } });
+    });
+    return { deleted: deals.length };
   });
 
   app.post<{
@@ -560,7 +620,7 @@ export async function registerPipelineRoutes(
     if (!user) return reply;
 
     const deal = await database.client.deal.findFirst({
-      where: { id: request.params.dealId, ...dataScope(user) },
+      where: { id: request.params.dealId, ...dealScope(user) },
       select: { id: true, stageId: true, contactId: true },
     });
     if (!deal) return reply.status(404).send({ error: "deal_not_found", message: "Сделка не найдена." });
@@ -569,7 +629,7 @@ export async function registerPipelineRoutes(
     }
 
     const contact = await database.client.contact.findFirst({
-      where: { id: request.body.contactId, ...dataScope(user) },
+      where: { id: request.body.contactId, ...contactScope(user) },
       select: { id: true, name: true },
     });
     if (!contact) return reply.status(400).send({ error: "invalid_contact", message: "Контакт не найден." });
@@ -614,7 +674,7 @@ export async function registerPipelineRoutes(
     if (!user) return reply;
 
     const deal = await database.client.deal.findFirst({
-      where: { id: request.params.dealId, ...dataScope(user) },
+      where: { id: request.params.dealId, ...dealScope(user) },
       select: { id: true },
     });
     if (!deal) return reply.status(404).send({ error: "deal_not_found", message: "Сделка не найдена." });
@@ -664,7 +724,7 @@ export async function registerPipelineRoutes(
     if (!user) return reply;
 
     const deal = await database.client.deal.findFirst({
-      where: { id: request.params.dealId, ...dataScope(user) },
+      where: { id: request.params.dealId, ...dealScope(user) },
       select: { id: true, contactId: true, stageId: true, status: true, closedAt: true },
     });
     if (!deal) return reply.status(404).send({ error: "deal_not_found", message: "Сделка не найдена." });
@@ -712,7 +772,7 @@ export async function registerPipelineRoutes(
     const user = await requireUser(request, reply, database);
     if (!user) return reply;
 
-    const deal = await database.client.deal.findFirst({ where: { id: request.params.dealId, ...dataScope(user) } });
+    const deal = await database.client.deal.findFirst({ where: { id: request.params.dealId, ...dealScope(user) } });
     if (!deal) return reply.status(404).send({ error: "deal_not_found", message: "Сделка не найдена." });
 
     const stage = await database.client.pipelineStage.findFirst({ where: { id: request.body.stageId, pipelineId: deal.pipelineId } });

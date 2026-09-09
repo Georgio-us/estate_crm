@@ -10,7 +10,7 @@ import type {
 } from "@estate-crm/contracts";
 import type { DatabaseConnection } from "@estate-crm/database";
 
-import { canAssignTo, dataScope, effectiveAssigneeId, hasOrganizationWideDataAccess } from "../auth/authorization.js";
+import { canAssignTo, contactScope, effectiveAssigneeId, hasOrganizationWideDataAccess } from "../auth/authorization.js";
 import { requireUser } from "../auth/require-user.js";
 import { parsePhone } from "../lib/phone.js";
 
@@ -28,10 +28,11 @@ function describeChange(label: string, previous: string | null, next: string | n
 }
 
 function contactInclude(assigneeId?: string) {
+  const visibleDealScope = assigneeId ? { OR: [{ assigneeId }, { assigneeId: null }] } : {};
   return {
     assignee: { select: { id: true, name: true } },
-    deals: { where: { status: "ACTIVE" as const, ...(assigneeId ? { assigneeId } : {}) }, select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } },
-    relatedDeals: { where: { deal: { status: "ACTIVE" as const, ...(assigneeId ? { assigneeId } : {}) } }, include: { deal: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } } } },
+    deals: { where: { status: "ACTIVE" as const, ...visibleDealScope }, select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } },
+    relatedDeals: { where: { deal: { status: "ACTIVE" as const, ...visibleDealScope } }, include: { deal: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } } } },
     relationsAsA: { ...(assigneeId ? { where: { contactB: { assigneeId } } } : {}), include: { contactB: { select: { id: true, name: true, phone: true } } } },
     relationsAsB: { ...(assigneeId ? { where: { contactA: { assigneeId } } } : {}), include: { contactA: { select: { id: true, name: true, phone: true } } } },
     tasks: { where: { status: "ACTIVE" as const, ...(assigneeId ? { assigneeId } : {}) }, orderBy: [{ dueDate: "asc" as const }, { dueTime: "asc" as const }], take: 1, select: { id: true, title: true, dueDate: true, dueTime: true } },
@@ -87,17 +88,16 @@ export async function registerContactRoutes(
 
     const query = request.query.q?.trim();
     const contacts = await database.client.contact.findMany({
-      where: {
-        ...dataScope(user),
-        ...(query ? {
+      where: query ? {
+        AND: [contactScope(user), {
           OR: [
             { name: { contains: query, mode: "insensitive" } },
             { phone: { contains: query } },
             { email: { contains: query, mode: "insensitive" } },
             { telegram: { contains: query, mode: "insensitive" } },
           ],
-        } : {}),
-      },
+        }],
+      } : contactScope(user),
       include: contactInclude(hasOrganizationWideDataAccess(user) ? undefined : user.id),
       orderBy: { createdAt: "desc" },
       take: 200,
@@ -215,7 +215,7 @@ export async function registerContactRoutes(
     if (!user) return reply;
 
     const existing = await database.client.contact.findFirst({
-      where: { id: request.params.contactId, ...dataScope(user) },
+      where: { id: request.params.contactId, ...contactScope(user) },
     });
     if (!existing) return reply.status(404).send({ error: "contact_not_found", message: "Контакт не найден." });
 
@@ -305,7 +305,7 @@ export async function registerContactRoutes(
     if (request.params.contactId === request.body.relatedContactId) return reply.status(409).send({ error: "same_contact", message: "Нельзя связать контакт с самим собой." });
 
     const contacts = await database.client.contact.findMany({
-      where: { ...dataScope(user), id: { in: [request.params.contactId, request.body.relatedContactId] } },
+      where: { ...contactScope(user), id: { in: [request.params.contactId, request.body.relatedContactId] } },
       select: { id: true, name: true, phone: true },
     });
     if (contacts.length !== 2) return reply.status(404).send({ error: "contact_not_found", message: "Один из контактов не найден." });

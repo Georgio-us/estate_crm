@@ -3,7 +3,7 @@ import type { FastifyInstance } from "fastify";
 import type { ApiErrorResponse, DashboardResponse } from "@estate-crm/contracts";
 import type { DatabaseConnection } from "@estate-crm/database";
 
-import { dataScope, hasOrganizationWideDataAccess } from "../auth/authorization.js";
+import { contactScope, dealScope, hasOrganizationWideDataAccess } from "../auth/authorization.js";
 import { requireUser } from "../auth/require-user.js";
 
 export async function registerDashboardRoutes(app: FastifyInstance, database: DatabaseConnection): Promise<void> {
@@ -21,7 +21,7 @@ export async function registerDashboardRoutes(app: FastifyInstance, database: Da
             orderBy: { position: "asc" },
             include: {
               deals: {
-                where: { status: "ACTIVE", ...(hasOrganizationWideDataAccess(user) ? {} : { assigneeId: user.id }) },
+                where: { status: "ACTIVE", ...dealScope(user) },
                 select: {
                   id: true,
                   assigneeId: true,
@@ -32,15 +32,15 @@ export async function registerDashboardRoutes(app: FastifyInstance, database: Da
           },
         },
       }),
-      database.client.contact.count({ where: dataScope(user) }),
+      database.client.contact.count({ where: contactScope(user) }),
       database.client.property.count({ where: { organizationId, status: "AVAILABLE" } }),
       database.client.activityEvent.findMany({
         where: {
           organizationId,
           ...(hasOrganizationWideDataAccess(user) ? {} : {
             OR: [
-              { deal: { assigneeId: user.id } },
-              { dealId: null, contact: { assigneeId: user.id } },
+              { deal: { OR: [{ assigneeId: user.id }, { assigneeId: null, status: "ACTIVE" }] } },
+              { dealId: null, contact: { OR: [{ assigneeId: user.id }, { deals: { some: { assigneeId: null, status: "ACTIVE" } } }] } },
             ],
           }),
         },

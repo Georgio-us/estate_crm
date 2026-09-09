@@ -692,9 +692,33 @@
 .restoreButton { display: grid; width: 32px; height: 32px; place-items: center; padding: 0; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: #fff; color: var(--primary); cursor: pointer; }
 .restoreButton:hover { border-color: #9eb3db; background: #f4f7fd; }
 .restoreButton svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.closedBulkBar { display: flex; min-height: 52px; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 16px; border-bottom: 1px solid var(--border); background: #fff; }
+.closedBulkBar label, .closedSelector { display: flex; align-items: center; gap: 8px; color: var(--text-muted); font-size: var(--font-size-caption); }
+.closedBulkBar input, .closedSelector input { width: 18px; height: 18px; accent-color: var(--primary); }
+.closedBulkBar button { min-height: 36px; padding: 0 13px; border: 1px solid #dfbaba; border-radius: var(--radius-sm); background: #fff; color: #a24b4b; cursor: pointer; }
+.closedBulkBar button:disabled { cursor: default; opacity: .45; }
+.closedSelector { position: absolute; z-index: 2; left: 3px; }
+.listRow:has(.closedSelector) { position: relative; padding-left: 44px; }
 .notice { position: fixed; z-index: 90; right: 24px; bottom: 24px; max-width: min(380px, calc(100vw - 32px)); padding: 12px 15px; border: 1px solid #cbd5e7; border-radius: var(--radius-md); background: #fff; color: var(--text); box-shadow: 0 16px 40px rgba(28, 28, 26, 0.16); font-size: var(--font-size-body-sm); }
 .emptyDeals { display: grid; min-height: 420px; place-content: center; justify-items: center; gap: 5px; background: #f8f8f6; }
 .emptyDeals span { color: var(--text-muted); }
+
+.assignmentLayer { position: fixed; z-index: 150; inset: 0; display: grid; place-items: center; padding: 20px; }
+.assignmentBackdrop { position: absolute; inset: 0; background: rgba(24, 27, 33, .48); backdrop-filter: blur(2px); }
+.assignmentModal { position: relative; width: min(510px, 100%); padding: 28px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: #fff; box-shadow: 0 28px 90px rgba(20, 24, 31, .24); }
+.assignmentEyebrow { color: var(--primary); font-size: 11px; font-weight: var(--font-weight-semibold); letter-spacing: .1em; text-transform: uppercase; }
+.assignmentModal h3 { margin: 9px 0 8px; font-size: 25px; line-height: 1.18; }
+.assignmentModal > p { margin: 0; color: var(--text-muted); font-size: var(--font-size-body-sm); line-height: 1.5; }
+.assignmentActions { display: grid; gap: 10px; margin-top: 22px; }
+.assignmentActions button, .assignmentDelegate select { min-height: 46px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font: inherit; }
+.assignmentActions button { padding: 0 16px; cursor: pointer; }
+.assignmentActions button:disabled, .assignmentDelegate select:disabled { cursor: wait; opacity: .55; }
+.assignmentPrimary { border-color: var(--primary); background: var(--primary); color: #fff; font-weight: var(--font-weight-semibold); }
+.assignmentDelegate { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+.assignmentDelegate select { min-width: 0; padding: 0 12px; background: #fff; color: var(--text); }
+.assignmentDelegate button { background: #f4f7fd; color: var(--primary); font-weight: var(--font-weight-semibold); }
+.assignmentLater { background: #fff8e8; color: #805f17; }
+.assignmentReturn { border-color: transparent; background: transparent; color: var(--text-muted); }
 
 .transferLayer {
   position: fixed;
@@ -873,4 +897,8 @@
   .transferModal > header { padding: 21px 20px 18px; }
   .transferSection { grid-template-columns: 1fr; gap: 15px; padding: 20px; }
   .transferResult { padding: 16px 20px 19px; }
+  .assignmentLayer { align-items: end; padding: 10px; }
+  .assignmentModal { padding: 23px 20px calc(20px + env(safe-area-inset-bottom)); border-radius: 18px 18px 12px 12px; }
+  .assignmentModal h3 { font-size: 23px; }
+  .assignmentDelegate { grid-template-columns: 1fr; }
 }
