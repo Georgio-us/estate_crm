@@ -190,6 +190,7 @@ export function PipelineBoard() {
   const [activities, setActivities] = useState<Record<string, ActivityEvent[]>>({});
   const [selected, setSelected] = useState<{ dealId: string; stageId: string; composer?: "note" | "task"; taskId?: string } | null>(null);
   const [newDealStageId, setNewDealStageId] = useState<string | null>(null);
+  const [newDealContactId, setNewDealContactId] = useState<string | null>(null);
   const [activeDealId, setActiveDealId] = useState<string | null>(null);
   const [view, setView] = useState<"board" | "list">("board");
   const [query, setQuery] = useState("");
@@ -239,9 +240,14 @@ export function PipelineBoard() {
         setLoadState("ready");
         if (!deepLinkHandledRef.current) {
           const parameters = new URLSearchParams(window.location.search);
+          const newDealContact = parameters.get("newDealContact");
           const dealId = parameters.get("deal");
           const stage = dealId ? pipeline.stages.find((item) => item.deals.some((deal) => deal.id === dealId)) : undefined;
-          if (dealId && stage) {
+          if (newDealContact && contactOptions.some((contact) => contact.id === newDealContact) && pipeline.stages[0]) {
+            deepLinkHandledRef.current = true;
+            setNewDealContactId(newDealContact);
+            setNewDealStageId(pipeline.stages[0].id);
+          } else if (dealId && stage) {
             deepLinkHandledRef.current = true;
             markDealRead(dealId);
             setSelected({ dealId, stageId: stage.id, taskId: parameters.get("task") || undefined });
@@ -556,6 +562,7 @@ export function PipelineBoard() {
       }],
     }));
     setNewDealStageId(null);
+    setNewDealContactId(null);
     setSelected({ dealId, stageId: draft.stageId });
     if (!draft.contactId && deal.contactId) {
       setContacts((current) => current.some((item) => item.id === deal.contactId) ? current : [{ id: deal.contactId!, name: deal.contactName, phone: deal.phone || null, source: deal.source, dealCount: 1 }, ...current]);
@@ -783,7 +790,7 @@ export function PipelineBoard() {
         </button>
         {notificationsOpen && <div className={styles.notificationPanel}><header><strong>Задачи требуют внимания</strong><span>{notificationTasks.length}</span></header>{notificationTasks.slice(0, 5).map((task) => <button type="button" key={task.id} onClick={() => { setNotificationsOpen(false); openTaskDeal(task); }}><i className={task.period === "overdue" ? styles.alertRed : styles.alertAmber}>{task.period === "overdue" ? "!" : "○"}</i><span><strong>{task.period === "overdue" ? "Просрочена задача" : "Задача на сегодня"}</strong><small>{task.contactName || "Без контакта"} · {task.title}</small></span><time>{task.dueTime || task.dueLabel}</time></button>)}{notificationTasks.length === 0 && <div className={styles.notificationEmpty}>На сегодня нет задач, требующих внимания.</div>}<footer><button type="button" onClick={() => router.push("/tasks")}>Открыть все задачи</button></footer></div>}
         </div>
-        <button className={styles.primaryButton} type="button" disabled={!stages.length} onClick={() => { if (stages[0]) setNewDealStageId(stages[0].id); }}>
+        <button className={styles.primaryButton} type="button" disabled={!stages.length} onClick={() => { setNewDealContactId(null); if (stages[0]) setNewDealStageId(stages[0].id); }}>
           <span aria-hidden="true">＋</span><span className={styles.actionLabel}>Новая сделка</span>
         </button>
       </header>
@@ -832,7 +839,7 @@ export function PipelineBoard() {
               onOpenDeal={(dealId) => openDeal(dealId, stage.id)}
               onAddTask={(dealId) => setSelected({ dealId, stageId: stage.id, composer: "task" })}
               onLifecycle={(dealId, status) => runDealLifecycle(dealId, status)}
-              onAddDeal={() => setNewDealStageId(stage.id)}
+              onAddDeal={() => { setNewDealContactId(null); setNewDealStageId(stage.id); }}
             />
           ))}
         </div>
@@ -882,11 +889,12 @@ export function PipelineBoard() {
       {newDealStageId && (
         <NewDealModal
           initialStageId={newDealStageId}
+          initialContactId={newDealContactId || undefined}
           stages={stageOptions}
           contacts={contacts}
           assignees={teamAssignees}
           onCreate={createDeal}
-          onClose={() => setNewDealStageId(null)}
+          onClose={() => { setNewDealStageId(null); setNewDealContactId(null); if (window.location.search) router.replace("/"); }}
         />
       )}
     </section>

@@ -849,8 +849,8 @@
     left: auto;
     width: calc(100% - 36px);
     min-height: 0;
-    order: 1;
-    margin: 14px 18px 0;
+    order: 2;
+    margin: 0 18px max(18px, env(safe-area-inset-bottom));
   }
   .composerTask { min-height: 0; }
   .composerTabs { height: 46px; gap: 22px; }
@@ -865,7 +865,7 @@
   .taskSchedule input[type="time"] { width: 100%; height: 44px; min-width: 0; background: #fff; font-size: 16px; }
   .composerFooter { min-height: 51px; padding: 4px 10px 10px 12px; }
   .composerFooter .saveNoteButton { min-width: 132px; height: 40px; font-size: var(--font-size-body-sm); }
-  .activityFeed { min-height: 360px; flex: none; order: 2; overflow: visible; padding: 24px 18px max(40px, env(safe-area-inset-bottom)); }
+  .activityFeed { min-height: 360px; flex: none; order: 1; overflow: visible; padding: 24px 18px 28px; }
   .taskPrompt { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; margin-bottom: 24px; padding: 14px; }
   .taskPrompt button { min-height: 36px; font-size: var(--font-size-body-sm); }
   .activityCard { display: grid; align-items: start; grid-template-columns: 30px minmax(0, 1fr); gap: 10px; padding: 14px; }
