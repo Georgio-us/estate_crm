@@ -20,6 +20,7 @@ const primaryItems = [
 const secondaryItems = [
   ["↗", "Интеграции", "/integrations"],
   ["♙", "Команда", "/team"],
+  ["≡", "Документация", "/documentation"],
   ["◫", "Подписка", "/subscription"],
   ["⚙", "Настройки", "/settings"],
 ];
