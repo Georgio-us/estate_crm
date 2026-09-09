@@ -32,7 +32,7 @@ The shared bot is configured only on `estate_crm_api` through sealed Railway var
 
 A signed-in CRM user opens **Интеграции → Telegram → Подключить Telegram**. The API creates a random one-time token valid for ten minutes, stores only its SHA-256 hash, and opens the bot through a Telegram deep link. `/start` consumes that token once and binds the Telegram chat to the CRM user and organization. No chat IDs or owner lists are stored in environment variables.
 
-CRM roles control delivery scope. Admins and team leads receive organization-wide lead notifications. Managers receive only notifications for deals assigned to them. The message intentionally contains no lead form fields or telephone number: only `Новый лид` / `Повторное обращение` and an **Открыть лид** button that targets `/?deal=<deal-id>` in the CRM.
+CRM roles control delivery scope. Admins and team leads receive organization-wide lead notifications. Managers receive only notifications for deals assigned to them. The message intentionally contains no lead form fields or telephone number: only `Новый лид · #<номер сделки>` / `Повторное обращение · #<номер сделки>` and an **Открыть лид** button that targets `/?deal=<deal-id>` in the CRM. Older queued notifications created before deal numbers were added remain deliverable with the previous short title.
 
 `notification_outbox` remains the source of truth. Per-recipient results live in `notification_deliveries`, so a retry for one failed recipient does not duplicate a message already delivered to another. After five failed attempts the delivery and its outbox item are marked failed instead of retrying forever. If no eligible Telegram recipient is connected, the item remains pending and is delivered after an eligible user connects.
 

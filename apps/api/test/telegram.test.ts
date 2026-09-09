@@ -26,11 +26,17 @@ const config = {
 };
 
 test("Telegram notification stays short and links directly to the CRM deal", () => {
+  const message = buildTelegramNotification({ title: "Новый лид", actionUrl: "/?deal=deal-42", payload: { dealNumber: 1017 } }, config.webAppUrl);
+
+  assert.equal(message.text, "🔔 Новый лид · #1017\n\nОткройте карточку в Estate CRM.");
+  assert.equal(message.reply_markup.inline_keyboard[0]?.[0]?.url, "https://crm.example.test/?deal=deal-42");
+  assert.equal(message.text.includes("телефон"), false);
+});
+
+test("Telegram notification remains compatible with older queued records without a deal number", () => {
   const message = buildTelegramNotification({ title: "Новый лид", actionUrl: "/?deal=deal-42" }, config.webAppUrl);
 
   assert.equal(message.text, "🔔 Новый лид\n\nОткройте карточку в Estate CRM.");
-  assert.equal(message.reply_markup.inline_keyboard[0]?.[0]?.url, "https://crm.example.test/?deal=deal-42");
-  assert.equal(message.text.includes("телефон"), false);
 });
 
 test("CRM creates an expiring Telegram deep link and stores only its hash", async () => {
@@ -103,7 +109,7 @@ test("outbox delivery sends once and marks both recipient delivery and notificat
   let deliveryReads = 0;
   const database = { client: {
     notificationOutbox: {
-      async findMany() { return [{ id: "notification-1", organizationId, channel: "TELEGRAM", status: "PENDING", title: "Новый лид", actionUrl: "/?deal=deal-42", payload: { assigneeId: null }, createdAt: new Date() }]; },
+      async findMany() { return [{ id: "notification-1", organizationId, channel: "TELEGRAM", status: "PENDING", title: "Новый лид", actionUrl: "/?deal=deal-42", payload: { assigneeId: null, dealNumber: 1017 }, createdAt: new Date() }]; },
       async update(args: { data: { status?: string } }) { writes.push(`outbox-${args.data.status || "retry"}`); },
     },
     telegramRecipient: { async findMany() { return [{ id: "recipient-1", organizationId, userId, chatId: "778899", scope: "ORGANIZATION", active: true }]; } },

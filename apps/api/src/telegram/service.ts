@@ -22,6 +22,7 @@ type TelegramApiResponse<T = unknown> = {
 type TelegramNotification = {
   title: string;
   actionUrl: string | null;
+  payload?: unknown;
 };
 
 export function telegramWebhookSecret(botToken: string): string {
@@ -57,12 +58,23 @@ export function buildTelegramNotification(
   notification: TelegramNotification,
   webAppUrl: string,
 ): { text: string; reply_markup: { inline_keyboard: Array<Array<{ text: string; url: string }>> } } {
+  const dealNumber = readDealNumber(notification.payload);
+  const title = dealNumber === null ? notification.title : `${notification.title} · #${dealNumber}`;
+
   return {
-    text: `🔔 ${notification.title}\n\nОткройте карточку в Estate CRM.`,
+    text: `🔔 ${title}\n\nОткройте карточку в Estate CRM.`,
     reply_markup: {
       inline_keyboard: [[{ text: "Открыть лид", url: resolveCrmUrl(webAppUrl, notification.actionUrl) }]],
     },
   };
+}
+
+function readDealNumber(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  const dealNumber = (payload as Record<string, unknown>).dealNumber;
+  if (typeof dealNumber === "number" && Number.isSafeInteger(dealNumber) && dealNumber > 0) return String(dealNumber);
+  if (typeof dealNumber === "string" && /^\d+$/.test(dealNumber)) return dealNumber;
+  return null;
 }
 
 export async function sendTelegramMessage(
