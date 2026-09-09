@@ -20,11 +20,13 @@ function taskRecord(overrides: Record<string, unknown> = {}) {
 test("creating a task links it to the deal contact and writes deal history", async () => {
   let createdData: Record<string, unknown> = {};
   let activityData: Record<string, unknown> = {};
+  let notificationData: Record<string, unknown> = {};
   const database = { client: {
     session: { async findUnique() { return { id: "session-1", expiresAt: new Date(Date.now() + 60_000), user: sessionUser }; } },
     deal: { async findFirst() { return { id: dealId, contactId, relatedContacts: [] }; } },
     task: { async create({ data }: { data: Record<string, unknown> }) { createdData = data; return taskRecord(); } },
     activityEvent: { async create({ data }: { data: Record<string, unknown> }) { activityData = data; } },
+    notificationOutbox: { async create({ data }: { data: Record<string, unknown> }) { notificationData = data; } },
   }, async ping() {}, async disconnect() {} } as unknown as DatabaseConnection;
   const app = await buildApp(config, database);
   const response = await app.inject({ method: "POST", url: "/tasks", headers: { cookie: "estate_crm_session=test-token" }, payload: { title: "Позвонить клиенту", kind: "CALL", dueDate: "2026-09-09", dueTime: "10:30", dealId } });
@@ -34,6 +36,8 @@ test("creating a task links it to the deal contact and writes deal history", asy
   assert.equal(createdData.dealId, dealId);
   assert.equal(activityData.dealId, dealId);
   assert.equal(activityData.category, "TASK");
+  assert.equal(notificationData.eventType, "task.assigned");
+  assert.equal((notificationData.payload as { assigneeId: string }).assigneeId, userId);
   assert.equal(response.json().task.dueDate, "2026-09-09");
   await app.close();
 });

@@ -38,6 +38,38 @@ async function cancelPendingTaskNotifications(database: DatabaseConnection, orga
   });
 }
 
+async function enqueueTaskAssignmentNotification(database: DatabaseConnection, organizationId: string, task: {
+  id: string;
+  title: string;
+  status: "ACTIVE" | "COMPLETED";
+  dueDate: Date | null;
+  dueTime: string | null;
+  updatedAt: Date;
+  assignee: { id: string; name: string } | null;
+  deal: { id: string; number: number; title: string } | null;
+}) {
+  if (task.status !== "ACTIVE" || !task.assignee) return;
+  await database.client.notificationOutbox.create({
+    data: {
+      organizationId,
+      channel: "TELEGRAM",
+      eventType: "task.assigned",
+      title: "Новая задача",
+      body: task.title,
+      actionUrl: task.deal ? `/?deal=${task.deal.id}&task=${task.id}` : `/tasks?task=${task.id}`,
+      dedupeKey: `task:${task.id}:${task.updatedAt.toISOString()}:task.assigned`,
+      payload: {
+        taskId: task.id,
+        dealId: task.deal?.id ?? null,
+        dealNumber: task.deal?.number ?? null,
+        assigneeId: task.assignee.id,
+        dueDate: task.dueDate?.toISOString().slice(0, 10) ?? null,
+        dueTime: task.dueTime,
+      },
+    },
+  });
+}
+
 function mapTask(task: {
   id: string;
   title: string;
@@ -133,6 +165,7 @@ export async function registerTaskRoutes(app: FastifyInstance, database: Databas
       include: taskInclude,
     });
     await database.client.activityEvent.create({ data: { organizationId: user.organization.id, contactId: task.contact?.id, dealId: task.deal?.id, authorId: user.id, category: "TASK", title: "Поставлена задача", description: task.title } });
+    await enqueueTaskAssignmentNotification(database, user.organization.id, task);
     return reply.status(201).send({ task: mapTask(task) });
   });
 
@@ -162,6 +195,7 @@ export async function registerTaskRoutes(app: FastifyInstance, database: Databas
       include: taskInclude,
     });
     await cancelPendingTaskNotifications(database, user.organization.id, existing.id);
+    if (existing.assigneeId !== task.assignee?.id) await enqueueTaskAssignmentNotification(database, user.organization.id, task);
     await database.client.activityEvent.create({ data: { organizationId: user.organization.id, contactId: task.contact?.id, dealId: task.deal?.id, authorId: user.id, category: "TASK", title: nextStatus === "COMPLETED" && existing.status !== "COMPLETED" ? "Задача выполнена" : "Задача обновлена", description: task.result || task.title } });
     return { task: mapTask(task) };
   });

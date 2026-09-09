@@ -64,7 +64,7 @@ export function buildTelegramNotification(
   const dealLabel = dealNumber === null ? "" : ` · ${notification.eventType?.startsWith("task.") ? "Сделка " : ""}#${dealNumber}`;
   const taskNotification = notification.eventType?.startsWith("task.") ?? false;
   const dueLabel = taskNotification ? formatTaskDueLabel(notification.payload) : null;
-  const icon = notification.eventType === "task.overdue" ? "🔴" : taskNotification ? "⏰" : "🔔";
+  const icon = notification.eventType === "task.overdue" ? "🔴" : notification.eventType === "task.assigned" ? "📌" : taskNotification ? "⏰" : "🔔";
   const details = taskNotification
     ? [notification.body?.trim(), dueLabel ? `Срок: ${dueLabel}` : null].filter(Boolean).join("\n")
     : "Откройте карточку в Estate CRM.";
@@ -146,7 +146,7 @@ type RecipientPreference = {
 function recipientAccepts(notification: TelegramNotification, recipient: RecipientPreference, assigneeId: string | null): boolean {
   const eventType = notification.eventType || "";
   if (eventType.startsWith("lead.") && recipient.leadNotifications === false) return false;
-  if (eventType === "task.reminder" && recipient.taskReminderNotifications === false) return false;
+  if (["task.assigned", "task.reminder"].includes(eventType) && recipient.taskReminderNotifications === false) return false;
   if (eventType === "task.overdue" && recipient.taskOverdueNotifications === false) return false;
   const audience = recipient.scope === "OWN" ? (recipient.audience === "NONE" ? "NONE" : "OWN") : recipient.audience ?? "ALL";
   if (audience === "NONE") return false;
@@ -240,7 +240,7 @@ export async function deliverPendingTelegramNotifications(
   const notifications = await database.client.notificationOutbox.findMany({
     where: {
       channel: "TELEGRAM",
-      eventType: { in: ["lead.created", "lead.repeated", "task.reminder", "task.overdue"] },
+      eventType: { in: ["lead.created", "lead.repeated", "task.assigned", "task.reminder", "task.overdue"] },
       status: "PENDING",
       OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }],
     },
