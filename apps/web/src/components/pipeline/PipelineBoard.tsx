@@ -20,6 +20,7 @@ import {
 import { arrayMove, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { useRouter } from "next/navigation";
 import { useCurrentUser } from "@/components/auth/AuthContext";
+import { LogoMark } from "@/components/brand/LogoMark";
 import { useTasks } from "@/components/tasks/TasksContext";
 import { normalizePhone } from "@/lib/phone";
 import { localDateKey } from "@/lib/tasks";
@@ -741,7 +742,7 @@ export function PipelineBoard() {
   return (
     <section className={styles.page}>
       <header className={styles.topbar}>
-        <div className={styles.mobileBrand}>E</div>
+        <LogoMark className={styles.mobileBrand} title="Estate CRM" />
         <h1>Воронка</h1>
 
         <label className={styles.search}>

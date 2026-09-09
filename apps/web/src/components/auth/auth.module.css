@@ -30,14 +30,9 @@
 .loginPanel header small { color: var(--text-muted); font-size: 12px; }
 
 .logo {
-  display: grid;
   width: 38px;
   height: 38px;
-  place-items: center;
-  border-radius: 10px;
-  background: var(--text);
-  color: white;
-  font-weight: 700;
+  flex: 0 0 auto;
 }
 
 .loginIntro > span {

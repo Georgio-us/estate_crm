@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
 
 import styles from "@/components/auth/auth.module.css";
+import { LogoMark } from "@/components/brand/LogoMark";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -46,7 +47,7 @@ export default function LoginPage() {
     <main className={styles.loginPage}>
       <section className={styles.loginPanel}>
         <header>
-          <span className={styles.logo}>E</span>
+          <LogoMark className={styles.logo} title="Estate CRM" />
           <div><strong>Estate CRM</strong><small>Рабочее пространство</small></div>
         </header>
         <div className={styles.loginIntro}>

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState } from "react";
 import { useCurrentUser } from "@/components/auth/AuthContext";
+import { LogoMark } from "@/components/brand/LogoMark";
 import { useTasks } from "@/components/tasks/TasksContext";
 import styles from "./layout.module.css";
 
@@ -66,7 +67,7 @@ export function Sidebar({ collapsed, mobileOpen, onMobileClose, onToggle }: Side
   return (
     <aside className={`${styles.sidebar} ${collapsed ? styles.sidebarCollapsed : ""} ${mobileOpen ? styles.sidebarMobileOpen : ""}`}>
       <div className={styles.brand}>
-        <span className={styles.brandMark}>E</span>
+        <LogoMark className={styles.brandMark} title="Estate CRM" />
         <span>Estate CRM</span>
         <button className={styles.collapseButton} type="button" aria-label={collapsed ? "Развернуть меню" : "Свернуть меню"} onClick={onToggle}>
           {collapsed ? "›" : "‹"}

@@ -32,14 +32,9 @@
 }
 
 .brandMark {
-  display: grid;
-  width: 28px;
-  height: 28px;
-  place-items: center;
-  border-radius: var(--radius-md);
-  background: var(--text);
-  color: white;
-  font-size: var(--font-size-body);
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
 }
 
 .collapseButton {

@@ -27,7 +27,8 @@
 .heroVisual .facebook { top: 44px; left: 7%; transform: rotate(-7deg); }
 .heroVisual .telegram { right: 8%; bottom: 38px; transform: rotate(7deg); }
 .heroVisual .via { top: 27px; right: 25%; width: 108px; height: 108px; transform: rotate(4deg); }
-.crmNode { z-index: 2; bottom: 32px; left: 37%; width: 116px; height: 116px; border-radius: 50%; background: #fff; color: #20242c; font-size: 42px; }
+.crmNode { z-index: 2; bottom: 32px; left: 37%; width: 116px; height: 116px; border-radius: 50%; background: #fff; color: #20242c; }
+.crmNode svg { width: 68px; height: 68px; margin-top: -10px; }
 .connectorOne, .connectorTwo { position: absolute; height: 1px; transform-origin: left; background: rgba(255,255,255,.28); }
 .connectorOne { top: 153px; left: 22%; width: 190px; transform: rotate(19deg); }
 .connectorTwo { right: 20%; bottom: 100px; width: 160px; transform: rotate(-22deg); }

@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { AuthProvider, type SessionUser } from "./AuthContext";
+import { LogoMark } from "@/components/brand/LogoMark";
 import styles from "./auth.module.css";
 
 type AuthState =
@@ -71,7 +72,7 @@ export function AuthBoundary({ children }: { children: ReactNode }) {
     return (
       <main className={styles.statusPage}>
         <section className={styles.statusPanel}>
-          <span className={styles.logo}>E</span>
+          <LogoMark className={styles.logo} title="Estate CRM" />
           <h1>CRM временно недоступна</h1>
           <p>Не удалось проверить подключение к серверу. Попробуйте ещё раз.</p>
           <button type="button" onClick={retry}>Повторить</button>
