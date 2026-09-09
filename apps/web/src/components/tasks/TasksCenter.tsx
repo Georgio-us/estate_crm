@@ -24,7 +24,7 @@ const kindIcons: Record<TaskKind, string> = { Звонок: "☎", Встреч�
 
 export function TasksCenter() {
   const user = useCurrentUser();
-  const { tasks, contacts, deals, loadState, createTask, updateTask, completeTask: persistCompleteTask, reloadTasks } = useTasks();
+  const { tasks, contacts, deals, assignees, loadState, createTask, updateTask, completeTask: persistCompleteTask, reloadTasks } = useTasks();
   const [period, setPeriod] = useState<PeriodFilter>("active");
   const [assignee, setAssignee] = useState("all");
   const [kind, setKind] = useState<"all" | TaskKind>("all");
@@ -91,7 +91,7 @@ export function TasksCenter() {
         </div>
 
         <div className={styles.filters}>
-          <label><span>Ответственный</span><select value={assignee} onChange={(event) => setAssignee(event.target.value)}><option value="all">Все</option><option>Георгий</option><option>Елена</option><option>Андрей</option></select></label>
+          <label><span>Ответственный</span><select value={assignee} onChange={(event) => setAssignee(event.target.value)}><option value="all">Все</option>{assignees.map((item) => <option key={item.id}>{item.name}</option>)}</select></label>
           <label><span>Тип</span><select value={kind} onChange={(event) => setKind(event.target.value as "all" | TaskKind)}><option value="all">Все действия</option><option>Звонок</option><option>Встреча</option><option>Сообщение</option><option>Другое</option></select></label>
           <span>{visibleTasks.length} задач</span>
           {(assignee !== "all" || kind !== "all" || search) && <button type="button" onClick={() => { setAssignee("all"); setKind("all"); setSearch(""); }}>Сбросить</button>}
@@ -103,8 +103,8 @@ export function TasksCenter() {
       </div>
 
       {completingTask && <CompleteTaskModal task={completingTask} onComplete={(result) => { void completeTask(result); }} onClose={() => setCompletingId(null)} />}
-      {selectedTask && <TaskDetailsModal task={selectedTask} contacts={contacts} deals={deals} assignee={{ id: user.id, name: user.name }} onSave={updateTask} onClose={() => setSelectedTaskId(null)} />}
-      {isCreating && <NewTaskModal initialDate={localDateKey()} contacts={contacts} deals={deals} assignee={{ id: user.id, name: user.name }} onCreate={createNewTask} onClose={() => setIsCreating(false)} />}
+      {selectedTask && <TaskDetailsModal task={selectedTask} contacts={contacts} deals={deals} assignees={assignees} currentUserId={user.id} onSave={updateTask} onClose={() => setSelectedTaskId(null)} />}
+      {isCreating && <NewTaskModal initialDate={localDateKey()} contacts={contacts} deals={deals} assignees={assignees} currentUserId={user.id} onCreate={createNewTask} onClose={() => setIsCreating(false)} />}
     </section>
   );
 }

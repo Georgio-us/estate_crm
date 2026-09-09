@@ -10,6 +10,7 @@ import type {
 } from "@estate-crm/contracts";
 import type { DatabaseConnection } from "@estate-crm/database";
 
+import { canAssignTo, dataScope, effectiveAssigneeId, hasOrganizationWideDataAccess } from "../auth/authorization.js";
 import { requireUser } from "../auth/require-user.js";
 import { parsePhone } from "../lib/phone.js";
 
@@ -24,6 +25,17 @@ function describeChange(label: string, previous: string | null, next: string | n
   if (!previous && next) return `${label} добавлен: «${next}»`;
   if (previous && !next) return `${label} очищен`;
   return `${label}: «${previous}» → «${next}»`;
+}
+
+function contactInclude(assigneeId?: string) {
+  return {
+    assignee: { select: { id: true, name: true } },
+    deals: { where: { status: "ACTIVE" as const, ...(assigneeId ? { assigneeId } : {}) }, select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } },
+    relatedDeals: { where: { deal: { status: "ACTIVE" as const, ...(assigneeId ? { assigneeId } : {}) } }, include: { deal: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } } } },
+    relationsAsA: { ...(assigneeId ? { where: { contactB: { assigneeId } } } : {}), include: { contactB: { select: { id: true, name: true, phone: true } } } },
+    relationsAsB: { ...(assigneeId ? { where: { contactA: { assigneeId } } } : {}), include: { contactA: { select: { id: true, name: true, phone: true } } } },
+    tasks: { where: { status: "ACTIVE" as const, ...(assigneeId ? { assigneeId } : {}) }, orderBy: [{ dueDate: "asc" as const }, { dueTime: "asc" as const }], take: 1, select: { id: true, title: true, dueDate: true, dueTime: true } },
+  };
 }
 
 function mapContact(contact: {
@@ -76,7 +88,7 @@ export async function registerContactRoutes(
     const query = request.query.q?.trim();
     const contacts = await database.client.contact.findMany({
       where: {
-        organizationId: user.organization.id,
+        ...dataScope(user),
         ...(query ? {
           OR: [
             { name: { contains: query, mode: "insensitive" } },
@@ -86,7 +98,7 @@ export async function registerContactRoutes(
           ],
         } : {}),
       },
-      include: { assignee: { select: { id: true, name: true } }, deals: { where: { status: "ACTIVE" }, select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } }, relatedDeals: { where: { deal: { status: "ACTIVE" } }, include: { deal: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } } } }, relationsAsA: { include: { contactB: { select: { id: true, name: true, phone: true } } } }, relationsAsB: { include: { contactA: { select: { id: true, name: true, phone: true } } } }, tasks: { where: { status: "ACTIVE" }, orderBy: [{ dueDate: "asc" }, { dueTime: "asc" }], take: 1, select: { id: true, title: true, dueDate: true, dueTime: true } } },
+      include: contactInclude(hasOrganizationWideDataAccess(user) ? undefined : user.id),
       orderBy: { createdAt: "desc" },
       take: 200,
     });
@@ -121,6 +133,10 @@ export async function registerContactRoutes(
     const user = await requireUser(request, reply, database);
     if (!user) return reply;
 
+    if (!canAssignTo(user, request.body.assigneeId)) {
+      return reply.status(403).send({ error: "forbidden", message: "Менеджер может назначать контакты только себе." });
+    }
+
     if (request.body.assigneeId) {
       const membership = await database.client.membership.findUnique({
         where: {
@@ -149,7 +165,9 @@ export async function registerContactRoutes(
     if (duplicate) {
       return reply.status(409).send({
         error: "contact_already_exists",
-        message: `Контакт «${duplicate.name}» с таким телефоном уже существует.`,
+        message: hasOrganizationWideDataAccess(user)
+          ? `Контакт «${duplicate.name}» с таким телефоном уже существует.`
+          : "Контакт с таким телефоном уже существует. Обратитесь к руководителю.",
       });
     }
     const contact = await database.client.contact.create({
@@ -161,10 +179,10 @@ export async function registerContactRoutes(
         email: optionalText(request.body.email)?.toLowerCase() ?? null,
         telegram: optionalText(request.body.telegram),
         source: request.body.source ?? "MANUAL",
-        assigneeId: request.body.assigneeId ?? null,
+        assigneeId: effectiveAssigneeId(user, request.body.assigneeId),
         comment: optionalText(request.body.comment),
       },
-      include: { assignee: { select: { id: true, name: true } }, deals: { where: { status: "ACTIVE" }, select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } }, relatedDeals: { where: { deal: { status: "ACTIVE" } }, include: { deal: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } } } }, relationsAsA: { include: { contactB: { select: { id: true, name: true, phone: true } } } }, relationsAsB: { include: { contactA: { select: { id: true, name: true, phone: true } } } }, tasks: { where: { status: "ACTIVE" }, orderBy: [{ dueDate: "asc" }, { dueTime: "asc" }], take: 1, select: { id: true, title: true, dueDate: true, dueTime: true } } },
+      include: contactInclude(hasOrganizationWideDataAccess(user) ? undefined : user.id),
     });
 
     return reply.status(201).send({ contact: mapContact(contact) });
@@ -197,9 +215,13 @@ export async function registerContactRoutes(
     if (!user) return reply;
 
     const existing = await database.client.contact.findFirst({
-      where: { id: request.params.contactId, organizationId: user.organization.id },
+      where: { id: request.params.contactId, ...dataScope(user) },
     });
     if (!existing) return reply.status(404).send({ error: "contact_not_found", message: "Контакт не найден." });
+
+    if (!canAssignTo(user, request.body.assigneeId)) {
+      return reply.status(403).send({ error: "forbidden", message: "Менеджер не может передать контакт другому сотруднику или снять ответственность." });
+    }
 
     if (request.body.assigneeId) {
       const membership = await database.client.membership.findUnique({
@@ -219,7 +241,7 @@ export async function registerContactRoutes(
     const nextEmail = request.body.email === undefined ? existing.email : optionalText(request.body.email)?.toLowerCase() ?? null;
     const nextTelegram = request.body.telegram === undefined ? existing.telegram : optionalText(request.body.telegram);
     const nextSource = request.body.source ?? existing.source;
-    const nextAssigneeId = request.body.assigneeId === undefined ? existing.assigneeId : request.body.assigneeId;
+    const nextAssigneeId = request.body.assigneeId === undefined ? existing.assigneeId : effectiveAssigneeId(user, request.body.assigneeId);
     const nextComment = request.body.comment === undefined ? existing.comment : optionalText(request.body.comment);
     const contact = await database.client.contact.update({
       where: { id: existing.id },
@@ -229,15 +251,15 @@ export async function registerContactRoutes(
         ...(request.body.email !== undefined ? { email: optionalText(request.body.email)?.toLowerCase() ?? null } : {}),
         ...(request.body.telegram !== undefined ? { telegram: optionalText(request.body.telegram) } : {}),
         ...(request.body.source !== undefined ? { source: request.body.source } : {}),
-        ...(request.body.assigneeId !== undefined ? { assigneeId: request.body.assigneeId } : {}),
+        ...(request.body.assigneeId !== undefined ? { assigneeId: nextAssigneeId } : {}),
         ...(request.body.comment !== undefined ? { comment: optionalText(request.body.comment) } : {}),
       },
-      include: { assignee: { select: { id: true, name: true } }, deals: { where: { status: "ACTIVE" }, select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } }, relatedDeals: { where: { deal: { status: "ACTIVE" } }, include: { deal: { select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } } } }, relationsAsA: { include: { contactB: { select: { id: true, name: true, phone: true } } } }, relationsAsB: { include: { contactA: { select: { id: true, name: true, phone: true } } } }, tasks: { where: { status: "ACTIVE" }, orderBy: [{ dueDate: "asc" }, { dueTime: "asc" }], take: 1, select: { id: true, title: true, dueDate: true, dueTime: true } } },
+      include: contactInclude(hasOrganizationWideDataAccess(user) ? undefined : user.id),
     });
 
     if (request.body.source !== undefined && request.body.source !== existing.source) {
       await database.client.deal.updateMany({
-        where: { organizationId: user.organization.id, contactId: existing.id },
+        where: { organizationId: user.organization.id, contactId: existing.id, ...(hasOrganizationWideDataAccess(user) ? {} : { assigneeId: user.id }) },
         data: { source: request.body.source },
       });
     }
@@ -283,7 +305,7 @@ export async function registerContactRoutes(
     if (request.params.contactId === request.body.relatedContactId) return reply.status(409).send({ error: "same_contact", message: "Нельзя связать контакт с самим собой." });
 
     const contacts = await database.client.contact.findMany({
-      where: { organizationId: user.organization.id, id: { in: [request.params.contactId, request.body.relatedContactId] } },
+      where: { ...dataScope(user), id: { in: [request.params.contactId, request.body.relatedContactId] } },
       select: { id: true, name: true, phone: true },
     });
     if (contacts.length !== 2) return reply.status(404).send({ error: "contact_not_found", message: "Один из контактов не найден." });
@@ -318,7 +340,12 @@ export async function registerContactRoutes(
     const contactAId = contactIds[0]!;
     const contactBId = contactIds[1]!;
     const relation = await database.client.contactRelation.findFirst({
-      where: { contactAId, contactBId, organizationId: user.organization.id },
+      where: {
+        contactAId,
+        contactBId,
+        organizationId: user.organization.id,
+        ...(hasOrganizationWideDataAccess(user) ? {} : { contactA: { assigneeId: user.id }, contactB: { assigneeId: user.id } }),
+      },
       include: { contactA: { select: { name: true } }, contactB: { select: { name: true } } },
     });
     if (!relation) return reply.status(404).send({ error: "relation_not_found", message: "Связь контактов не найдена." });

@@ -182,7 +182,7 @@ export function PipelineBoard() {
   const pipelineMenuRef = useRef<HTMLDivElement>(null);
   const deepLinkHandledRef = useRef(false);
   const user = useCurrentUser();
-  const { tasks, createTask, completeTask: persistCompleteTask } = useTasks();
+  const { tasks, assignees: teamAssignees, createTask, completeTask: persistCompleteTask } = useTasks();
   const [pipelineName, setPipelineName] = useState("Продажа недвижимости");
   const [stages, setStages] = useState<PipelineStage[]>([]);
   const [contacts, setContacts] = useState<ContactOption[]>([]);
@@ -769,7 +769,7 @@ export function PipelineBoard() {
             <button className={styles.titleMenu} type="button" aria-label="Настройки воронки" aria-expanded={pipelineMenuOpen} onClick={() => { setPipelineMenuOpen((value) => !value); setNotificationsOpen(false); }}>
               •••
             </button>
-            {pipelineMenuOpen && <div className={styles.pipelineMenu}><button type="button" onClick={() => { setPipelineMenuOpen(false); router.push("/settings"); }}>Настроить этапы <span>→</span></button><button type="button" onClick={() => { setPipelineMenuOpen(false); setTransferOpen(true); }}>Импорт и экспорт <span>⇅</span></button></div>}
+            {pipelineMenuOpen && <div className={styles.pipelineMenu}>{user.organization.role === "ADMIN" && <button type="button" onClick={() => { setPipelineMenuOpen(false); router.push("/settings"); }}>Настроить этапы <span>→</span></button>}<button type="button" onClick={() => { setPipelineMenuOpen(false); setTransferOpen(true); }}>Импорт и экспорт <span>⇅</span></button></div>}
           </div>
           <p>{visibleDealsCount === dealsCount ? `${dealsCount} ${pipelineView === "active" ? "активных" : "закрытых"} сделок` : `${visibleDealsCount} из ${dealsCount} сделок`}</p>
         </div>
@@ -820,7 +820,7 @@ export function PipelineBoard() {
           deal={selectedDeal}
           stageId={selectedStage.id}
           stages={stageOptions}
-          assignees={[{ id: user.id, name: user.name }]}
+          assignees={teamAssignees}
           activities={selectedActivities}
           tasks={selectedTasks}
           highlightedTaskId={selected?.taskId}
@@ -857,7 +857,7 @@ export function PipelineBoard() {
           initialStageId={newDealStageId}
           stages={stageOptions}
           contacts={contacts}
-          assignees={[{ id: user.id, name: user.name }]}
+          assignees={teamAssignees}
           onCreate={createDeal}
           onClose={() => setNewDealStageId(null)}
         />

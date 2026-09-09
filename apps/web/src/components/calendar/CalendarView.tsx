@@ -57,7 +57,7 @@ function formatFullDate(key: string) {
 
 export function CalendarView() {
   const user = useCurrentUser();
-  const { tasks, contacts, deals, createTask, updateTask, completeTask: persistCompleteTask } = useTasks();
+  const { tasks, contacts, deals, assignees, createTask, updateTask, completeTask: persistCompleteTask } = useTasks();
   const [mode, setMode] = useState<CalendarMode>("month");
   const [cursor, setCursor] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState(TODAY_KEY);
@@ -177,8 +177,8 @@ export function CalendarView() {
         </div>
       </div>
 
-      {isCreating && <NewTaskModal initialDate={selectedDate} contacts={contacts} deals={deals} assignee={{ id: user.id, name: user.name }} onCreate={createCalendarTask} onClose={() => setIsCreating(false)} />}
-      {selectedTask && <TaskDetailsModal task={selectedTask} contacts={contacts} deals={deals} assignee={{ id: user.id, name: user.name }} onSave={saveTask} onClose={() => setSelectedTaskId(null)} />}
+      {isCreating && <NewTaskModal initialDate={selectedDate} contacts={contacts} deals={deals} assignees={assignees} currentUserId={user.id} onCreate={createCalendarTask} onClose={() => setIsCreating(false)} />}
+      {selectedTask && <TaskDetailsModal task={selectedTask} contacts={contacts} deals={deals} assignees={assignees} currentUserId={user.id} onSave={saveTask} onClose={() => setSelectedTaskId(null)} />}
       {completingTask && <CompleteTaskModal task={completingTask} onComplete={(result) => { void completeTask(result); }} onClose={() => setCompletingTaskId(null)} />}
     </section>
   );

@@ -88,6 +88,14 @@ export interface TeamResponse {
   scope: "ORGANIZATION" | "OWN_TEAM";
 }
 
+export interface TeamAssigneeListResponse {
+  assignees: Array<{
+    id: string;
+    name: string;
+    role: MembershipRole;
+  }>;
+}
+
 export interface UpdateTeamMemberRequest {
   name?: string;
   phone?: string | null;

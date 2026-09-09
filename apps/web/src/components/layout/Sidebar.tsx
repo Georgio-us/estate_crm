@@ -44,6 +44,11 @@ export function Sidebar({ collapsed, mobileOpen, onMobileClose, onToggle }: Side
     : user.organization.role === "LEAD"
       ? "Руководитель"
       : "Менеджер";
+  const visibleSecondaryItems = secondaryItems.filter(([, label]) => {
+    if (label === "Команда" && user.organization.role === "MANAGER") return false;
+    if ((label === "Подписка" || label === "Настройки") && user.organization.role !== "ADMIN") return false;
+    return true;
+  });
   const initials = user.name
     .split(/\s+/)
     .filter(Boolean)
@@ -95,7 +100,7 @@ export function Sidebar({ collapsed, mobileOpen, onMobileClose, onToggle }: Side
         <div className={styles.navLabel}>Управление</div>
 
         <div className={styles.navGroup}>
-          {secondaryItems.map(([icon, label, href]) => (
+          {visibleSecondaryItems.map(([icon, label, href]) => (
             <Link className={`${styles.navItem} ${href !== "#" && pathname.startsWith(href) ? styles.navItemActive : ""}`} href={href} key={label} onClick={onMobileClose}>
               <span className={styles.navIcon}>{icon}</span>
               <span>{label}</span>

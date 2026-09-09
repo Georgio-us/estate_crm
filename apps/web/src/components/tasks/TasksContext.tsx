@@ -7,12 +7,14 @@ import type { CrmTask, TaskKind } from "@/types/crm";
 
 export interface TaskContactOption { id: string; name: string; phone: string | null }
 export interface TaskDealOption { id: string; number: number; title: string; contactId: string }
+export interface TaskAssigneeOption { id: string; name: string; role: "ADMIN" | "LEAD" | "MANAGER" }
 export interface TaskDraftInput { title: string; kind: TaskKind; dueDate?: string; dueTime?: string; assigneeId?: string; contactId?: string; dealId?: string }
 
 interface TasksContextValue {
   tasks: CrmTask[];
   contacts: TaskContactOption[];
   deals: TaskDealOption[];
+  assignees: TaskAssigneeOption[];
   loadState: "loading" | "ready" | "error";
   createTask: (draft: TaskDraftInput) => Promise<CrmTask>;
   updateTask: (task: CrmTask) => Promise<CrmTask>;
@@ -23,19 +25,22 @@ interface TasksContextValue {
 const TasksContext = createContext<TasksContextValue | null>(null);
 
 async function requestTaskData() {
-  const [tasksResponse, contactsResponse, pipelineResponse] = await Promise.all([
+  const [tasksResponse, contactsResponse, pipelineResponse, assigneesResponse] = await Promise.all([
     fetch("/api/crm/tasks", { cache: "no-store" }),
     fetch("/api/crm/contacts", { cache: "no-store" }),
     fetch("/api/crm/pipeline", { cache: "no-store" }),
+    fetch("/api/crm/team/assignees", { cache: "no-store" }),
   ]);
-  if (!tasksResponse.ok || !contactsResponse.ok || !pipelineResponse.ok) throw new Error("Не удалось загрузить задачи.");
+  if (!tasksResponse.ok || !contactsResponse.ok || !pipelineResponse.ok || !assigneesResponse.ok) throw new Error("Не удалось загрузить задачи.");
   const tasksPayload = await tasksResponse.json() as { tasks: ApiTask[] };
   const contactsPayload = await contactsResponse.json() as { contacts: TaskContactOption[] };
   const pipelinePayload = await pipelineResponse.json() as { pipeline: { stages: Array<{ deals: Array<{ id: string; number: number; title: string; contact: { id: string } }> }> } };
+  const assigneesPayload = await assigneesResponse.json() as { assignees: TaskAssigneeOption[] };
   return {
     tasks: tasksPayload.tasks.map(mapApiTask),
     contacts: contactsPayload.contacts,
     deals: pipelinePayload.pipeline.stages.flatMap((stage) => stage.deals.map((deal) => ({ id: deal.id, number: deal.number, title: deal.title, contactId: deal.contact.id }))),
+    assignees: assigneesPayload.assignees,
   };
 }
 
@@ -51,6 +56,7 @@ export function TasksProvider({ children }: { children: ReactNode }) {
   const [tasks, setTasks] = useState<CrmTask[]>([]);
   const [contacts, setContacts] = useState<TaskContactOption[]>([]);
   const [deals, setDeals] = useState<TaskDealOption[]>([]);
+  const [assignees, setAssignees] = useState<TaskAssigneeOption[]>([{ id: user.id, name: user.name, role: user.organization.role }]);
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
 
   async function reloadTasks() {
@@ -59,6 +65,7 @@ export function TasksProvider({ children }: { children: ReactNode }) {
       setTasks(data.tasks);
       setContacts(data.contacts);
       setDeals(data.deals);
+      setAssignees(data.assignees);
       setLoadState("ready");
     } catch {
       setLoadState("error");
@@ -72,6 +79,7 @@ export function TasksProvider({ children }: { children: ReactNode }) {
       setTasks(data.tasks);
       setContacts(data.contacts);
       setDeals(data.deals);
+      setAssignees(data.assignees);
       setLoadState("ready");
     }, () => { if (active) setLoadState("error"); });
     return () => { active = false; };
@@ -95,7 +103,7 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     return task;
   }
 
-  const value = { tasks, contacts, deals, loadState, createTask, updateTask, completeTask, reloadTasks };
+  const value = { tasks, contacts, deals, assignees, loadState, createTask, updateTask, completeTask, reloadTasks };
   return <TasksContext.Provider value={value}>{children}</TasksContext.Provider>;
 }
 

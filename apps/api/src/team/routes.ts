@@ -4,6 +4,7 @@ import type {
   ApiErrorResponse,
   CreateTeamInvitationRequest,
   TeamAuditResponse,
+  TeamAssigneeListResponse,
   TeamInvitationLinkResponse,
   TeamResponse,
   TelegramNotificationAudience,
@@ -88,6 +89,32 @@ function invitationUrl(config: ApiConfig, token: string) {
 }
 
 export async function registerTeamRoutes(app: FastifyInstance, config: ApiConfig, database: DatabaseConnection): Promise<void> {
+  app.get<{ Reply: TeamAssigneeListResponse | ApiErrorResponse }>("/team/assignees", async (request, reply) => {
+    const currentUser = await requireUser(request, reply, database);
+    if (!currentUser) return reply;
+
+    const memberships = await database.client.membership.findMany({
+      where: {
+        organizationId: currentUser.organization.id,
+        status: "ACTIVE",
+        ...(currentUser.organization.role === "MANAGER" ? { userId: currentUser.id } : {}),
+      },
+      select: {
+        role: true,
+        user: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: "asc" },
+    });
+
+    return {
+      assignees: memberships.map((membership) => ({
+        id: membership.user.id,
+        name: membership.user.name,
+        role: membership.role,
+      })),
+    };
+  });
+
   app.get<{ Reply: TeamResponse | ApiErrorResponse }>("/team", async (request, reply) => {
     const currentUser = await requireUser(request, reply, database);
     if (!currentUser) return reply;

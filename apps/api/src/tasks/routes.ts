@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 
 import type {
   ApiErrorResponse,
+  AuthenticatedUser,
   CompleteTaskRequest,
   CreateTaskRequest,
   TaskListResponse,
@@ -10,6 +11,7 @@ import type {
 } from "@estate-crm/contracts";
 import type { DatabaseConnection } from "@estate-crm/database";
 
+import { canAssignTo, dataScope, effectiveAssigneeId } from "../auth/authorization.js";
 import { requireUser } from "../auth/require-user.js";
 
 const taskInclude = {
@@ -110,23 +112,24 @@ const taskProperties = {
   assigneeId: { anyOf: [{ type: "string", format: "uuid" }, { type: "null" }] },
 } as const;
 
-async function resolveRelations(database: DatabaseConnection, organizationId: string, body: CreateTaskRequest) {
+async function resolveRelations(database: DatabaseConnection, user: AuthenticatedUser, body: CreateTaskRequest) {
+  const organizationId = user.organization.id;
   let contactId = body.contactId ?? null;
   if (body.dealId) {
     const deal = await database.client.deal.findFirst({
-      where: { id: body.dealId, organizationId },
+      where: { id: body.dealId, ...dataScope(user) },
       select: { id: true, contactId: true, relatedContacts: { select: { contactId: true } } },
     });
     if (!deal) return { error: "deal_not_found" as const };
     if (contactId && contactId !== deal.contactId && !deal.relatedContacts.some((item) => item.contactId === contactId)) return { error: "contact_not_in_deal" as const };
     contactId ??= deal.contactId;
   } else if (contactId) {
-    const contact = await database.client.contact.findFirst({ where: { id: contactId, organizationId }, select: { id: true } });
+    const contact = await database.client.contact.findFirst({ where: { id: contactId, ...dataScope(user) }, select: { id: true } });
     if (!contact) return { error: "contact_not_found" as const };
   }
   if (body.assigneeId) {
     const membership = await database.client.membership.findUnique({ where: { organizationId_userId: { organizationId, userId: body.assigneeId } } });
-    if (!membership) return { error: "assignee_not_found" as const };
+    if (!membership || membership.status !== "ACTIVE") return { error: "assignee_not_found" as const };
   }
   return { contactId };
 }
@@ -136,7 +139,7 @@ export async function registerTaskRoutes(app: FastifyInstance, database: Databas
     const user = await requireUser(request, reply, database);
     if (!user) return reply;
     const tasks = await database.client.task.findMany({
-      where: { organizationId: user.organization.id },
+      where: dataScope(user),
       include: taskInclude,
       orderBy: [{ status: "asc" }, { dueDate: "asc" }, { dueTime: "asc" }, { createdAt: "desc" }],
       take: 500,
@@ -149,7 +152,10 @@ export async function registerTaskRoutes(app: FastifyInstance, database: Databas
   }, async (request, reply) => {
     const user = await requireUser(request, reply, database);
     if (!user) return reply;
-    const relations = await resolveRelations(database, user.organization.id, request.body);
+    if (!canAssignTo(user, request.body.assigneeId)) {
+      return reply.status(403).send({ error: "forbidden", message: "Менеджер может ставить задачи только себе." });
+    }
+    const relations = await resolveRelations(database, user, request.body);
     if ("error" in relations) return reply.status(404).send({ error: relations.error ?? "relation_not_found", message: "Не удалось найти связанную сущность задачи." });
     const task = await database.client.task.create({
       data: {
@@ -160,7 +166,7 @@ export async function registerTaskRoutes(app: FastifyInstance, database: Databas
         dueTime: optionalText(request.body.dueTime),
         contactId: relations.contactId,
         dealId: request.body.dealId ?? null,
-        assigneeId: request.body.assigneeId ?? user.id,
+        assigneeId: effectiveAssigneeId(user, request.body.assigneeId ?? user.id),
       },
       include: taskInclude,
     });
@@ -174,11 +180,17 @@ export async function registerTaskRoutes(app: FastifyInstance, database: Databas
   }, async (request, reply) => {
     const user = await requireUser(request, reply, database);
     if (!user) return reply;
-    const existing = await database.client.task.findFirst({ where: { id: request.params.taskId, organizationId: user.organization.id } });
+    const existing = await database.client.task.findFirst({ where: { id: request.params.taskId, ...dataScope(user) } });
     if (!existing) return reply.status(404).send({ error: "task_not_found", message: "Задача не найдена." });
-    const relations = await resolveRelations(database, user.organization.id, { ...request.body, contactId: request.body.contactId === undefined ? existing.contactId : request.body.contactId, dealId: request.body.dealId === undefined ? existing.dealId : request.body.dealId, assigneeId: request.body.assigneeId === undefined ? existing.assigneeId : request.body.assigneeId } as CreateTaskRequest);
+    if (!canAssignTo(user, request.body.assigneeId)) {
+      return reply.status(403).send({ error: "forbidden", message: "Менеджер не может передать задачу другому сотруднику или снять ответственность." });
+    }
+    const relations = await resolveRelations(database, user, { ...request.body, contactId: request.body.contactId === undefined ? existing.contactId : request.body.contactId, dealId: request.body.dealId === undefined ? existing.dealId : request.body.dealId, assigneeId: request.body.assigneeId === undefined ? existing.assigneeId : request.body.assigneeId } as CreateTaskRequest);
     if ("error" in relations) return reply.status(404).send({ error: relations.error ?? "relation_not_found", message: "Не удалось найти связанную сущность задачи." });
     const nextStatus = request.body.status ?? existing.status;
+    const nextAssigneeId = request.body.assigneeId === undefined
+      ? existing.assigneeId
+      : effectiveAssigneeId(user, request.body.assigneeId);
     const task = await database.client.task.update({
       where: { id: existing.id },
       data: {
@@ -188,7 +200,7 @@ export async function registerTaskRoutes(app: FastifyInstance, database: Databas
         ...(request.body.dueTime !== undefined ? { dueTime: optionalText(request.body.dueTime) } : {}),
         ...(request.body.contactId !== undefined || request.body.dealId !== undefined ? { contactId: relations.contactId } : {}),
         ...(request.body.dealId !== undefined ? { dealId: request.body.dealId } : {}),
-        ...(request.body.assigneeId !== undefined ? { assigneeId: request.body.assigneeId } : {}),
+        ...(request.body.assigneeId !== undefined ? { assigneeId: nextAssigneeId } : {}),
         ...(request.body.status !== undefined ? { status: nextStatus, completedAt: nextStatus === "COMPLETED" ? existing.completedAt ?? new Date() : null } : {}),
         ...(request.body.result !== undefined ? { result: optionalText(request.body.result) } : {}),
       },
@@ -205,7 +217,7 @@ export async function registerTaskRoutes(app: FastifyInstance, database: Databas
   }, async (request, reply) => {
     const user = await requireUser(request, reply, database);
     if (!user) return reply;
-    const existing = await database.client.task.findFirst({ where: { id: request.params.taskId, organizationId: user.organization.id }, include: taskInclude });
+    const existing = await database.client.task.findFirst({ where: { id: request.params.taskId, ...dataScope(user) }, include: taskInclude });
     if (!existing) return reply.status(404).send({ error: "task_not_found", message: "Задача не найдена." });
     const task = await database.client.task.update({ where: { id: existing.id }, data: { status: "COMPLETED", result: optionalText(request.body.result) || "Выполнено", completedAt: existing.completedAt ?? new Date() }, include: taskInclude });
     await cancelPendingTaskNotifications(database, user.organization.id, existing.id);

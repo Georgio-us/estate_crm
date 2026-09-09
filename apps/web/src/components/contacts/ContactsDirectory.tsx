@@ -100,7 +100,7 @@ async function requestContactActivities(contactId: string): Promise<ActivityEven
 
 export function ContactsDirectory() {
   const user = useCurrentUser();
-  const { contacts: taskContacts, deals: taskDeals, createTask, reloadTasks } = useTasks();
+  const { contacts: taskContacts, deals: taskDeals, assignees: teamAssignees, createTask, reloadTasks } = useTasks();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [dealsById, setDealsById] = useState<Map<string, RelatedDeal>>(() => new Map());
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
@@ -347,10 +347,10 @@ export function ContactsDirectory() {
         </section>
       </div>
 
-      {selectedContact && <ContactDrawer key={selectedContact.id} contact={selectedContact} contacts={contacts} deals={selectedDeals} activities={selectedActivities} assignees={[{ id: user.id, name: user.name }]} onSave={saveContact} onAddNote={addContactNote} onLinkContact={linkRelatedContact} onUnlinkContact={unlinkRelatedContact} onCreateDeal={() => { void openDealCreation(selectedContact.id).catch(() => undefined); }} onCreateTask={() => setTaskContactId(selectedContact.id)} onClose={() => setSelectedId(null)} />}
-      {isCreating && <NewContactModal onCreate={createContact} onClose={() => setIsCreating(false)} assignees={[{ id: user.id, name: user.name }]} />}
-      {dealContactId && dealStages[0] && <NewDealModal initialContactId={dealContactId} initialStageId={dealStages[0].id} stages={dealStages} contacts={contacts.map((item) => ({ id: item.id, name: item.name, phone: item.phone || null, source: item.source, dealCount: item.dealIds.length }))} assignees={[{ id: user.id, name: user.name }]} onCreate={createDeal} onClose={() => setDealContactId(null)} />}
-      {taskContactId && <NewTaskModal initialContactId={taskContactId} contacts={taskContacts} deals={taskDeals} assignee={{ id: user.id, name: user.name }} onCreate={async (draft) => { await createTask(draft); const items = await requestContactActivities(taskContactId); setContactActivities((current) => ({ ...current, [taskContactId]: items })); }} onClose={() => setTaskContactId(null)} />}
+      {selectedContact && <ContactDrawer key={selectedContact.id} contact={selectedContact} contacts={contacts} deals={selectedDeals} activities={selectedActivities} assignees={teamAssignees} onSave={saveContact} onAddNote={addContactNote} onLinkContact={linkRelatedContact} onUnlinkContact={unlinkRelatedContact} onCreateDeal={() => { void openDealCreation(selectedContact.id).catch(() => undefined); }} onCreateTask={() => setTaskContactId(selectedContact.id)} onClose={() => setSelectedId(null)} />}
+      {isCreating && <NewContactModal onCreate={createContact} onClose={() => setIsCreating(false)} assignees={teamAssignees} />}
+      {dealContactId && dealStages[0] && <NewDealModal initialContactId={dealContactId} initialStageId={dealStages[0].id} stages={dealStages} contacts={contacts.map((item) => ({ id: item.id, name: item.name, phone: item.phone || null, source: item.source, dealCount: item.dealIds.length }))} assignees={teamAssignees} onCreate={createDeal} onClose={() => setDealContactId(null)} />}
+      {taskContactId && <NewTaskModal initialContactId={taskContactId} contacts={taskContacts} deals={taskDeals} assignees={teamAssignees} currentUserId={user.id} onCreate={async (draft) => { await createTask(draft); const items = await requestContactActivities(taskContactId); setContactActivities((current) => ({ ...current, [taskContactId]: items })); }} onClose={() => setTaskContactId(null)} />}
     </section>
   );
 }

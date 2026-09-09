@@ -8,6 +8,7 @@ import type {
 } from "@estate-crm/contracts";
 import type { DatabaseConnection } from "@estate-crm/database";
 
+import { dataScope, hasOrganizationWideDataAccess } from "../auth/authorization.js";
 import { requireUser } from "../auth/require-user.js";
 
 function mapActivity(activity: {
@@ -59,7 +60,7 @@ export async function registerActivityRoutes(
     if (!user) return reply;
 
     const deal = await database.client.deal.findFirst({
-      where: { id: request.params.dealId, organizationId: user.organization.id },
+      where: { id: request.params.dealId, ...dataScope(user) },
       select: { id: true },
     });
     if (!deal) return reply.status(404).send({ error: "deal_not_found", message: "Сделка не найдена." });
@@ -84,7 +85,7 @@ export async function registerActivityRoutes(
     if (!user) return reply;
 
     const deal = await database.client.deal.findFirst({
-      where: { id: request.params.dealId, organizationId: user.organization.id },
+      where: { id: request.params.dealId, ...dataScope(user) },
       select: { id: true, contactId: true },
     });
     if (!deal) return reply.status(404).send({ error: "deal_not_found", message: "Сделка не найдена." });
@@ -114,7 +115,7 @@ export async function registerActivityRoutes(
     if (!user) return reply;
 
     const contact = await database.client.contact.findFirst({
-      where: { id: request.params.contactId, organizationId: user.organization.id },
+      where: { id: request.params.contactId, ...dataScope(user) },
       select: { id: true },
     });
     if (!contact) return reply.status(404).send({ error: "contact_not_found", message: "Контакт не найден." });
@@ -122,9 +123,19 @@ export async function registerActivityRoutes(
     const activities = await database.client.activityEvent.findMany({
       where: {
         organizationId: user.organization.id,
-        OR: [
-          { contactId: contact.id },
-          { deal: { relatedContacts: { some: { contactId: contact.id } } } },
+        AND: [
+          {
+            OR: [
+              { contactId: contact.id },
+              { deal: { relatedContacts: { some: { contactId: contact.id } } } },
+            ],
+          },
+          ...(hasOrganizationWideDataAccess(user) ? [] : [{
+            OR: [
+              { dealId: null, contactId: contact.id },
+              { deal: { assigneeId: user.id } },
+            ],
+          }]),
         ],
       },
       include: { author: { select: { id: true, name: true } } },
@@ -145,7 +156,7 @@ export async function registerActivityRoutes(
     if (!user) return reply;
 
     const contact = await database.client.contact.findFirst({
-      where: { id: request.params.contactId, organizationId: user.organization.id },
+      where: { id: request.params.contactId, ...dataScope(user) },
       select: { id: true },
     });
     if (!contact) return reply.status(404).send({ error: "contact_not_found", message: "Контакт не найден." });
