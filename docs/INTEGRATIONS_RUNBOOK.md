@@ -40,12 +40,16 @@ Assignment produces an immediate short task notification. The Telegram runtime a
 
 `notification_outbox` remains the source of truth. Per-recipient results live in `notification_deliveries`, so a retry for one failed recipient does not duplicate a message already delivered to another. After five failed attempts the delivery and its outbox item are marked failed instead of retrying forever. If no eligible Telegram recipient is connected, the item remains pending and is delivered after an eligible user connects.
 
-## Deliberately not enabled
+## Optional channels and deliberately not enabled
 
-- No direct Meta Developer application, Meta webhook subscription, Instagram permission, or telephony account was created.
-- No plaintext provider secret is stored in the database or Railway; only the webhook secret hash is persisted by the CRM.
+- No direct Meta Developer application, Meta webhook subscription, Instagram permission, or telephony account was created. Instagram Direct and telephony are **optional client decisions**, not prerequisites for the current CRM or Delmar Lead Ads flow.
+- The Google Sheets webhook secret is stored in Apps Script properties; the CRM stores only its hash in PostgreSQL. The Telegram bot token is kept as a sealed Railway variable on the API service, never in the frontend.
 - The Meta Lead Ads connection is `CONNECTED` for Delmar through Google Sheets. Other provider cards remain `CREDENTIALS_REQUIRED`; a simulated event does not connect an external service.
 - The client's pre-existing Apps Script → Telegram route remains independent. Keeping it enabled together with the CRM bot intentionally produces two separate notifications until the old route is switched off.
+
+Instagram Direct has two possible transports if the client needs it: our own reviewed Meta application or a third-party messaging provider with its own authorized application. Either route requires access granted by the client's professional Instagram account. The current canonical inbound-lead input requires a phone number, while an Instagram sender may have none; an adapter must therefore introduce Instagram-scoped identity and conversation/message persistence before deciding how to link a contact or deal. Ingestion-only and two-way replies are separate scopes.
+
+Telephony depends on the client's number, existing carrier or PBX, a provider with call events, and an agreed call-to-lead rule. A ringing event can surface a contact or provisional lead; completion/missed status and recording arrive later. Capturing every office call as a deal is not assumed. Call recordings are optional and require an explicit retention/access decision. No provider is selected by this repository.
 
 ## Later: direct Meta delivery
 
