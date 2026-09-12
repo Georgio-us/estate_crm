@@ -272,6 +272,9 @@ export interface LinkContactRequest {
 
 export type DealOperation = "PURCHASE" | "RENT" | "SALE";
 export type DealStatus = "ACTIVE" | "WON" | "LOST" | "ARCHIVED";
+export type DealMarketPreference = "PRIMARY" | "SECONDARY";
+export type DealPaymentMethod = "FULL" | "INSTALLMENT";
+export type DealPropertySelectionStatus = "CANDIDATE" | "OFFERED";
 
 export interface PipelineDealRecord {
   id: string;
@@ -286,6 +289,10 @@ export interface PipelineDealRecord {
   propertyType: string | null;
   district: string | null;
   rooms: string | null;
+  marketPreference: DealMarketPreference | null;
+  paymentMethod: DealPaymentMethod | null;
+  neighborhood: string | null;
+  preferredProject: string | null;
   source: ContactSource;
   status: DealStatus;
   assignee: ContactAssignee | null;
@@ -353,6 +360,10 @@ export interface CreateDealRequest {
   propertyType?: string;
   district?: string;
   rooms?: string;
+  marketPreference?: DealMarketPreference;
+  paymentMethod?: DealPaymentMethod;
+  neighborhood?: string;
+  preferredProject?: string;
   source?: ContactSource;
   comment?: string;
 }
@@ -367,6 +378,10 @@ export interface UpdateDealRequest {
   propertyType?: string | null;
   district?: string | null;
   rooms?: string | null;
+  marketPreference?: DealMarketPreference | null;
+  paymentMethod?: DealPaymentMethod | null;
+  neighborhood?: string | null;
+  preferredProject?: string | null;
   source?: ContactSource;
   comment?: string | null;
 }
@@ -378,6 +393,33 @@ export interface MoveDealRequest {
 
 export interface UpdateDealLifecycleRequest {
   status: DealStatus;
+}
+
+export interface DealPropertySelectionRecord {
+  id: string;
+  dealId: string;
+  propertyId: string | null;
+  catalogKey: string;
+  status: DealPropertySelectionStatus;
+  title: string;
+  subtitle: string | null;
+  priceLabel: string | null;
+  imageUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateDealPropertySelectionRequest {
+  propertyId?: string | null;
+  catalogKey: string;
+  title: string;
+  subtitle?: string | null;
+  priceLabel?: string | null;
+  imageUrl?: string | null;
+}
+
+export interface UpdateDealPropertySelectionRequest {
+  status: DealPropertySelectionStatus;
 }
 
 export type TaskKind = "CALL" | "MEETING" | "MESSAGE" | "OTHER";

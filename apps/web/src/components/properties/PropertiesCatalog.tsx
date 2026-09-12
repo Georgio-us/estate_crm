@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { UiIcon } from "@/components/ui/UiIcon";
-import type { PropertyCategory, PropertyListing, PropertyStatus } from "@/types/crm";
+import type { PropertyCategory, PropertyListing } from "@/types/crm";
 import { demoProjects, demoSecondaryProperties, type PropertyProject } from "./demoCatalog";
 import { NewPropertyModal, type NewPropertyDraft } from "./NewPropertyModal";
 import { ProjectDrawer, formatProjectPrice } from "./ProjectDrawer";
@@ -63,8 +63,11 @@ export function PropertiesCatalog() {
   const [section, setSection] = useState<CatalogSection>("all");
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<"all" | PropertyCategory>("all");
-  const [status, setStatus] = useState<"all" | PropertyStatus>("all");
   const [developer, setDeveloper] = useState("all");
+  const [construction, setConstruction] = useState("all");
+  const [operation, setOperation] = useState("all");
+  const [district, setDistrict] = useState("all");
+  const [maxPrice, setMaxPrice] = useState("");
   const [demoEnabled, setDemoEnabled] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -110,27 +113,34 @@ export function PropertiesCatalog() {
     const query = search.trim().toLocaleLowerCase("ru");
     return catalogProperties.filter((property) => {
       const matchesSearch = !query || [property.title, property.address, property.code, property.project, property.developer].some((value) => value?.toLocaleLowerCase("ru").includes(query));
-      return matchesSearch
+      return property.status === "Доступен"
+        && matchesSearch
         && (section === "all" || (section === "primary" ? property.market === "Первичный" : property.market === "Вторичный"))
         && (category === "all" || property.category === category)
-        && (status === "all" || property.status === status)
-        && (developer === "all" || property.developer === developer);
+        && (section !== "secondary" || operation === "all" || property.operation === operation)
+        && (district === "all" || property.district === district)
+        && (!maxPrice || property.price <= Number(maxPrice));
     });
-  }, [catalogProperties, category, developer, search, section, status]);
+  }, [catalogProperties, category, district, maxPrice, operation, search, section]);
 
   const visibleProjects = useMemo(() => {
     if (section === "secondary" || (category !== "all" && category !== "Квартира")) return [];
     const query = search.trim().toLocaleLowerCase("ru");
     return shownProjects.filter((project) => {
       const matchesSearch = !query || [project.title, project.address, project.city, project.district, project.developer].some((value) => value.toLocaleLowerCase("ru").includes(query));
-      const matchesStatus = status === "all" || project.units.some((unit) => unit.status === status);
-      return matchesSearch && matchesStatus && (developer === "all" || project.developer === developer);
+      return project.units.some((unit) => unit.status === "Доступен")
+        && matchesSearch
+        && (developer === "all" || project.developer === developer)
+        && (construction === "all" || project.status === construction)
+        && (district === "all" || project.district === district)
+        && (!maxPrice || project.priceFrom <= Number(maxPrice));
     });
-  }, [category, developer, search, section, shownProjects, status]);
+  }, [category, construction, developer, district, maxPrice, search, section, shownProjects]);
 
-  const hasFilters = Boolean(search || section !== "all" || category !== "all" || status !== "all" || developer !== "all");
+  const hasFilters = Boolean(search || section !== "all" || category !== "all" || developer !== "all" || construction !== "all" || operation !== "all" || district !== "all" || maxPrice);
   const resultTotal = visibleProjects.length + visibleProperties.length;
-  const catalogTotal = shownProjects.length + catalogProperties.length;
+  const catalogTotal = shownProjects.filter((project) => project.units.some((unit) => unit.status === "Доступен")).length
+    + catalogProperties.filter((property) => property.status === "Доступен").length;
 
   async function createProperty(draft: NewPropertyDraft) {
     const response = await fetch("/api/crm/properties", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(propertyPayload(draft)) });
@@ -152,7 +162,15 @@ export function PropertiesCatalog() {
   }
 
   function resetFilters() {
-    setSearch(""); setSection("all"); setCategory("all"); setStatus("all"); setDeveloper("all");
+    setSearch(""); setSection("all"); setCategory("all"); setDeveloper("all"); setConstruction("all"); setOperation("all"); setDistrict("all"); setMaxPrice("");
+  }
+
+  function changeSection(next: CatalogSection) {
+    setSection(next);
+    setCategory("all");
+    setDeveloper("all");
+    setConstruction("all");
+    setOperation("all");
   }
 
   return (
@@ -170,15 +188,18 @@ export function PropertiesCatalog() {
         </div>
 
         <div className={styles.catalogTabs} role="tablist" aria-label="Раздел каталога">
-          <button className={section === "all" ? styles.catalogTabActive : ""} type="button" onClick={() => setSection("all")}>Все</button>
-          <button className={section === "primary" ? styles.catalogTabActive : ""} type="button" onClick={() => setSection("primary")}>Новостройки</button>
-          <button className={section === "secondary" ? styles.catalogTabActive : ""} type="button" onClick={() => setSection("secondary")}>Вторичная недвижимость</button>
+          <button className={section === "all" ? styles.catalogTabActive : ""} type="button" onClick={() => changeSection("all")}>Все</button>
+          <button className={section === "primary" ? styles.catalogTabActive : ""} type="button" onClick={() => changeSection("primary")}>Новостройки</button>
+          <button className={section === "secondary" ? styles.catalogTabActive : ""} type="button" onClick={() => changeSection("secondary")}>Вторичная недвижимость</button>
         </div>
 
         <div className={styles.filters}>
-          <FilterSelect label="Тип" value={category} onChange={(value) => setCategory(value as "all" | PropertyCategory)} options={["Квартира", "Дом", "Участок", "Коммерция"]} />
-          <FilterSelect label="Застройщик" value={developer} onChange={setDeveloper} options={developers} />
-          <FilterSelect label="Статус" value={status} onChange={(value) => setStatus(value as "all" | PropertyStatus)} options={["Доступен", "Резерв", "Продан"]} />
+          <FilterSelect label="Тип" value={category} onChange={(value) => setCategory(value as "all" | PropertyCategory)} options={section === "primary" ? ["Квартира", "Коммерция"] : ["Квартира", "Дом", "Участок", "Коммерция"]} />
+          {section === "primary" && <FilterSelect label="Застройщик" value={developer} onChange={setDeveloper} options={developers} />}
+          {section === "primary" && <FilterSelect label="Строительство" value={construction} onChange={setConstruction} options={["Строится", "Сдан"]} />}
+          {section === "secondary" && <FilterSelect label="Операция" value={operation} onChange={setOperation} options={["Продажа", "Аренда"]} />}
+          <FilterSelect label="Район" value={district} onChange={setDistrict} options={["Приморский", "Киевский", "Пересыпский", "Хаджибейский"]} />
+          <label className={styles.filter}><span>Цена до</span><input inputMode="numeric" value={maxPrice} onChange={(event) => setMaxPrice(event.target.value.replace(/\D/g, ""))} placeholder="Любая" /></label>
           <span className={styles.resultCount}>{resultTotal} из {catalogTotal}</span>
           {hasFilters && <button className={styles.resetButton} type="button" onClick={resetFilters}>Сбросить</button>}
         </div>

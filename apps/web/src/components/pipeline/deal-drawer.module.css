@@ -260,6 +260,87 @@
   box-shadow: 0 0 0 2px #edf3ff;
 }
 
+.additionalToggle,
+.selectionSummaryButton {
+  display: flex;
+  width: 100%;
+  min-height: 54px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 13px;
+  padding: 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+}
+.additionalToggle > span,
+.selectionSummaryButton > span { display: flex; min-width: 0; align-items: center; gap: 9px; }
+.additionalToggle i,
+.selectionSummaryButton i { display: grid; width: 22px; height: 22px; place-items: center; border-radius: 50%; background: var(--surface-muted); color: var(--text-muted); font-size: var(--font-size-caption); font-style: normal; }
+.additionalToggle b,
+.selectionSummaryButton > b { margin-left: auto; color: #376bbf; font-size: var(--font-size-caption); font-weight: var(--font-weight-medium); white-space: nowrap; }
+.additionalToggle em { color: var(--text-subtle); font-style: normal; }
+.additionalFields { padding: 5px 0 10px 14px; border-left: 2px solid #e3e9f4; }
+.selectionSummaryButton { min-height: 68px; margin-top: 4px; }
+.selectionSummaryButton > span > span { display: grid; gap: 3px; }
+.selectionSummaryButton strong { font-size: var(--font-size-body-sm); }
+.selectionSummaryButton small { color: var(--text-muted); font-size: var(--font-size-caption); }
+
+.selectionLayer { position: fixed; z-index: 70; inset: 0; }
+.selectionBackdrop { position: absolute; width: 100%; inset: 0; border: 0; background: rgba(28,28,26,.22); }
+.selectionDrawer { position: absolute; inset: 0 0 0 auto; display: flex; width: min(760px, calc(100vw - 80px)); flex-direction: column; overflow: hidden; border-left: 1px solid var(--border-strong); background: #fff; box-shadow: -12px 0 36px rgba(25,25,23,.12); animation: enter 160ms ease-out; }
+.selectionHeader { display: flex; min-height: 118px; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 23px 27px; border-bottom: 1px solid var(--border); }
+.selectionHeader > div { display: grid; gap: 5px; }
+.selectionHeader span { color: var(--text-subtle); font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); letter-spacing: .06em; text-transform: uppercase; }
+.selectionHeader h2 { margin: 0; font-size: var(--font-size-heading-md); letter-spacing: -.025em; }
+.selectionHeader p { margin: 0; color: var(--text-muted); font-size: var(--font-size-caption); }
+.selectionHeader > button { display: grid; width: 34px; height: 34px; place-items: center; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text-muted); cursor: pointer; font-size: var(--font-size-heading-md); }
+.selectionTabs { display: flex; gap: 24px; padding: 0 27px; border-bottom: 1px solid var(--border); }
+.selectionTabs > button { position: relative; display: flex; height: 48px; align-items: center; gap: 7px; padding: 0; border: 0; background: transparent; color: var(--text-muted); cursor: pointer; font-size: var(--font-size-body-sm); }
+.selectionTabs > button::after { position: absolute; right: 0; bottom: -1px; left: 0; height: 2px; background: transparent; content: ""; }
+.selectionTabs .selectionTabActive { color: var(--text); font-weight: var(--font-weight-semibold); }
+.selectionTabs .selectionTabActive::after { background: var(--text); }
+.selectionTabs span { display: grid; min-width: 21px; height: 21px; place-items: center; border-radius: 11px; background: var(--surface-muted); font-size: 11px; }
+.selectionActions { display: flex; min-height: 69px; align-items: center; justify-content: space-between; gap: 16px; padding: 13px 27px; border-bottom: 1px solid var(--border); }
+.selectionActions p { margin: 0; color: var(--text-muted); font-size: var(--font-size-caption); }
+.selectionActions button { min-height: 34px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: #fff; color: #376bbf; cursor: pointer; font-size: var(--font-size-caption); white-space: nowrap; }
+.selectionList,
+.selectionCatalog { display: grid; min-height: 0; flex: 1; align-content: start; gap: 10px; overflow-y: auto; padding: 18px 27px 38px; }
+.selectionItem { display: grid; align-items: center; grid-template-columns: 96px minmax(0,1fr) auto; gap: 13px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius-md); }
+.selectionItem > span { height: 78px; border-radius: var(--radius-sm); background-position: center; background-size: cover; }
+.selectionItem > div:nth-child(2) { display: grid; min-width: 0; gap: 4px; }
+.selectionItem strong { overflow: hidden; font-size: var(--font-size-body-sm); text-overflow: ellipsis; white-space: nowrap; }
+.selectionItem p { overflow: hidden; margin: 0; color: var(--text-muted); font-size: var(--font-size-caption); text-overflow: ellipsis; white-space: nowrap; }
+.selectionItem b { font-size: var(--font-size-caption); }
+.selectionItem > div:last-child { display: grid; justify-items: end; gap: 5px; }
+.selectionItem button { min-height: 30px; padding: 0 8px; border: 0; border-radius: var(--radius-sm); background: #edf2fa; color: #376bbf; cursor: pointer; font-size: var(--font-size-caption); white-space: nowrap; }
+.selectionItem .selectionRemove { background: transparent; color: var(--text-subtle); }
+.catalogPickerToolbar { display: grid; align-items: center; grid-template-columns: auto minmax(180px,1fr) auto; gap: 8px; padding: 14px 27px; border-bottom: 1px solid var(--border); }
+.catalogPickerToolbar button { height: 36px; padding: 0 8px; border: 0; background: transparent; color: #376bbf; cursor: pointer; font-size: var(--font-size-caption); }
+.catalogPickerToolbar input,
+.catalogPickerToolbar select { min-width: 0; height: 38px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); outline: 0; background: #fbfbfa; font-size: 16px; }
+.catalogPickerToolbar select { font-size: var(--font-size-caption); }
+.requestFilterNotice { display: flex; min-height: 48px; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 27px; background: #f7f9fd; color: #657188; font-size: var(--font-size-caption); }
+.requestFilterNotice button { border: 0; background: transparent; color: #376bbf; cursor: pointer; font-size: inherit; }
+.selectionCatalog { grid-template-columns: repeat(2,minmax(0,1fr)); }
+.selectionCatalogCard { position: relative; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-md); background: #fff; }
+.selectionCatalogCard > span { display: block; height: 132px; background-position: center; background-size: cover; }
+.selectionCatalogCard > div { display: grid; gap: 4px; padding: 12px 12px 48px; }
+.selectionCatalogCard small { color: #69768a; }
+.selectionCatalogCard strong { overflow: hidden; font-size: var(--font-size-body-sm); text-overflow: ellipsis; white-space: nowrap; }
+.selectionCatalogCard p { overflow: hidden; margin: 0; color: var(--text-muted); font-size: var(--font-size-caption); text-overflow: ellipsis; white-space: nowrap; }
+.selectionCatalogCard b { margin-top: 5px; font-size: var(--font-size-body-sm); }
+.selectionCatalogCard > button { position: absolute; right: 12px; bottom: 12px; height: 30px; padding: 0 10px; border: 0; border-radius: var(--radius-sm); background: var(--primary); color: #fff; cursor: pointer; font-size: var(--font-size-caption); }
+.selectionCatalogCard > button:disabled { background: #e6e8ec; color: #858b95; cursor: default; }
+.selectionState { display: grid; min-height: 260px; place-items: center; align-content: center; gap: 10px; padding: 30px; color: var(--text-muted); text-align: center; }
+.selectionState p { margin: 0; }
+.selectionState button { min-height: 34px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: #fff; color: #376bbf; cursor: pointer; }
+.selectionError { position: absolute; right: 20px; bottom: 16px; left: 20px; margin: 0; padding: 10px 12px; border: 1px solid #edcaca; border-radius: var(--radius-sm); background: #fff6f6; color: #a84747; font-size: var(--font-size-caption); }
+
 .contactHeader {
   position: relative;
   display: flex;
@@ -829,6 +910,22 @@
   .contactSection,
   .notesSection { padding: 22px 18px; }
   .relatedSection { padding: 18px; }
+  .additionalFields { padding-left: 8px; }
+  .selectionDrawer { width: 100%; }
+  .selectionHeader { min-height: 104px; padding: 18px; }
+  .selectionTabs { gap: 18px; padding: 0 18px; overflow-x: auto; }
+  .selectionActions { align-items: flex-start; flex-direction: column; padding: 13px 18px; }
+  .selectionActions button { width: 100%; height: 40px; }
+  .selectionList,
+  .selectionCatalog { padding: 14px 18px 40px; }
+  .selectionItem { align-items: start; grid-template-columns: 76px minmax(0,1fr); }
+  .selectionItem > span { height: 68px; }
+  .selectionItem > div:last-child { display: flex; grid-column: 1 / -1; justify-items: stretch; }
+  .selectionItem > div:last-child button { min-height: 36px; flex: 1; }
+  .catalogPickerToolbar { grid-template-columns: 1fr 1fr; padding: 12px 18px; }
+  .catalogPickerToolbar button { grid-column: 1 / -1; justify-self: start; padding: 0; }
+  .requestFilterNotice { padding: 9px 18px; }
+  .selectionCatalog { grid-template-columns: 1fr; }
   .relatedPicker { grid-template-columns: 1fr 1fr; }
   .activityToolbar {
     display: grid;

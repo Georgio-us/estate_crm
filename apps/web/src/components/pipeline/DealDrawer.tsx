@@ -3,6 +3,8 @@ import { UiIcon } from "@/components/ui/UiIcon";
 import { localDateKey } from "@/lib/tasks";
 import type { ActivityCategory, ActivityEvent, CrmTask, Deal, DealStatus } from "@/types/crm";
 import { isValidPhone } from "@/lib/phone";
+import { demoProjects } from "@/components/properties/demoCatalog";
+import { DealPropertySelectionPanel } from "./DealPropertySelectionPanel";
 import styles from "./deal-drawer.module.css";
 
 interface DealDrawerProps {
@@ -23,6 +25,7 @@ interface DealDrawerProps {
   onCompleteTask: (taskId: string, result: string) => Promise<void>;
   onLifecycle: (status: DealStatus) => Promise<void>;
   onOpenContact: (contactId: string) => void;
+  onRefreshActivities: () => Promise<void>;
   initialComposerMode?: ComposerMode;
   onClose: () => void;
 }
@@ -62,6 +65,7 @@ export function DealDrawer({
   onCompleteTask,
   onLifecycle,
   onOpenContact,
+  onRefreshActivities,
   initialComposerMode = "note",
   onClose,
 }: DealDrawerProps) {
@@ -86,9 +90,13 @@ export function DealDrawer({
   const [contactMenuOpen, setContactMenuOpen] = useState(false);
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
   const [visibleActivityCount, setVisibleActivityCount] = useState(historyPageSize);
+  const [additionalOpen, setAdditionalOpen] = useState(Boolean(deal.marketPreference || deal.paymentMethod || deal.neighborhood || deal.preferredProject));
+  const [selectionOpen, setSelectionOpen] = useState(false);
+  const [selectionCount, setSelectionCount] = useState(0);
+  const [projectOptions, setProjectOptions] = useState(() => demoProjects.map((project) => project.title));
   const composerRef = useRef<HTMLTextAreaElement>(null);
 
-  const comparable = (value: Deal) => ({ title: value.title, phone: value.phone, assigneeId: value.assigneeId, budget: value.budget, operation: value.operation, propertyType: value.propertyType, district: value.district, rooms: value.rooms, request: value.request, comment: value.comment, source: value.source });
+  const comparable = (value: Deal) => ({ title: value.title, phone: value.phone, assigneeId: value.assigneeId, budget: value.budget, operation: value.operation, propertyType: value.propertyType, district: value.district, rooms: value.rooms, marketPreference: value.marketPreference, paymentMethod: value.paymentMethod, neighborhood: value.neighborhood, preferredProject: value.preferredProject, request: value.request, comment: value.comment, source: value.source });
   const isDirty = draftStageId !== stageId || JSON.stringify(comparable(draft)) !== JSON.stringify(comparable(deal));
 
   function updateDraft(patch: Partial<Deal>) {
@@ -185,6 +193,23 @@ export function DealDrawer({
     if (!highlightedTaskId) return;
     window.setTimeout(() => document.getElementById(`deal-task-${highlightedTaskId}`)?.scrollIntoView({ block: "center", behavior: "smooth" }), 120);
   }, [highlightedTaskId, tasks.length]);
+
+  useEffect(() => {
+    let active = true;
+    void fetch(`/api/crm/deals/${deal.id}/property-selections`, { cache: "no-store" }).then(async (response) => {
+      const payload = await response.json() as { selections?: unknown[] };
+      if (active && response.ok && payload.selections) setSelectionCount(payload.selections.length);
+    }).catch(() => undefined);
+    void fetch("/api/crm/properties", { cache: "no-store" }).then(async (response) => {
+      const payload = await response.json() as { properties?: Array<{ project: string | null }> };
+      if (!active || !response.ok || !payload.properties) return;
+      setProjectOptions(Array.from(new Set([
+        ...demoProjects.map((project) => project.title),
+        ...payload.properties.map((property) => property.project).filter((value): value is string => Boolean(value)),
+      ])).sort((a, b) => a.localeCompare(b, "ru")));
+    }).catch(() => undefined);
+    return () => { active = false; };
+  }, [deal.id]);
 
   function activateTaskComposer() {
     setComposerMode("task");
@@ -284,6 +309,14 @@ export function DealDrawer({
               <PropertySelect label="Тип объекта" icon="⌂" value={draft.propertyType || ""} placeholder="Выбрать" options={propertyTypes} onChange={(value) => updateDraft({ propertyType: value })} />
               <PropertySelect label="Район" icon="⌖" value={draft.district || ""} placeholder="Выбрать" options={districts} onChange={(value) => updateDraft({ district: value })} />
               <PropertySelect label="Комнаты" icon="№" value={draft.rooms || ""} placeholder="Не указано" options={roomOptions} onChange={(value) => updateDraft({ rooms: value })} />
+              <button className={styles.additionalToggle} type="button" aria-expanded={additionalOpen} onClick={() => setAdditionalOpen((value) => !value)}><span><i>＋</i>Дополнительно</span><b>{additionalOpen ? "Свернуть" : [draft.marketPreference, draft.paymentMethod, draft.neighborhood, draft.preferredProject].filter(Boolean).length ? "Заполнено" : "Уточнить запрос"}</b><em>{additionalOpen ? "⌃" : "⌄"}</em></button>
+              {additionalOpen && <div className={styles.additionalFields}>
+                <PropertySelect label="Рынок" icon="◇" value={draft.marketPreference || ""} placeholder="Не определено" options={["Новостройка", "Вторичная"]} onChange={(value) => updateDraft({ marketPreference: value as Deal["marketPreference"] || undefined })} />
+                <PropertySelect label="Оплата" icon="₴" value={draft.paymentMethod || ""} placeholder="Не определено" options={["Полная оплата", "Рассрочка"]} onChange={(value) => updateDraft({ paymentMethod: value as Deal["paymentMethod"] || undefined })} />
+                <PropertyInput label="Микрорайон" icon="⌖" value={draft.neighborhood || ""} placeholder="Например, Аркадия" onChange={(value) => updateDraft({ neighborhood: value })} />
+                <PropertySelect label="Жилой комплекс" icon="▤" value={draft.preferredProject || ""} placeholder="Не указан" options={projectOptions} onChange={(value) => updateDraft({ preferredProject: value })} />
+              </div>}
+              <button className={styles.selectionSummaryButton} type="button" onClick={() => setSelectionOpen(true)}><span><i>⌂</i><span><strong>Подборка</strong><small>{selectionCount ? `${selectionCount} ${selectionCount === 1 ? "объект" : selectionCount < 5 ? "объекта" : "объектов"}` : "Объекты для клиента"}</small></span></span><b>Открыть</b></button>
             </section>
 
             <section className={styles.contactSection}>
@@ -399,6 +432,7 @@ export function DealDrawer({
           </div>
         </div>
       </aside>
+      {selectionOpen && <DealPropertySelectionPanel deal={draft} onClose={() => setSelectionOpen(false)} onCountChange={setSelectionCount} onActivityChanged={onRefreshActivities} />}
     </div>
   );
 }

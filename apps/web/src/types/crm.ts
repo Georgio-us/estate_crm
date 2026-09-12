@@ -15,6 +15,10 @@ export interface Deal {
   propertyType?: string;
   district?: string;
   rooms?: string;
+  marketPreference?: "Новостройка" | "Вторичная";
+  paymentMethod?: "Полная оплата" | "Рассрочка";
+  neighborhood?: string;
+  preferredProject?: string;
   comment?: string;
   createdAt?: string;
   source: "Meta" | "Website" | "Manual";

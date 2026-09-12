@@ -38,6 +38,21 @@ enum DealStatus {
   ARCHIVED
 }
 
+enum DealMarketPreference {
+  PRIMARY
+  SECONDARY
+}
+
+enum DealPaymentMethod {
+  FULL
+  INSTALLMENT
+}
+
+enum DealPropertySelectionStatus {
+  CANDIDATE
+  OFFERED
+}
+
 enum ActivityCategory {
   NOTE
   TASK
@@ -153,6 +168,7 @@ model Organization {
   contactRelations       ContactRelation[]
   tasks                  Task[]
   properties             Property[]
+  dealPropertySelections DealPropertySelection[]
   integrationConnections IntegrationConnection[]
   integrationEvents      IntegrationEvent[]
   notificationOutbox     NotificationOutbox[]
@@ -164,24 +180,24 @@ model Organization {
 }
 
 model User {
-  id                    String                 @id @default(uuid()) @db.Uuid
-  email                 String                 @unique
-  name                  String
-  phone                 String?
-  passwordHash          String?                @map("password_hash")
-  createdAt             DateTime               @default(now()) @map("created_at")
-  updatedAt             DateTime               @updatedAt @map("updated_at")
-  memberships           Membership[]
-  sessions              Session[]
-  assignedContacts      Contact[]              @relation("ContactAssignee")
-  assignedDeals         Deal[]                 @relation("DealAssignee")
-  authoredActivities    ActivityEvent[]        @relation("ActivityAuthor")
-  assignedTasks         Task[]                 @relation("TaskAssignee")
-  telegramRecipients    TelegramRecipient[]
-  telegramConnectTokens TelegramConnectToken[]
-  telegramSelections    TelegramRecipientSelection[] @relation("TelegramSelectedUser")
-  receivedTeamInvitations TeamInvitation[]          @relation("TeamInvitationUser")
-  sentTeamInvitations     TeamInvitation[]          @relation("TeamInvitationSender")
+  id                      String                       @id @default(uuid()) @db.Uuid
+  email                   String                       @unique
+  name                    String
+  phone                   String?
+  passwordHash            String?                      @map("password_hash")
+  createdAt               DateTime                     @default(now()) @map("created_at")
+  updatedAt               DateTime                     @updatedAt @map("updated_at")
+  memberships             Membership[]
+  sessions                Session[]
+  assignedContacts        Contact[]                    @relation("ContactAssignee")
+  assignedDeals           Deal[]                       @relation("DealAssignee")
+  authoredActivities      ActivityEvent[]              @relation("ActivityAuthor")
+  assignedTasks           Task[]                       @relation("TaskAssignee")
+  telegramRecipients      TelegramRecipient[]
+  telegramConnectTokens   TelegramConnectToken[]
+  telegramSelections      TelegramRecipientSelection[] @relation("TelegramSelectedUser")
+  receivedTeamInvitations TeamInvitation[]             @relation("TeamInvitationUser")
+  sentTeamInvitations     TeamInvitation[]             @relation("TeamInvitationSender")
 
   @@map("users")
 }
@@ -266,36 +282,41 @@ model PipelineStage {
 }
 
 model Deal {
-  id                String               @id @default(uuid()) @db.Uuid
-  number            Int                  @default(autoincrement())
-  organizationId    String               @map("organization_id") @db.Uuid
-  pipelineId        String               @map("pipeline_id") @db.Uuid
-  stageId           String               @map("stage_id") @db.Uuid
-  contactId         String               @map("contact_id") @db.Uuid
-  assigneeId        String?              @map("assignee_id") @db.Uuid
-  title             String
-  request           String
-  budget            String?
-  comment           String?
-  operation         DealOperation        @default(PURCHASE)
-  propertyType      String?              @map("property_type")
-  district          String?
-  rooms             String?
-  source            ContactSource        @default(MANUAL)
-  status            DealStatus           @default(ACTIVE)
-  position          Int                  @default(0)
-  closedAt          DateTime?            @map("closed_at")
-  createdAt         DateTime             @default(now()) @map("created_at")
-  updatedAt         DateTime             @updatedAt @map("updated_at")
-  organization      Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  pipeline          Pipeline             @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
-  stage             PipelineStage        @relation(fields: [stageId], references: [id], onDelete: Restrict)
-  contact           Contact              @relation(fields: [contactId], references: [id], onDelete: Restrict)
-  assignee          User?                @relation("DealAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  activities        ActivityEvent[]
-  relatedContacts   DealRelatedContact[]
-  tasks             Task[]
-  integrationEvents IntegrationEvent[]
+  id                 String                  @id @default(uuid()) @db.Uuid
+  number             Int                     @default(autoincrement())
+  organizationId     String                  @map("organization_id") @db.Uuid
+  pipelineId         String                  @map("pipeline_id") @db.Uuid
+  stageId            String                  @map("stage_id") @db.Uuid
+  contactId          String                  @map("contact_id") @db.Uuid
+  assigneeId         String?                 @map("assignee_id") @db.Uuid
+  title              String
+  request            String
+  budget             String?
+  comment            String?
+  operation          DealOperation           @default(PURCHASE)
+  propertyType       String?                 @map("property_type")
+  district           String?
+  rooms              String?
+  marketPreference   DealMarketPreference?   @map("market_preference")
+  paymentMethod      DealPaymentMethod?      @map("payment_method")
+  neighborhood       String?
+  preferredProject   String?                 @map("preferred_project")
+  source             ContactSource           @default(MANUAL)
+  status             DealStatus              @default(ACTIVE)
+  position           Int                     @default(0)
+  closedAt           DateTime?               @map("closed_at")
+  createdAt          DateTime                @default(now()) @map("created_at")
+  updatedAt          DateTime                @updatedAt @map("updated_at")
+  organization       Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pipeline           Pipeline                @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  stage              PipelineStage           @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  contact            Contact                 @relation(fields: [contactId], references: [id], onDelete: Restrict)
+  assignee           User?                   @relation("DealAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  activities         ActivityEvent[]
+  relatedContacts    DealRelatedContact[]
+  tasks              Task[]
+  integrationEvents  IntegrationEvent[]
+  propertySelections DealPropertySelection[]
 
   @@unique([organizationId, number])
   @@index([pipelineId, status, stageId, position])
@@ -405,30 +426,30 @@ model NotificationOutbox {
   organization   Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   deliveries     NotificationDelivery[]
 
-  @@index([organizationId, status, createdAt])
   @@unique([organizationId, channel, dedupeKey])
+  @@index([organizationId, status, createdAt])
   @@map("notification_outbox")
 }
 
 model TelegramRecipient {
-  id             String                 @id @default(uuid()) @db.Uuid
-  organizationId String                 @map("organization_id") @db.Uuid
-  userId         String                 @map("user_id") @db.Uuid
-  chatId         String                 @map("chat_id")
-  username       String?
-  firstName      String?                @map("first_name")
-  scope          TelegramRecipientScope
-  audience       TelegramNotificationAudience @default(OWN)
-  leadNotifications Boolean               @default(true) @map("lead_notifications")
-  taskReminderNotifications Boolean       @default(true) @map("task_reminder_notifications")
-  taskOverdueNotifications Boolean        @default(true) @map("task_overdue_notifications")
-  active         Boolean                @default(true)
-  connectedAt    DateTime               @default(now()) @map("connected_at")
-  updatedAt      DateTime               @updatedAt @map("updated_at")
-  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  user           User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  deliveries     NotificationDelivery[]
-  selectedUsers  TelegramRecipientSelection[]
+  id                        String                       @id @default(uuid()) @db.Uuid
+  organizationId            String                       @map("organization_id") @db.Uuid
+  userId                    String                       @map("user_id") @db.Uuid
+  chatId                    String                       @map("chat_id")
+  username                  String?
+  firstName                 String?                      @map("first_name")
+  scope                     TelegramRecipientScope
+  audience                  TelegramNotificationAudience @default(OWN)
+  leadNotifications         Boolean                      @default(true) @map("lead_notifications")
+  taskReminderNotifications Boolean                      @default(true) @map("task_reminder_notifications")
+  taskOverdueNotifications  Boolean                      @default(true) @map("task_overdue_notifications")
+  active                    Boolean                      @default(true)
+  connectedAt               DateTime                     @default(now()) @map("connected_at")
+  updatedAt                 DateTime                     @updatedAt @map("updated_at")
+  organization              Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user                      User                         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries                NotificationDelivery[]
+  selectedUsers             TelegramRecipientSelection[]
 
   @@unique([organizationId, userId])
   @@unique([organizationId, chatId])
@@ -510,46 +531,70 @@ model Task {
 }
 
 model Property {
-  id             String            @id @default(uuid()) @db.Uuid
-  number         Int               @default(autoincrement())
-  organizationId String            @map("organization_id") @db.Uuid
+  id             String                  @id @default(uuid()) @db.Uuid
+  number         Int                     @default(autoincrement())
+  organizationId String                  @map("organization_id") @db.Uuid
   title          String
   address        String?
   district       String?
   category       PropertyCategory
   market         PropertyMarket
-  operation      PropertyOperation @default(SALE)
-  status         PropertyStatus    @default(AVAILABLE)
-  price          Float             @default(0)
-  currency       Currency          @default(USD)
+  operation      PropertyOperation       @default(SALE)
+  status         PropertyStatus          @default(AVAILABLE)
+  price          Float                   @default(0)
+  currency       Currency                @default(USD)
   rooms          String?
-  area           Float             @default(0)
+  area           Float                   @default(0)
   floor          Int?
-  totalFloors    Int?              @map("total_floors")
-  landArea       Float?            @map("land_area")
+  totalFloors    Int?                    @map("total_floors")
+  landArea       Float?                  @map("land_area")
   project        String?
   developer      String?
   description    String?
-  imageUrl       String?           @map("image_url")
-  createdAt      DateTime          @default(now()) @map("created_at")
-  updatedAt      DateTime          @updatedAt @map("updated_at")
-  organization   Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  imageUrl       String?                 @map("image_url")
+  createdAt      DateTime                @default(now()) @map("created_at")
+  updatedAt      DateTime                @updatedAt @map("updated_at")
+  organization   Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  dealSelections DealPropertySelection[]
 
   @@unique([organizationId, number])
   @@index([organizationId, status, updatedAt])
   @@map("properties")
 }
 
+model DealPropertySelection {
+  id             String                      @id @default(uuid()) @db.Uuid
+  organizationId String                      @map("organization_id") @db.Uuid
+  dealId         String                      @map("deal_id") @db.Uuid
+  propertyId     String?                     @map("property_id") @db.Uuid
+  catalogKey     String                      @map("catalog_key")
+  status         DealPropertySelectionStatus @default(CANDIDATE)
+  title          String
+  subtitle       String?
+  priceLabel     String?                     @map("price_label")
+  imageUrl       String?                     @map("image_url")
+  createdAt      DateTime                    @default(now()) @map("created_at")
+  updatedAt      DateTime                    @updatedAt @map("updated_at")
+  organization   Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  deal           Deal                        @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  property       Property?                   @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+
+  @@unique([dealId, catalogKey])
+  @@index([organizationId, status])
+  @@index([propertyId])
+  @@map("deal_property_selections")
+}
+
 model Session {
-  id        String   @id @default(uuid()) @db.Uuid
-  tokenHash String   @unique @map("token_hash")
-  userId    String   @map("user_id") @db.Uuid
-  expiresAt DateTime @map("expires_at")
-  userAgent String?  @map("user_agent")
-  ipAddress String?  @map("ip_address")
+  id         String   @id @default(uuid()) @db.Uuid
+  tokenHash  String   @unique @map("token_hash")
+  userId     String   @map("user_id") @db.Uuid
+  expiresAt  DateTime @map("expires_at")
+  userAgent  String?  @map("user_agent")
+  ipAddress  String?  @map("ip_address")
   lastSeenAt DateTime @default(now()) @map("last_seen_at")
-  createdAt DateTime @default(now()) @map("created_at")
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now()) @map("created_at")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([expiresAt])
@@ -574,15 +619,15 @@ model Membership {
 }
 
 model TeamInvitation {
-  id             String    @id @default(uuid()) @db.Uuid
-  organizationId String    @map("organization_id") @db.Uuid
-  userId         String    @map("user_id") @db.Uuid
-  invitedById    String    @map("invited_by_id") @db.Uuid
-  tokenHash      String    @unique @map("token_hash")
-  expiresAt      DateTime  @map("expires_at")
-  acceptedAt     DateTime? @map("accepted_at")
-  revokedAt      DateTime? @map("revoked_at")
-  createdAt      DateTime  @default(now()) @map("created_at")
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  userId         String       @map("user_id") @db.Uuid
+  invitedById    String       @map("invited_by_id") @db.Uuid
+  tokenHash      String       @unique @map("token_hash")
+  expiresAt      DateTime     @map("expires_at")
+  acceptedAt     DateTime?    @map("accepted_at")
+  revokedAt      DateTime?    @map("revoked_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user           User         @relation("TeamInvitationUser", fields: [userId], references: [id], onDelete: Cascade)
   invitedBy      User         @relation("TeamInvitationSender", fields: [invitedById], references: [id], onDelete: Restrict)

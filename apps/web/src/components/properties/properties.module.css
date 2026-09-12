@@ -40,6 +40,8 @@
 .filter { display: flex; height: 34px; align-items: center; gap: 7px; padding: 0 9px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: #fff; }
 .filter span { color: var(--text-subtle); font-size: var(--font-size-caption); }
 .filter select { border: 0; outline: 0; background: transparent; color: var(--text); cursor: pointer; font-size: var(--font-size-caption); }
+.filter input { width: 78px; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text); font-size: var(--font-size-caption); }
+.filter input::placeholder { color: var(--text-muted); opacity: 1; }
 .resultCount { margin-left: auto; color: var(--text-subtle); font-size: var(--font-size-caption); }
 .resetButton { padding: 7px; border: 0; background: transparent; color: #376bbf; cursor: pointer; font-size: var(--font-size-caption); }
 

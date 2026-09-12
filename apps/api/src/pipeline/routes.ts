@@ -50,6 +50,10 @@ function mapDeal(deal: {
   propertyType: string | null;
   district: string | null;
   rooms: string | null;
+  marketPreference: "PRIMARY" | "SECONDARY" | null;
+  paymentMethod: "FULL" | "INSTALLMENT" | null;
+  neighborhood: string | null;
+  preferredProject: string | null;
   source: "META" | "WEBSITE" | "MANUAL";
   status: "ACTIVE" | "WON" | "LOST" | "ARCHIVED";
   position: number;
@@ -311,6 +315,10 @@ export async function registerPipelineRoutes(
           propertyType: { type: "string", maxLength: 100 },
           district: { type: "string", maxLength: 100 },
           rooms: { type: "string", maxLength: 30 },
+          marketPreference: { type: "string", enum: ["PRIMARY", "SECONDARY"] },
+          paymentMethod: { type: "string", enum: ["FULL", "INSTALLMENT"] },
+          neighborhood: { type: "string", maxLength: 160 },
+          preferredProject: { type: "string", maxLength: 300 },
           source: { type: "string", enum: ["META", "WEBSITE", "MANUAL"] },
           comment: { type: "string", maxLength: 5_000 },
         },
@@ -394,6 +402,10 @@ export async function registerPipelineRoutes(
         propertyType: optionalText(request.body.propertyType),
         district: optionalText(request.body.district),
         rooms: optionalText(request.body.rooms),
+        marketPreference: request.body.marketPreference,
+        paymentMethod: request.body.paymentMethod,
+        neighborhood: optionalText(request.body.neighborhood),
+        preferredProject: optionalText(request.body.preferredProject),
         source: dealSource,
       },
       include: {
@@ -440,6 +452,10 @@ export async function registerPipelineRoutes(
           propertyType: { anyOf: [{ type: "string", maxLength: 100 }, { type: "null" }] },
           district: { anyOf: [{ type: "string", maxLength: 100 }, { type: "null" }] },
           rooms: { anyOf: [{ type: "string", maxLength: 30 }, { type: "null" }] },
+          marketPreference: { anyOf: [{ type: "string", enum: ["PRIMARY", "SECONDARY"] }, { type: "null" }] },
+          paymentMethod: { anyOf: [{ type: "string", enum: ["FULL", "INSTALLMENT"] }, { type: "null" }] },
+          neighborhood: { anyOf: [{ type: "string", maxLength: 160 }, { type: "null" }] },
+          preferredProject: { anyOf: [{ type: "string", maxLength: 300 }, { type: "null" }] },
           source: { type: "string", enum: ["META", "WEBSITE", "MANUAL"] },
           comment: { anyOf: [{ type: "string", maxLength: 5_000 }, { type: "null" }] },
         },
@@ -494,6 +510,10 @@ export async function registerPipelineRoutes(
         ...(request.body.propertyType !== undefined ? { propertyType: optionalText(request.body.propertyType ?? undefined) } : {}),
         ...(request.body.district !== undefined ? { district: optionalText(request.body.district ?? undefined) } : {}),
         ...(request.body.rooms !== undefined ? { rooms: optionalText(request.body.rooms ?? undefined) } : {}),
+        ...(request.body.marketPreference !== undefined ? { marketPreference: request.body.marketPreference } : {}),
+        ...(request.body.paymentMethod !== undefined ? { paymentMethod: request.body.paymentMethod } : {}),
+        ...(request.body.neighborhood !== undefined ? { neighborhood: optionalText(request.body.neighborhood ?? undefined) } : {}),
+        ...(request.body.preferredProject !== undefined ? { preferredProject: optionalText(request.body.preferredProject ?? undefined) } : {}),
         ...(request.body.source !== undefined ? { source: request.body.source } : {}),
         ...(request.body.comment !== undefined ? { comment: optionalText(request.body.comment ?? undefined) } : {}),
       },
@@ -518,6 +538,8 @@ export async function registerPipelineRoutes(
     const nextPropertyType = request.body.propertyType === undefined ? existing.propertyType : optionalText(request.body.propertyType ?? undefined);
     const nextDistrict = request.body.district === undefined ? existing.district : optionalText(request.body.district ?? undefined);
     const nextRooms = request.body.rooms === undefined ? existing.rooms : optionalText(request.body.rooms ?? undefined);
+    const nextNeighborhood = request.body.neighborhood === undefined ? existing.neighborhood : optionalText(request.body.neighborhood ?? undefined);
+    const nextPreferredProject = request.body.preferredProject === undefined ? existing.preferredProject : optionalText(request.body.preferredProject ?? undefined);
     const nextComment = request.body.comment === undefined ? existing.comment : optionalText(request.body.comment ?? undefined);
     const changes = [
       describeChange("Название", existing.title, request.body.title?.trim() ?? existing.title),
@@ -527,6 +549,10 @@ export async function registerPipelineRoutes(
       describeChange("Тип объекта", existing.propertyType, nextPropertyType),
       describeChange("Район", existing.district, nextDistrict),
       describeChange("Комнаты", existing.rooms, nextRooms),
+      existing.marketPreference === (request.body.marketPreference === undefined ? existing.marketPreference : request.body.marketPreference) ? null : "Предпочтение рынка изменено",
+      existing.paymentMethod === (request.body.paymentMethod === undefined ? existing.paymentMethod : request.body.paymentMethod) ? null : "Способ оплаты изменён",
+      describeChange("Микрорайон", existing.neighborhood, nextNeighborhood),
+      describeChange("Жилой комплекс", existing.preferredProject, nextPreferredProject),
       existing.source === (request.body.source ?? existing.source) ? null : `Источник: «${sourceLabels[existing.source]}» → «${sourceLabels[request.body.source!]}»`,
       existing.assigneeId === (request.body.assigneeId === undefined ? existing.assigneeId : request.body.assigneeId) ? null : "Ответственный изменён",
       describeChange("Комментарий", existing.comment, nextComment),

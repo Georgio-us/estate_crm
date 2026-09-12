@@ -115,6 +115,10 @@ interface ApiDeal {
   propertyType: string | null;
   district: string | null;
   rooms: string | null;
+  marketPreference: "PRIMARY" | "SECONDARY" | null;
+  paymentMethod: "FULL" | "INSTALLMENT" | null;
+  neighborhood: string | null;
+  preferredProject: string | null;
   source: keyof typeof sourceFromApi;
   status: DealStatus;
   closedAt: string | null;
@@ -144,6 +148,10 @@ function mapApiDeal(deal: ApiDeal): Deal {
     propertyType: deal.propertyType || undefined,
     district: deal.district || undefined,
     rooms: deal.rooms || undefined,
+    marketPreference: deal.marketPreference === "PRIMARY" ? "Новостройка" : deal.marketPreference === "SECONDARY" ? "Вторичная" : undefined,
+    paymentMethod: deal.paymentMethod === "FULL" ? "Полная оплата" : deal.paymentMethod === "INSTALLMENT" ? "Рассрочка" : undefined,
+    neighborhood: deal.neighborhood || undefined,
+    preferredProject: deal.preferredProject || undefined,
     source: sourceFromApi[deal.source],
     status: deal.status,
     closedAt: deal.closedAt || undefined,
@@ -455,6 +463,10 @@ export function PipelineBoard() {
         propertyType: nextDeal.propertyType || null,
         district: nextDeal.district || null,
         rooms: nextDeal.rooms || null,
+        marketPreference: nextDeal.marketPreference === "Новостройка" ? "PRIMARY" : nextDeal.marketPreference === "Вторичная" ? "SECONDARY" : null,
+        paymentMethod: nextDeal.paymentMethod === "Полная оплата" ? "FULL" : nextDeal.paymentMethod === "Рассрочка" ? "INSTALLMENT" : null,
+        neighborhood: nextDeal.neighborhood || null,
+        preferredProject: nextDeal.preferredProject || null,
         source: sourceToApi[nextDeal.source],
         comment: nextDeal.comment || null,
       }),
@@ -598,6 +610,12 @@ export function PipelineBoard() {
   async function completeTask(taskId: string, result: string) {
     if (!selected) return;
     await persistCompleteTask(taskId, result);
+    const refreshedActivities = await requestDealActivities(selected.dealId);
+    setActivities((current) => ({ ...current, [selected.dealId]: refreshedActivities }));
+  }
+
+  async function refreshSelectedActivities() {
+    if (!selected) return;
     const refreshedActivities = await requestDealActivities(selected.dealId);
     setActivities((current) => ({ ...current, [selected.dealId]: refreshedActivities }));
   }
@@ -950,6 +968,7 @@ export function PipelineBoard() {
           onCompleteTask={completeTask}
           onLifecycle={(status) => runDealLifecycle(selectedDeal.id, status)}
           onOpenContact={(contactId) => router.push(`/contacts?contact=${contactId}`)}
+          onRefreshActivities={refreshSelectedActivities}
           onClose={requestDealClose}
         />
       )}
