@@ -2,19 +2,20 @@
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { useCurrentUser } from "@/components/auth/AuthContext";
-import { kindToApi, mapApiTask, type ApiTask } from "@/lib/tasks";
-import type { CrmTask, TaskKind } from "@/types/crm";
+import { kindFromApi, kindToApi, mapApiTask, type ApiTask } from "@/lib/tasks";
+import type { CrmTask, CrmTaskType, TaskKind } from "@/types/crm";
 
 export interface TaskContactOption { id: string; name: string; phone: string | null }
 export interface TaskDealOption { id: string; number: number; title: string; contactId: string }
 export interface TaskAssigneeOption { id: string; name: string; role: "ADMIN" | "LEAD" | "MANAGER" }
-export interface TaskDraftInput { title: string; kind: TaskKind; dueDate?: string; dueTime?: string; assigneeId?: string; contactId?: string; dealId?: string }
+export interface TaskDraftInput { title: string; kind: TaskKind; taskTypeId?: string; dueDate?: string; dueTime?: string; assigneeId?: string; contactId?: string; dealId?: string }
 
 interface TasksContextValue {
   tasks: CrmTask[];
   contacts: TaskContactOption[];
   deals: TaskDealOption[];
   assignees: TaskAssigneeOption[];
+  taskTypes: CrmTaskType[];
   loadState: "loading" | "ready" | "error";
   createTask: (draft: TaskDraftInput) => Promise<CrmTask>;
   updateTask: (task: CrmTask) => Promise<CrmTask>;
@@ -25,22 +26,25 @@ interface TasksContextValue {
 const TasksContext = createContext<TasksContextValue | null>(null);
 
 async function requestTaskData() {
-  const [tasksResponse, contactsResponse, pipelineResponse, assigneesResponse] = await Promise.all([
+  const [tasksResponse, contactsResponse, pipelineResponse, assigneesResponse, taskTypesResponse] = await Promise.all([
     fetch("/api/crm/tasks", { cache: "no-store" }),
     fetch("/api/crm/contacts", { cache: "no-store" }),
     fetch("/api/crm/pipeline", { cache: "no-store" }),
     fetch("/api/crm/team/assignees", { cache: "no-store" }),
+    fetch("/api/crm/settings/task-types", { cache: "no-store" }),
   ]);
-  if (!tasksResponse.ok || !contactsResponse.ok || !pipelineResponse.ok || !assigneesResponse.ok) throw new Error("Не удалось загрузить задачи.");
+  if (!tasksResponse.ok || !contactsResponse.ok || !pipelineResponse.ok || !assigneesResponse.ok || !taskTypesResponse.ok) throw new Error("Не удалось загрузить задачи.");
   const tasksPayload = await tasksResponse.json() as { tasks: ApiTask[] };
   const contactsPayload = await contactsResponse.json() as { contacts: TaskContactOption[] };
   const pipelinePayload = await pipelineResponse.json() as { pipeline: { stages: Array<{ deals: Array<{ id: string; number: number; title: string; contact: { id: string } }> }> } };
   const assigneesPayload = await assigneesResponse.json() as { assignees: TaskAssigneeOption[] };
+  const taskTypesPayload = await taskTypesResponse.json() as { taskTypes: Array<Omit<CrmTaskType, "baseKind"> & { baseKind: keyof typeof kindFromApi }> };
   return {
     tasks: tasksPayload.tasks.map(mapApiTask),
     contacts: contactsPayload.contacts,
     deals: pipelinePayload.pipeline.stages.flatMap((stage) => stage.deals.map((deal) => ({ id: deal.id, number: deal.number, title: deal.title, contactId: deal.contact.id }))),
     assignees: assigneesPayload.assignees,
+    taskTypes: taskTypesPayload.taskTypes.map((item) => ({ ...item, baseKind: kindFromApi[item.baseKind] })),
   };
 }
 
@@ -57,6 +61,7 @@ export function TasksProvider({ children }: { children: ReactNode }) {
   const [contacts, setContacts] = useState<TaskContactOption[]>([]);
   const [deals, setDeals] = useState<TaskDealOption[]>([]);
   const [assignees, setAssignees] = useState<TaskAssigneeOption[]>([{ id: user.id, name: user.name, role: user.organization.role }]);
+  const [taskTypes, setTaskTypes] = useState<CrmTaskType[]>([]);
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
 
   async function reloadTasks() {
@@ -66,6 +71,7 @@ export function TasksProvider({ children }: { children: ReactNode }) {
       setContacts(data.contacts);
       setDeals(data.deals);
       setAssignees(data.assignees);
+      setTaskTypes(data.taskTypes);
       setLoadState("ready");
     } catch {
       setLoadState("error");
@@ -80,19 +86,21 @@ export function TasksProvider({ children }: { children: ReactNode }) {
       setContacts(data.contacts);
       setDeals(data.deals);
       setAssignees(data.assignees);
+      setTaskTypes(data.taskTypes);
       setLoadState("ready");
     }, () => { if (active) setLoadState("error"); });
     return () => { active = false; };
   }, []);
 
   async function createTask(draft: TaskDraftInput) {
-    const task = await taskRequest("/api/crm/tasks", "POST", { ...draft, kind: kindToApi[draft.kind], assigneeId: draft.assigneeId || user.id, dueDate: draft.dueDate || null, dueTime: draft.dueTime || null, contactId: draft.contactId || null, dealId: draft.dealId || null });
+    const matchingTaskType = taskTypes.find((item) => item.isActive && item.baseKind === draft.kind) ?? taskTypes.find((item) => item.isActive);
+    const task = await taskRequest("/api/crm/tasks", "POST", { ...draft, kind: kindToApi[draft.kind], taskTypeId: draft.taskTypeId || matchingTaskType?.id || null, assigneeId: draft.assigneeId || user.id, dueDate: draft.dueDate || null, dueTime: draft.dueTime || null, contactId: draft.contactId || null, dealId: draft.dealId || null });
     setTasks((current) => [task, ...current]);
     return task;
   }
 
   async function updateTask(next: CrmTask) {
-    const task = await taskRequest(`/api/crm/tasks/${next.id}`, "PATCH", { title: next.title, kind: kindToApi[next.kind], status: next.period === "completed" ? "COMPLETED" : "ACTIVE", dueDate: next.dueDate || null, dueTime: next.dueTime || null, assigneeId: next.assigneeId || user.id, contactId: next.contactId || null, dealId: next.dealId || null, result: next.result || null });
+    const task = await taskRequest(`/api/crm/tasks/${next.id}`, "PATCH", { title: next.title, kind: kindToApi[next.kind], taskTypeId: next.taskTypeId || null, status: next.period === "completed" ? "COMPLETED" : "ACTIVE", dueDate: next.dueDate || null, dueTime: next.dueTime || null, assigneeId: next.assigneeId || user.id, contactId: next.contactId || null, dealId: next.dealId || null, result: next.result || null });
     setTasks((current) => current.map((item) => item.id === task.id ? task : item));
     return task;
   }
@@ -103,7 +111,7 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     return task;
   }
 
-  const value = { tasks, contacts, deals, assignees, loadState, createTask, updateTask, completeTask, reloadTasks };
+  const value = { tasks, contacts, deals, assignees, taskTypes, loadState, createTask, updateTask, completeTask, reloadTasks };
   return <TasksContext.Provider value={value}>{children}</TasksContext.Provider>;
 }
 

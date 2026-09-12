@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { useCurrentUser } from "@/components/auth/AuthContext";
 import { TaskKindIcon, UiIcon } from "@/components/ui/UiIcon";
 import { localDateKey } from "@/lib/tasks";
-import type { CrmTask, TaskKind, TaskPeriod } from "@/types/crm";
+import type { CrmTask, TaskPeriod } from "@/types/crm";
 import { CompleteTaskModal } from "./CompleteTaskModal";
 import { NewTaskModal, type NewTaskDraft } from "./NewTaskModal";
 import { TaskDetailsModal } from "./TaskDetailsModal";
@@ -23,10 +23,10 @@ const periodLabels: Record<TaskPeriod, string> = {
 
 export function TasksCenter() {
   const user = useCurrentUser();
-  const { tasks, contacts, deals, assignees, loadState, createTask, updateTask, completeTask: persistCompleteTask, reloadTasks } = useTasks();
+  const { tasks, contacts, deals, assignees, taskTypes, loadState, createTask, updateTask, completeTask: persistCompleteTask, reloadTasks } = useTasks();
   const [period, setPeriod] = useState<PeriodFilter>("active");
   const [assignee, setAssignee] = useState("all");
-  const [kind, setKind] = useState<"all" | TaskKind>("all");
+  const [kind, setKind] = useState("all");
   const [search, setSearch] = useState("");
   const [completingId, setCompletingId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(() => typeof window === "undefined" ? null : new URLSearchParams(window.location.search).get("task"));
@@ -47,7 +47,7 @@ export function TasksCenter() {
     return tasks.filter((task) => {
       const periodMatch = period === "active" ? task.period !== "completed" : task.period === period;
       const searchMatch = !query || [task.title, task.contactName, task.dealTitle].some((value) => value?.toLocaleLowerCase("ru").includes(query));
-      return periodMatch && searchMatch && (assignee === "all" || task.assignee === assignee) && (kind === "all" || task.kind === kind);
+      return periodMatch && searchMatch && (assignee === "all" || task.assignee === assignee) && (kind === "all" || task.taskTypeId === kind);
     });
   }, [assignee, kind, period, search, tasks]);
 
@@ -91,7 +91,7 @@ export function TasksCenter() {
 
         <div className={styles.filters}>
           <label><span>Ответственный</span><select value={assignee} onChange={(event) => setAssignee(event.target.value)}><option value="all">Все</option>{assignees.map((item) => <option key={item.id}>{item.name}</option>)}</select></label>
-          <label><span>Тип</span><select value={kind} onChange={(event) => setKind(event.target.value as "all" | TaskKind)}><option value="all">Все действия</option><option>Звонок</option><option>Встреча</option><option>Сообщение</option><option>Другое</option></select></label>
+          <label><span>Тип</span><select value={kind} onChange={(event) => setKind(event.target.value)}><option value="all">Все действия</option>{taskTypes.filter((item) => item.isActive).map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label>
           <span>{visibleTasks.length} задач</span>
           {(assignee !== "all" || kind !== "all" || search) && <button type="button" onClick={() => { setAssignee("all"); setKind("all"); setSearch(""); }}>Сбросить</button>}
         </div>
@@ -102,8 +102,8 @@ export function TasksCenter() {
       </div>
 
       {completingTask && <CompleteTaskModal task={completingTask} onComplete={(result) => { void completeTask(result); }} onClose={() => setCompletingId(null)} />}
-      {selectedTask && <TaskDetailsModal task={selectedTask} contacts={contacts} deals={deals} assignees={assignees} currentUserId={user.id} onSave={updateTask} onClose={() => setSelectedTaskId(null)} />}
-      {isCreating && <NewTaskModal initialDate={localDateKey()} contacts={contacts} deals={deals} assignees={assignees} currentUserId={user.id} onCreate={createNewTask} onClose={() => setIsCreating(false)} />}
+      {selectedTask && <TaskDetailsModal task={selectedTask} contacts={contacts} deals={deals} assignees={assignees} taskTypes={taskTypes} currentUserId={user.id} onSave={updateTask} onClose={() => setSelectedTaskId(null)} />}
+      {isCreating && <NewTaskModal initialDate={localDateKey()} contacts={contacts} deals={deals} assignees={assignees} taskTypes={taskTypes} currentUserId={user.id} onCreate={createNewTask} onClose={() => setIsCreating(false)} />}
     </section>
   );
 }
@@ -118,7 +118,7 @@ function TaskRow({ task, onOpen, onComplete }: { task: CrmTask; onOpen: () => vo
     <article className={`${styles.taskRow} ${isCompleted ? styles.taskCompleted : ""}`}>
       <button className={styles.checkButton} type="button" aria-label={isCompleted ? "Задача выполнена" : `Выполнить: ${task.title}`} disabled={isCompleted} onClick={onComplete}>{isCompleted ? "✓" : ""}</button>
       <span className={styles.kindIcon}><TaskKindIcon kind={task.kind} /></span>
-      <button className={styles.taskMain} type="button" onClick={onOpen}><strong>{task.title}</strong><span>{task.kind}{task.result && ` · ${task.result}`}</span></button>
+      <button className={styles.taskMain} type="button" onClick={onOpen}><strong>{task.title}</strong><span>{task.taskTypeName || task.kind}{task.result && ` · ${task.result}`}</span></button>
       <div className={styles.relation}>{task.contactName ? <Link href={`/contacts?contact=${task.contactId}`}>{task.contactName}</Link> : <span>Без контакта</span>}{task.dealNumber && task.dealId && <Link href={`/?deal=${task.dealId}&task=${task.id}`}>Открыть сделку #{task.dealNumber}</Link>}</div>
       <span className={styles.taskAssignee}><i>{task.assignee.slice(0, 1)}</i>{task.assignee}</span>
       <time className={task.period === "overdue" ? styles.overdueTime : ""}>{task.completedAt || <>{task.dueLabel}{task.dueTime && <b>{task.dueTime}</b>}</>}</time>

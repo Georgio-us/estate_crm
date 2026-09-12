@@ -57,7 +57,7 @@ function formatFullDate(key: string) {
 
 export function CalendarView() {
   const user = useCurrentUser();
-  const { tasks, contacts, deals, assignees, createTask, updateTask, completeTask: persistCompleteTask } = useTasks();
+  const { tasks, contacts, deals, assignees, taskTypes, createTask, updateTask, completeTask: persistCompleteTask } = useTasks();
   const [mode, setMode] = useState<CalendarMode>("month");
   const [cursor, setCursor] = useState(() => new Date());
   const [selectedDate, setSelectedDate] = useState(TODAY_KEY);
@@ -168,7 +168,7 @@ export function CalendarView() {
               {selectedTasks.length ? selectedTasks.map((task) => (
                 <article className={`${styles.agendaItem} ${task.period === "completed" ? styles.completedAgenda : ""}`} key={task.id}>
                   <button className={styles.checkButton} type="button" aria-label={task.period === "completed" ? `Задача выполнена: ${task.title}` : `Выполнить задачу: ${task.title}`} disabled={task.period === "completed"} onClick={() => setCompletingTaskId(task.id)}>{task.period === "completed" ? "✓" : ""}</button>
-                  <button className={styles.agendaMain} type="button" onClick={() => setSelectedTaskId(task.id)}><span><i><TaskKindIcon kind={task.kind} /></i>{task.kind}<time>{task.dueTime || "Без времени"}</time></span><strong>{task.title}</strong><small>{task.assignee}</small></button>
+                  <button className={styles.agendaMain} type="button" onClick={() => setSelectedTaskId(task.id)}><span><i><TaskKindIcon kind={task.kind} /></i>{task.taskTypeName || task.kind}<time>{task.dueTime || "Без времени"}</time></span><strong>{task.title}</strong><small>{task.assignee}</small></button>
                   {(task.contactName || task.dealTitle) && <div className={styles.relations}>{task.contactName && <Link href={`/contacts?contact=${task.contactId}`}>{task.contactName}</Link>}{task.dealTitle && task.dealId && <Link href={`/?deal=${task.dealId}&task=${task.id}`}>Открыть сделку · {task.dealTitle}</Link>}</div>}
                 </article>
               )) : <div className={styles.emptyDay}><span>○</span><h4>На этот день задач нет</h4><p>Можно оставить день свободным или запланировать действие.</p><button type="button" onClick={() => setIsCreating(true)}>＋ Добавить задачу</button></div>}
@@ -177,8 +177,8 @@ export function CalendarView() {
         </div>
       </div>
 
-      {isCreating && <NewTaskModal initialDate={selectedDate} contacts={contacts} deals={deals} assignees={assignees} currentUserId={user.id} onCreate={createCalendarTask} onClose={() => setIsCreating(false)} />}
-      {selectedTask && <TaskDetailsModal task={selectedTask} contacts={contacts} deals={deals} assignees={assignees} currentUserId={user.id} onSave={saveTask} onClose={() => setSelectedTaskId(null)} />}
+      {isCreating && <NewTaskModal initialDate={selectedDate} contacts={contacts} deals={deals} assignees={assignees} taskTypes={taskTypes} currentUserId={user.id} onCreate={createCalendarTask} onClose={() => setIsCreating(false)} />}
+      {selectedTask && <TaskDetailsModal task={selectedTask} contacts={contacts} deals={deals} assignees={assignees} taskTypes={taskTypes} currentUserId={user.id} onSave={saveTask} onClose={() => setSelectedTaskId(null)} />}
       {completingTask && <CompleteTaskModal task={completingTask} onComplete={(result) => { void completeTask(result); }} onClose={() => setCompletingTaskId(null)} />}
     </section>
   );

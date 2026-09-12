@@ -18,6 +18,7 @@ const taskInclude = {
   contact: { select: { id: true, name: true } },
   deal: { select: { id: true, number: true, title: true } },
   assignee: { select: { id: true, name: true } },
+  taskType: { select: { id: true, name: true, baseKind: true } },
 } as const;
 
 function optionalText(value: string | null | undefined) {
@@ -48,6 +49,7 @@ async function enqueueTaskAssignmentNotification(database: DatabaseConnection, o
   dueTime: string | null;
   updatedAt: Date;
   assignee: { id: string; name: string } | null;
+  taskType?: { id: string; name: string; baseKind: "CALL" | "MEETING" | "MESSAGE" | "OTHER" } | null;
   deal: { id: string; number: number; title: string } | null;
 }) {
   if (task.status !== "ACTIVE" || !task.assignee) return;
@@ -84,11 +86,13 @@ function mapTask(task: {
   contact: { id: string; name: string } | null;
   deal: { id: string; number: number; title: string } | null;
   assignee: { id: string; name: string } | null;
+  taskType?: { id: string; name: string; baseKind: "CALL" | "MEETING" | "MESSAGE" | "OTHER" } | null;
   createdAt: Date;
   updatedAt: Date;
 }): TaskRecord {
   return {
     ...task,
+    taskType: task.taskType ?? null,
     dueDate: task.dueDate?.toISOString().slice(0, 10) ?? null,
     completedAt: task.completedAt?.toISOString() ?? null,
     createdAt: task.createdAt.toISOString(),
@@ -110,7 +114,13 @@ const taskProperties = {
   contactId: { anyOf: [{ type: "string", format: "uuid" }, { type: "null" }] },
   dealId: { anyOf: [{ type: "string", format: "uuid" }, { type: "null" }] },
   assigneeId: { anyOf: [{ type: "string", format: "uuid" }, { type: "null" }] },
+  taskTypeId: { anyOf: [{ type: "string", format: "uuid" }, { type: "null" }] },
 } as const;
+
+async function resolveTaskType(database: DatabaseConnection, organizationId: string, taskTypeId: string | null | undefined) {
+  if (!taskTypeId) return null;
+  return database.client.taskType.findFirst({ where: { id: taskTypeId, organizationId, isActive: true }, select: { id: true, baseKind: true } });
+}
 
 async function resolveRelations(database: DatabaseConnection, user: AuthenticatedUser, body: CreateTaskRequest) {
   const organizationId = user.organization.id;
@@ -157,11 +167,14 @@ export async function registerTaskRoutes(app: FastifyInstance, database: Databas
     }
     const relations = await resolveRelations(database, user, request.body);
     if ("error" in relations) return reply.status(404).send({ error: relations.error ?? "relation_not_found", message: "Не удалось найти связанную сущность задачи." });
+    const taskType = await resolveTaskType(database, user.organization.id, request.body.taskTypeId);
+    if (request.body.taskTypeId && !taskType) return reply.status(404).send({ error: "task_type_not_found", message: "Выбранный тип задачи недоступен." });
     const task = await database.client.task.create({
       data: {
         organizationId: user.organization.id,
         title: request.body.title.trim(),
-        kind: request.body.kind ?? "CALL",
+        kind: taskType?.baseKind ?? request.body.kind ?? "CALL",
+        taskTypeId: taskType?.id ?? null,
         dueDate: parseDueDate(request.body.dueDate),
         dueTime: optionalText(request.body.dueTime),
         contactId: relations.contactId,
@@ -187,6 +200,8 @@ export async function registerTaskRoutes(app: FastifyInstance, database: Databas
     }
     const relations = await resolveRelations(database, user, { ...request.body, contactId: request.body.contactId === undefined ? existing.contactId : request.body.contactId, dealId: request.body.dealId === undefined ? existing.dealId : request.body.dealId, assigneeId: request.body.assigneeId === undefined ? existing.assigneeId : request.body.assigneeId } as CreateTaskRequest);
     if ("error" in relations) return reply.status(404).send({ error: relations.error ?? "relation_not_found", message: "Не удалось найти связанную сущность задачи." });
+    const taskType = request.body.taskTypeId === undefined ? undefined : await resolveTaskType(database, user.organization.id, request.body.taskTypeId);
+    if (request.body.taskTypeId && !taskType) return reply.status(404).send({ error: "task_type_not_found", message: "Выбранный тип задачи недоступен." });
     const nextStatus = request.body.status ?? existing.status;
     const nextAssigneeId = request.body.assigneeId === undefined
       ? existing.assigneeId
@@ -195,7 +210,7 @@ export async function registerTaskRoutes(app: FastifyInstance, database: Databas
       where: { id: existing.id },
       data: {
         ...(request.body.title !== undefined ? { title: request.body.title.trim() } : {}),
-        ...(request.body.kind !== undefined ? { kind: request.body.kind } : {}),
+        ...(taskType ? { kind: taskType.baseKind, taskTypeId: taskType.id } : request.body.taskTypeId === null ? { taskTypeId: null } : request.body.kind !== undefined ? { kind: request.body.kind } : {}),
         ...(request.body.dueDate !== undefined ? { dueDate: parseDueDate(request.body.dueDate) } : {}),
         ...(request.body.dueTime !== undefined ? { dueTime: optionalText(request.body.dueTime) } : {}),
         ...(request.body.contactId !== undefined || request.body.dealId !== undefined ? { contactId: relations.contactId } : {}),

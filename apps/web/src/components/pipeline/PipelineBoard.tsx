@@ -257,6 +257,11 @@ export function PipelineBoard() {
           const newDealContact = parameters.get("newDealContact");
           const dealId = parameters.get("deal");
           const filter = parameters.get("filter");
+          const transfer = parameters.get("transfer");
+          if (transfer === "1") {
+            deepLinkHandledRef.current = true;
+            setTransferOpen(true);
+          }
           if (filter === "unassigned") {
             setAssigneeFilter("Не назначен");
             setFiltersOpen(true);

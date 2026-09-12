@@ -59,8 +59,8 @@ function ProjectFact({ label, value }: { label: string; value: string }) {
   return <div><span>{label}</span><strong>{value}</strong></div>;
 }
 
-export function formatProjectPrice(price: number, currency: "USD" | "EUR") {
-  return `${currency === "USD" ? "$" : "€"}${new Intl.NumberFormat("ru-RU").format(price)}`;
+export function formatProjectPrice(price: number, currency: "USD" | "EUR" | "UAH") {
+  return `${currency === "USD" ? "$" : currency === "EUR" ? "€" : "₴"}${new Intl.NumberFormat("ru-RU").format(price)}`;
 }
 
 function unitWord(count: number) {

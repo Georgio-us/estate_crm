@@ -36,6 +36,7 @@ export interface ApiTask {
   id: string;
   title: string;
   kind: "CALL" | "MEETING" | "MESSAGE" | "OTHER";
+  taskType: { id: string; name: string; baseKind: "CALL" | "MEETING" | "MESSAGE" | "OTHER" } | null;
   status: "ACTIVE" | "COMPLETED";
   dueDate: string | null;
   dueTime: string | null;
@@ -46,7 +47,7 @@ export interface ApiTask {
   assignee: { id: string; name: string } | null;
 }
 
-const kindFromApi = { CALL: "Звонок", MEETING: "Встреча", MESSAGE: "Сообщение", OTHER: "Другое" } as const;
+export const kindFromApi = { CALL: "Звонок", MEETING: "Встреча", MESSAGE: "Сообщение", OTHER: "Другое" } as const;
 export const kindToApi = { Звонок: "CALL", Встреча: "MEETING", Сообщение: "MESSAGE", Другое: "OTHER" } as const;
 
 export function mapApiTask(task: ApiTask): CrmTask {
@@ -54,6 +55,8 @@ export function mapApiTask(task: ApiTask): CrmTask {
     id: task.id,
     title: task.title,
     kind: kindFromApi[task.kind],
+    taskTypeId: task.taskType?.id,
+    taskTypeName: task.taskType?.name ?? kindFromApi[task.kind],
     period: taskPeriod(task.dueDate, task.status === "COMPLETED", task.dueTime),
     dueDate: task.dueDate || undefined,
     dueLabel: taskDueLabel(task.dueDate),

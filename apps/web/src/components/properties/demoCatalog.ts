@@ -5,7 +5,7 @@ export interface ProjectUnit {
   name: string;
   status: "Доступен" | "Резерв" | "Продан";
   price: number;
-  currency: "USD" | "EUR";
+  currency: "USD" | "EUR" | "UAH";
   rooms: number;
   bathrooms: number;
   area: number;
@@ -25,7 +25,7 @@ export interface PropertyProject {
   status: "Строится" | "Сдан" | "Продажи завершены";
   completion: string;
   priceFrom: number;
-  currency: "USD" | "EUR";
+  currency: "USD" | "EUR" | "UAH";
   imageUrl: string;
   description: string;
   units: ProjectUnit[];

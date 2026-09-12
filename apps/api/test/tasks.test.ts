@@ -10,6 +10,7 @@ const userId = "6f398049-0273-4c80-9d36-56dc65069437";
 const dealId = "14a292bd-d84e-447c-b71a-aa185b809b88";
 const contactId = "201f180c-d032-49a0-8aa7-04db19095eb2";
 const taskId = "3a93e90c-769d-4716-9b4c-9ab6fa153244";
+const taskTypeId = "4a93e90c-769d-4716-9b4c-9ab6fa153244";
 const now = new Date("2026-09-08T12:00:00.000Z");
 const sessionUser = { id: userId, email: "admin@example.com", name: "Администратор", memberships: [{ role: "ADMIN" as const, organization: { id: "org-1", name: "CRM Del Mar", slug: "crm-delmar" } }] };
 
@@ -39,6 +40,26 @@ test("creating a task links it to the deal contact and writes deal history", asy
   assert.equal(notificationData.eventType, "task.assigned");
   assert.equal((notificationData.payload as { assigneeId: string }).assigneeId, userId);
   assert.equal(response.json().task.dueDate, "2026-09-09");
+  await app.close();
+});
+
+test("a configured task type controls the stored kind and is returned with the task", async () => {
+  let createdData: Record<string, unknown> = {};
+  const database = { client: {
+    session: { async findUnique() { return { id: "session-1", expiresAt: new Date(Date.now() + 60_000), user: sessionUser }; } },
+    deal: { async findFirst() { return { id: dealId, contactId, relatedContacts: [] }; } },
+    taskType: { async findFirst() { return { id: taskTypeId, baseKind: "MEETING" as const }; } },
+    task: { async create({ data }: { data: Record<string, unknown> }) { createdData = data; return taskRecord({ kind: "MEETING" as const, taskType: { id: taskTypeId, name: "Показ объекта", baseKind: "MEETING" as const } }); } },
+    activityEvent: { async create() {} },
+    notificationOutbox: { async create() {} },
+  }, async ping() {}, async disconnect() {} } as unknown as DatabaseConnection;
+  const app = await buildApp(config, database);
+  const response = await app.inject({ method: "POST", url: "/tasks", headers: { cookie: "estate_crm_session=test-token" }, payload: { title: "Провести показ", taskTypeId, dealId } });
+
+  assert.equal(response.statusCode, 201);
+  assert.equal(createdData.taskTypeId, taskTypeId);
+  assert.equal(createdData.kind, "MEETING");
+  assert.deepEqual(response.json().task.taskType, { id: taskTypeId, name: "Показ объекта", baseKind: "MEETING" });
   await app.close();
 });
 

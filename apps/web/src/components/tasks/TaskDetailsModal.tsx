@@ -2,14 +2,15 @@
 
 import { useState, type ReactNode } from "react";
 import { localDateKey, taskDueLabel, taskPeriod } from "@/lib/tasks";
-import type { CrmTask, TaskKind } from "@/types/crm";
+import type { CrmTask, CrmTaskType } from "@/types/crm";
 import type { TaskAssigneeOption, TaskContactOption, TaskDealOption } from "./TasksContext";
 import styles from "./tasks.module.css";
 
-export function TaskDetailsModal({ task, contacts, deals, assignees, currentUserId, onSave, onClose }: { task: CrmTask; contacts: TaskContactOption[]; deals: TaskDealOption[]; assignees: TaskAssigneeOption[]; currentUserId: string; onSave: (task: CrmTask) => Promise<unknown>; onClose: () => void }) {
+export function TaskDetailsModal({ task, contacts, deals, assignees, taskTypes, currentUserId, onSave, onClose }: { task: CrmTask; contacts: TaskContactOption[]; deals: TaskDealOption[]; assignees: TaskAssigneeOption[]; taskTypes: CrmTaskType[]; currentUserId: string; onSave: (task: CrmTask) => Promise<unknown>; onClose: () => void }) {
   const [draft, setDraft] = useState({
     title: task.title,
     kind: task.kind,
+    taskTypeId: task.taskTypeId || "",
     date: task.dueDate || localDateKey(),
     time: task.dueTime || "",
     assigneeId: task.assigneeId || currentUserId,
@@ -33,6 +34,8 @@ export function TaskDetailsModal({ task, contacts, deals, assignees, currentUser
       ...task,
       title: draft.title.trim(),
       kind: draft.kind,
+      taskTypeId: draft.taskTypeId || undefined,
+      taskTypeName: taskTypes.find((item) => item.id === draft.taskTypeId)?.name || task.taskTypeName || task.kind,
       dueDate: draft.date,
       dueLabel: taskDueLabel(draft.date),
       dueTime: draft.time || undefined,
@@ -60,7 +63,7 @@ export function TaskDetailsModal({ task, contacts, deals, assignees, currentUser
           <div className={styles.formGrid}>
             <Field label="Дата"><input type="date" value={draft.date} onChange={(event) => update({ date: event.target.value })} /></Field>
             <Field label="Время"><input type="time" value={draft.time} onChange={(event) => update({ time: event.target.value })} /></Field>
-            <Field label="Тип действия"><select value={draft.kind} onChange={(event) => update({ kind: event.target.value as TaskKind })}><option>Звонок</option><option>Встреча</option><option>Сообщение</option><option>Другое</option></select></Field>
+            <Field label="Тип действия"><select value={draft.taskTypeId} onChange={(event) => { const taskType = taskTypes.find((item) => item.id === event.target.value); if (taskType) update({ taskTypeId: taskType.id, kind: taskType.baseKind }); }}>{!task.taskTypeId && <option value="">{task.taskTypeName || task.kind}</option>}{taskTypes.filter((item) => item.isActive || item.id === task.taskTypeId).map((item) => <option value={item.id} key={item.id}>{item.name}{!item.isActive ? " · в архиве" : ""}</option>)}</select></Field>
             <Field label="Ответственный"><select value={draft.assigneeId} onChange={(event) => update({ assigneeId: event.target.value })}>{assignees.map((assignee) => <option value={assignee.id} key={assignee.id}>{assignee.name}</option>)}</select></Field>
             <Field label="Статус"><select value={draft.status} onChange={(event) => update({ status: event.target.value })}><option value="active">Запланирована</option><option value="completed">Выполнена</option></select></Field>
           </div>

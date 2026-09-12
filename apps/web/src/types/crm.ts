@@ -68,7 +68,7 @@ export interface PropertyListing {
   operation: "Продажа" | "Аренда";
   status: PropertyStatus;
   price: number;
-  currency: "USD" | "EUR";
+  currency: "USD" | "EUR" | "UAH";
   rooms?: string;
   area: number;
   floor?: number;
@@ -102,10 +102,22 @@ export interface Contact {
 export type TaskKind = "Звонок" | "Встреча" | "Сообщение" | "Другое";
 export type TaskPeriod = "overdue" | "today" | "upcoming" | "completed";
 
+export interface CrmTaskType {
+  id: string;
+  key: string;
+  name: string;
+  baseKind: TaskKind;
+  position: number;
+  isActive: boolean;
+  taskCount: number;
+}
+
 export interface CrmTask {
   id: string;
   title: string;
   kind: TaskKind;
+  taskTypeId?: string;
+  taskTypeName?: string;
   period: TaskPeriod;
   dueDate?: string;
   dueLabel: string;

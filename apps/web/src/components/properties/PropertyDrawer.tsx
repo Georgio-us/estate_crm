@@ -75,7 +75,7 @@ function EditField({ label, children }: { label: string; children: ReactNode }) 
 }
 
 function formatPrice(property: Pick<PropertyListing, "price" | "currency" | "operation">) {
-  const symbol = property.currency === "USD" ? "$" : "€";
+  const symbol = property.currency === "USD" ? "$" : property.currency === "EUR" ? "€" : "₴";
   const value = new Intl.NumberFormat("ru-RU").format(property.price);
   return property.operation === "Аренда" ? `${symbol}${value} / мес.` : `${symbol}${value}`;
 }

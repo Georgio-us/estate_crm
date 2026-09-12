@@ -45,7 +45,7 @@ export interface WorkspaceSettingsResponse {
     phone: string | null;
     email: string | null;
     timezone: string;
-    currency: "USD" | "EUR";
+    currency: "USD" | "EUR" | "UAH";
   };
   profile: {
     name: string;
@@ -60,7 +60,7 @@ export interface UpdateWorkspaceSettingsRequest {
   phone?: string | null;
   email?: string | null;
   timezone: string;
-  currency: "USD" | "EUR";
+  currency: "USD" | "EUR" | "UAH";
 }
 
 export interface UpdateProfileRequest {
@@ -429,10 +429,34 @@ export interface UpdateDealPropertySelectionRequest {
 export type TaskKind = "CALL" | "MEETING" | "MESSAGE" | "OTHER";
 export type TaskStatus = "ACTIVE" | "COMPLETED";
 
+export interface TaskTypeRecord {
+  id: string;
+  key: string;
+  name: string;
+  baseKind: TaskKind;
+  position: number;
+  isActive: boolean;
+  taskCount: number;
+}
+
+export interface TaskTypeListResponse {
+  taskTypes: TaskTypeRecord[];
+}
+
+export interface UpdateTaskTypesRequest {
+  taskTypes: Array<{
+    id?: string;
+    name: string;
+    baseKind: TaskKind;
+    isActive: boolean;
+  }>;
+}
+
 export interface TaskRecord {
   id: string;
   title: string;
   kind: TaskKind;
+  taskType: Pick<TaskTypeRecord, "id" | "name" | "baseKind"> | null;
   status: TaskStatus;
   dueDate: string | null;
   dueTime: string | null;
@@ -453,6 +477,7 @@ export interface TaskListResponse {
 export interface CreateTaskRequest {
   title: string;
   kind?: TaskKind;
+  taskTypeId?: string | null;
   dueDate?: string | null;
   dueTime?: string | null;
   contactId?: string | null;
@@ -473,7 +498,7 @@ export type PropertyCategory = "APARTMENT" | "HOUSE" | "LAND" | "COMMERCIAL";
 export type PropertyMarket = "PRIMARY" | "SECONDARY";
 export type PropertyOperation = "SALE" | "RENT";
 export type PropertyStatus = "AVAILABLE" | "RESERVED" | "SOLD";
-export type Currency = "USD" | "EUR";
+export type Currency = "USD" | "EUR" | "UAH";
 
 export interface PropertyRecord {
   id: string;

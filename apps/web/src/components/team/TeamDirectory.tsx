@@ -114,7 +114,7 @@ export function TeamDirectory() {
   function openMember(id: string) { router.push(`/team?member=${id}`); }
   async function refreshTeam() { setRows(await requestTeam()); }
 
-  if (selected) return <MemberPage key={`${selected.id}-${selected.name}-${selected.phone}-${selected.role}-${selected.status}`} member={selected} currentUserId={currentUser.id} currentUserRole={currentUser.organization.role} onBack={() => router.push("/team")} onUpdated={refreshTeam} />;
+  if (selected) return <MemberPage key={`${selected.id}-${selected.name}-${selected.phone}-${selected.role}-${selected.status}`} member={selected} initialTab={searchParams.get("memberTab") === "access" ? "access" : "overview"} currentUserId={currentUser.id} currentUserRole={currentUser.organization.role} onBack={() => router.push("/team")} onUpdated={refreshTeam} />;
 
   return <section className={styles.page}>
     <header className={styles.topbar}><h1>Команда</h1><label className={styles.search}><UiIcon name="search" /><input type="search" value={search} onFocus={() => setTab("people")} onChange={(event) => setSearch(event.target.value)} placeholder="Сотрудник или email" /></label><button className={styles.primaryButton} type="button" aria-label="Пригласить сотрудника" onClick={() => setInviteOpen(true)}><span>＋</span><b>Пригласить</b></button></header>
@@ -179,8 +179,8 @@ function Audit() {
   return <section className={styles.audit}><div className={styles.sectionTitle}><div><h3>Журнал действий</h3><p>Изменения ролей, доступов и уведомлений</p></div><span>{events?.length ?? 0} событий</span></div>{error ? <div className={styles.empty}><h3>Журнал недоступен</h3><p>{error}</p></div> : events === null ? <div className={styles.empty}><h3>Загружаем журнал</h3></div> : events.length ? <div className={styles.auditList}>{events.map((event) => <article key={event.id}><span>↔</span><div><strong>{event.title}</strong><p>{event.description}</p><small>{event.author?.name ?? "Система"}</small></div><time>{new Date(event.occurredAt).toLocaleString("ru")}</time></article>)}</div> : <div className={styles.empty}><span>✓</span><h3>Изменений пока нет</h3><p>Первое изменение роли, профиля или доступа появится здесь.</p></div>}</section>;
 }
 
-function MemberPage({ member, currentUserId, currentUserRole, onBack, onUpdated }: { member: TeamRow; currentUserId: string; currentUserRole: ApiRole; onBack: () => void; onUpdated: () => Promise<void> }) {
-  const [tab, setTab] = useState<MemberTab>("overview");
+function MemberPage({ member, initialTab, currentUserId, currentUserRole, onBack, onUpdated }: { member: TeamRow; initialTab: MemberTab; currentUserId: string; currentUserRole: ApiRole; onBack: () => void; onUpdated: () => Promise<void> }) {
+  const [tab, setTab] = useState<MemberTab>(initialTab);
   const [name, setName] = useState(member.name);
   const [phone, setPhone] = useState(member.phone ?? "");
   const [role, setRole] = useState<TeamRole>(member.role);

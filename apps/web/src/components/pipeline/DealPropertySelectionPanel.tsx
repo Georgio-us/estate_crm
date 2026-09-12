@@ -18,7 +18,7 @@ interface ApiProperty {
   id: string; code: string; title: string; address: string | null; district: string | null;
   category: "APARTMENT" | "HOUSE" | "LAND" | "COMMERCIAL"; market: "PRIMARY" | "SECONDARY";
   operation: "SALE" | "RENT"; status: "AVAILABLE" | "RESERVED" | "SOLD"; price: number;
-  currency: "USD" | "EUR"; rooms: string | null; area: number; imageUrl: string | null;
+  currency: "USD" | "EUR" | "UAH"; rooms: string | null; area: number; imageUrl: string | null;
 }
 
 interface CatalogCandidate {
@@ -185,6 +185,6 @@ export function DealPropertySelectionPanel({ deal, onClose, onCountChange, onAct
   </div>;
 }
 
-function formatPrice(value: number, currency: "USD" | "EUR") {
-  return `${currency === "USD" ? "$" : "€"}${new Intl.NumberFormat("ru-RU").format(value)}`;
+function formatPrice(value: number, currency: "USD" | "EUR" | "UAH") {
+  return `${currency === "USD" ? "$" : currency === "EUR" ? "€" : "₴"}${new Intl.NumberFormat("ru-RU").format(value)}`;
 }

@@ -13,7 +13,7 @@ function mapProperty(property: {
   id: string; number: number; title: string; address: string | null; district: string | null;
   category: "APARTMENT" | "HOUSE" | "LAND" | "COMMERCIAL"; market: "PRIMARY" | "SECONDARY";
   operation: "SALE" | "RENT"; status: "AVAILABLE" | "RESERVED" | "SOLD";
-  price: number; currency: "USD" | "EUR"; rooms: string | null; area: number; floor: number | null;
+  price: number; currency: "USD" | "EUR" | "UAH"; rooms: string | null; area: number; floor: number | null;
   totalFloors: number | null; landArea: number | null; project: string | null; developer: string | null;
   description: string | null; imageUrl: string | null; createdAt: Date; updatedAt: Date;
 }): PropertyRecord {
@@ -34,7 +34,7 @@ const propertyFields = {
   operation: { type: "string", enum: ["SALE", "RENT"] },
   status: { type: "string", enum: ["AVAILABLE", "RESERVED", "SOLD"] },
   price: { type: "number", minimum: 0 },
-  currency: { type: "string", enum: ["USD", "EUR"] },
+  currency: { type: "string", enum: ["USD", "EUR", "UAH"] },
   rooms: { anyOf: [{ type: "string", maxLength: 40 }, { type: "null" }] },
   area: { type: "number", minimum: 0 },
   floor: { anyOf: [{ type: "integer", minimum: 0 }, { type: "null" }] },

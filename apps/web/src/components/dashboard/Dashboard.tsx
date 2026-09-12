@@ -40,7 +40,7 @@ function activityTime(value: string) {
 export function Dashboard() {
   const router = useRouter();
   const user = useCurrentUser();
-  const { tasks, contacts, deals: taskDeals, assignees, updateTask, completeTask: persistCompleteTask } = useTasks();
+  const { tasks, contacts, deals: taskDeals, assignees, taskTypes, updateTask, completeTask: persistCompleteTask } = useTasks();
   const [dashboard, setDashboard] = useState<DashboardData>(emptyDashboard);
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
@@ -225,7 +225,7 @@ export function Dashboard() {
       </main>
 
       {completingTask && <CompleteTaskModal task={completingTask} onComplete={(result) => { void completeTask(result); }} onClose={() => setCompletingTaskId(null)} />}
-      {selectedTask && <TaskDetailsModal task={selectedTask} contacts={contacts} deals={taskDeals} assignees={assignees} currentUserId={user.id} onSave={saveTask} onClose={() => setSelectedTaskId(null)} />}
+      {selectedTask && <TaskDetailsModal task={selectedTask} contacts={contacts} deals={taskDeals} assignees={assignees} taskTypes={taskTypes} currentUserId={user.id} onSave={saveTask} onClose={() => setSelectedTaskId(null)} />}
     </section>
   );
 }

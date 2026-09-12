@@ -1,8 +1,12 @@
+import { randomUUID } from "node:crypto";
+
 import type { FastifyInstance } from "fastify";
 
 import type {
   ApiErrorResponse,
   SessionListResponse,
+  TaskTypeListResponse,
+  UpdateTaskTypesRequest,
   UpdateProfileRequest,
   UpdateWorkspaceSettingsRequest,
   WorkspaceSettingsResponse,
@@ -24,9 +28,60 @@ const workspaceBody = {
     phone: { anyOf: [{ type: "string", maxLength: 50 }, { type: "null" }] },
     email: { anyOf: [{ type: "string", format: "email", maxLength: 320 }, { type: "null" }] },
     timezone: { type: "string", enum: ["Europe/Madrid", "Europe/Kyiv", "UTC"] },
-    currency: { type: "string", enum: ["USD", "EUR"] },
+    currency: { type: "string", enum: ["USD", "EUR", "UAH"] },
   },
 } as const;
+
+const taskTypesBody = {
+  type: "object",
+  additionalProperties: false,
+  required: ["taskTypes"],
+  properties: {
+    taskTypes: {
+      type: "array",
+      minItems: 1,
+      maxItems: 20,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["name", "baseKind", "isActive"],
+        properties: {
+          id: { type: "string", format: "uuid" },
+          name: { type: "string", minLength: 1, maxLength: 80 },
+          baseKind: { type: "string", enum: ["CALL", "MEETING", "MESSAGE", "OTHER"] },
+          isActive: { type: "boolean" },
+        },
+      },
+    },
+  },
+} as const;
+
+const defaultTaskTypes = [
+  { key: "call", name: "Звонок", baseKind: "CALL" as const, position: 0 },
+  { key: "meeting", name: "Встреча", baseKind: "MEETING" as const, position: 1 },
+  { key: "message", name: "Сообщение", baseKind: "MESSAGE" as const, position: 2 },
+  { key: "showing", name: "Показ объекта", baseKind: "MEETING" as const, position: 3 },
+  { key: "other", name: "Другое", baseKind: "OTHER" as const, position: 4 },
+];
+
+async function taskTypesForOrganization(database: DatabaseConnection, organizationId: string) {
+  const count = await database.client.taskType.count({ where: { organizationId } });
+  if (!count) {
+    await database.client.taskType.createMany({
+      data: defaultTaskTypes.map((item) => ({ ...item, organizationId })),
+      skipDuplicates: true,
+    });
+  }
+  return database.client.taskType.findMany({
+    where: { organizationId },
+    orderBy: [{ position: "asc" }, { createdAt: "asc" }],
+    include: { _count: { select: { tasks: true } } },
+  });
+}
+
+function presentTaskTypes(taskTypes: Awaited<ReturnType<typeof taskTypesForOrganization>>): TaskTypeListResponse {
+  return { taskTypes: taskTypes.map(({ _count, ...taskType }) => ({ ...taskType, taskCount: _count.tasks })) };
+}
 
 const profileBody = {
   type: "object",
@@ -50,6 +105,31 @@ function sessionPresentation(userAgent: string | null) {
 }
 
 export async function registerSettingsRoutes(app: FastifyInstance, database: DatabaseConnection): Promise<void> {
+  app.get<{ Reply: TaskTypeListResponse | ApiErrorResponse }>("/settings/task-types", async (request, reply) => {
+    const user = await requireUser(request, reply, database);
+    if (!user) return reply;
+    return presentTaskTypes(await taskTypesForOrganization(database, user.organization.id));
+  });
+
+  app.put<{ Body: UpdateTaskTypesRequest; Reply: TaskTypeListResponse | ApiErrorResponse }>("/settings/task-types", { schema: { body: taskTypesBody } }, async (request, reply) => {
+    const user = await requireUser(request, reply, database);
+    if (!user) return reply;
+    if (!canConfigureOrganization(user)) return reply.status(403).send({ error: "forbidden", message: "Типы задач может настраивать только администратор." });
+    if (!request.body.taskTypes.some((item) => item.isActive)) return reply.status(400).send({ error: "active_task_type_required", message: "Оставьте хотя бы один активный тип задачи." });
+
+    const existing = await taskTypesForOrganization(database, user.organization.id);
+    const existingById = new Map(existing.map((item) => [item.id, item]));
+    if (request.body.taskTypes.some((item) => item.id && !existingById.has(item.id))) {
+      return reply.status(404).send({ error: "task_type_not_found", message: "Один из типов задач не найден." });
+    }
+
+    await database.client.$transaction(request.body.taskTypes.map((item, position) => item.id
+      ? database.client.taskType.update({ where: { id: item.id }, data: { name: item.name.trim(), baseKind: item.baseKind, isActive: item.isActive, position } })
+      : database.client.taskType.create({ data: { organizationId: user.organization.id, key: `custom-${randomUUID()}`, name: item.name.trim(), baseKind: item.baseKind, isActive: item.isActive, position } })));
+    await database.client.activityEvent.create({ data: { organizationId: user.organization.id, authorId: user.id, category: "CHANGE", title: "Типы задач обновлены" } });
+    return presentTaskTypes(await taskTypesForOrganization(database, user.organization.id));
+  });
+
   app.get<{ Reply: WorkspaceSettingsResponse | ApiErrorResponse }>("/settings", async (request, reply) => {
     const user = await requireUser(request, reply, database);
     if (!user) return reply;

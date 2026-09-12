@@ -16,7 +16,7 @@ interface ApiProperty {
   id: string; code: string; title: string; address: string | null; district: string | null;
   category: "APARTMENT" | "HOUSE" | "LAND" | "COMMERCIAL"; market: "PRIMARY" | "SECONDARY";
   operation: "SALE" | "RENT"; status: "AVAILABLE" | "RESERVED" | "SOLD"; price: number;
-  currency: "USD" | "EUR"; rooms: string | null; area: number; floor: number | null;
+  currency: "USD" | "EUR" | "UAH"; rooms: string | null; area: number; floor: number | null;
   totalFloors: number | null; landArea: number | null; project: string | null; developer: string | null;
   description: string | null; imageUrl: string | null; updatedAt: string;
 }
@@ -258,7 +258,7 @@ function ErrorState({ onRetry }: { onRetry: () => Promise<void> }) { return <div
 function EmptyState({ onReset, hasFilters }: { onReset: () => void; hasFilters: boolean }) { return <div className={styles.emptyState}><span><UiIcon name="search" /></span><h3>{hasFilters ? "Объекты не найдены" : "Каталог пока пуст"}</h3><p>{hasFilters ? "Измените параметры поиска или сбросьте фильтры." : "Добавьте объект или включите демонстрационный каталог."}</p>{hasFilters && <button type="button" onClick={onReset}>Сбросить фильтры</button>}</div>; }
 
 export function formatPrice(property: Pick<PropertyListing, "price" | "currency" | "operation">) {
-  const symbol = property.currency === "USD" ? "$" : "€";
+  const symbol = property.currency === "USD" ? "$" : property.currency === "EUR" ? "€" : "₴";
   const value = new Intl.NumberFormat("ru-RU").format(property.price);
   return property.operation === "Аренда" ? `${symbol}${value} / мес.` : `${symbol}${value}`;
 }

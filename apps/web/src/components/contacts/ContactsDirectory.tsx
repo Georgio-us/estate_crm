@@ -105,7 +105,7 @@ async function requestContactActivities(contactId: string): Promise<ActivityEven
 
 export function ContactsDirectory() {
   const user = useCurrentUser();
-  const { contacts: taskContacts, deals: taskDeals, assignees: teamAssignees, createTask, reloadTasks } = useTasks();
+  const { contacts: taskContacts, deals: taskDeals, assignees: teamAssignees, taskTypes, createTask, reloadTasks } = useTasks();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [dealsById, setDealsById] = useState<Map<string, RelatedDeal>>(() => new Map());
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
@@ -386,7 +386,7 @@ export function ContactsDirectory() {
       {selectedContact && <ContactDrawer key={selectedContact.id} contact={selectedContact} contacts={contacts} deals={selectedDeals} activities={selectedActivities} assignees={teamAssignees} canManage={user.organization.role !== "MANAGER"} onSave={saveContact} onAddNote={addContactNote} onLinkContact={linkRelatedContact} onUnlinkContact={unlinkRelatedContact} onCreateDeal={() => { void openDealCreation(selectedContact.id).catch(() => undefined); }} onCreateTask={() => setTaskContactId(selectedContact.id)} onArchive={() => runBulkAction("archive", [selectedContact.id])} onRestore={() => runBulkAction("restore", [selectedContact.id])} onDelete={() => runBulkAction("delete", [selectedContact.id])} onClose={() => setSelectedId(null)} />}
       {isCreating && <NewContactModal onCreate={createContact} onClose={() => setIsCreating(false)} assignees={teamAssignees} />}
       {dealContactId && dealStages[0] && <NewDealModal initialContactId={dealContactId} initialStageId={dealStages[0].id} stages={dealStages} contacts={contacts.map((item) => ({ id: item.id, name: item.name, phone: item.phone || null, source: item.source, assigneeId: item.assigneeId, dealCount: item.dealIds.length }))} assignees={teamAssignees} onCreate={createDeal} onClose={() => setDealContactId(null)} />}
-      {taskContactId && <NewTaskModal initialContactId={taskContactId} contacts={taskContacts} deals={taskDeals} assignees={teamAssignees} currentUserId={user.id} onCreate={async (draft) => { await createTask(draft); await refreshContacts(taskContactId); }} onClose={() => setTaskContactId(null)} />}
+      {taskContactId && <NewTaskModal initialContactId={taskContactId} contacts={taskContacts} deals={taskDeals} assignees={teamAssignees} taskTypes={taskTypes} currentUserId={user.id} onCreate={async (draft) => { await createTask(draft); await refreshContacts(taskContactId); }} onClose={() => setTaskContactId(null)} />}
       {notice && <div className={styles.notice} role="status">{notice}</div>}
     </section>
   );
