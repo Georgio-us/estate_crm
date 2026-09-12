@@ -236,6 +236,43 @@ test("updating a contact rejects an invalid email", async () => {
   await app.close();
 });
 
+test("admin archives several contacts only when they have no active deals", async () => {
+  const contactIds = [
+    "201f180c-d032-49a0-8aa7-04db19095eb2",
+    "14a292bd-d84e-447c-b71a-aa185b809b88",
+  ];
+  const writes: string[] = [];
+  const client: Record<string, any> = {
+    session: {
+      async findUnique() {
+        return { id: "session-1", expiresAt: new Date(Date.now() + 60_000), user: sessionUser };
+      },
+    },
+    contact: {
+      async findMany() {
+        return contactIds.map((id, index) => ({ id, name: `Контакт ${index + 1}`, _count: { deals: 0, relatedDeals: 0 } }));
+      },
+      async updateMany() { writes.push("contacts-archived"); },
+    },
+    activityEvent: { async createMany() { writes.push("history-created"); } },
+  };
+  client.$transaction = async (callback: (transaction: typeof client) => unknown) => callback(client);
+  const database = { client, async ping() {}, async disconnect() {} } as unknown as DatabaseConnection;
+
+  const app = await buildApp(config, database);
+  const response = await app.inject({
+    method: "POST",
+    url: "/contacts/archive",
+    headers: { cookie: "estate_crm_session=test-token" },
+    payload: { contactIds },
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().archived, 2);
+  assert.deepEqual(writes, ["history-created", "contacts-archived"]);
+  await app.close();
+});
+
 test("linking contacts creates one symmetric relation and history for both contacts", async () => {
   const firstId = "201f180c-d032-49a0-8aa7-04db19095eb2";
   const secondId = "14a292bd-d84e-447c-b71a-aa185b809b88";

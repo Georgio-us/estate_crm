@@ -37,7 +37,7 @@ const propertyTypes = ["Квартира", "Дом", "Участок", "Комм
 const districts = ["Приморский", "Киевский", "Пересыпский", "Хаджибейский"];
 const roomOptions = ["1", "2", "3", "4+"];
 const historyPageSize = 7;
-const sourceLabels: Record<Deal["source"], string> = { Meta: "Meta", Website: "Сайт", Manual: "Не указан" };
+const sourceLabels: Record<Deal["source"], string> = { Meta: "Meta", Website: "Сайт", Call: "Звонок", Referral: "Рекомендация", Manual: "Не указан" };
 
 const activityIcons: Record<ActivityCategory, string> = {
   note: "≡",
@@ -446,7 +446,7 @@ function PropertySelect({ label, icon, value, placeholder, options, onChange }: 
 }
 
 function SourceSelect({ value, onChange }: { value: Deal["source"]; onChange: (value: Deal["source"]) => void }) {
-  return <label className={styles.propertyRow}><span className={styles.propertyLabel}><i>↗</i>Источник</span><select value={value} onChange={(event) => onChange(event.target.value as Deal["source"])}><option value="Manual">Не указан</option><option value="Meta">Meta</option><option value="Website">Сайт</option></select></label>;
+  return <label className={styles.propertyRow}><span className={styles.propertyLabel}><i>↗</i>Источник</span><select value={value} onChange={(event) => onChange(event.target.value as Deal["source"])}><option value="Manual">Не указан</option><option value="Meta">Meta</option><option value="Website">Сайт</option><option value="Call">Звонок</option><option value="Referral">Рекомендация</option></select></label>;
 }
 
 function AssigneeSelect({ value, options, onChange }: { value: string; options: Array<{ id: string; name: string }>; onChange: (value: string) => void }) {

@@ -18,7 +18,7 @@ function optionalText(value: string | null | undefined): string | null {
   return value?.trim() || null;
 }
 
-const sourceLabels = { META: "Meta", WEBSITE: "Сайт", MANUAL: "Не указан" } as const;
+const sourceLabels = { META: "Meta", WEBSITE: "Сайт", CALL: "Звонок", REFERRAL: "Рекомендация", MANUAL: "Не указан" } as const;
 
 function describeChange(label: string, previous: string | null, next: string | null): string | null {
   if ((previous ?? "") === (next ?? "")) return null;
@@ -36,6 +36,7 @@ function contactInclude(assigneeId?: string) {
     relationsAsA: { ...(assigneeId ? { where: { contactB: { assigneeId } } } : {}), include: { contactB: { select: { id: true, name: true, phone: true } } } },
     relationsAsB: { ...(assigneeId ? { where: { contactA: { assigneeId } } } : {}), include: { contactA: { select: { id: true, name: true, phone: true } } } },
     tasks: { where: { status: "ACTIVE" as const, ...(assigneeId ? { assigneeId } : {}) }, orderBy: [{ dueDate: "asc" as const }, { dueTime: "asc" as const }], take: 1, select: { id: true, title: true, dueDate: true, dueTime: true } },
+    activities: { where: { category: { in: ["NOTE" as const, "TASK" as const] } }, orderBy: { createdAt: "desc" as const }, take: 1, select: { createdAt: true } },
   };
 }
 
@@ -45,7 +46,9 @@ function mapContact(contact: {
   phone: string | null;
   email: string | null;
   telegram: string | null;
-  source: "META" | "WEBSITE" | "MANUAL";
+  source: "META" | "WEBSITE" | "CALL" | "REFERRAL" | "MANUAL";
+  status: "ACTIVE" | "ARCHIVED";
+  archivedAt: Date | null;
   comment: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -55,8 +58,9 @@ function mapContact(contact: {
   relationsAsA?: Array<{ label: string | null; contactB: { id: string; name: string; phone: string | null } }>;
   relationsAsB?: Array<{ label: string | null; contactA: { id: string; name: string; phone: string | null } }>;
   tasks?: Array<{ id: string; title: string; dueDate: Date | null; dueTime: string | null }>;
+  activities?: Array<{ createdAt: Date }>;
 }): ContactRecord {
-  const { deals: primaryDeals, relatedDeals, relationsAsA, relationsAsB, tasks, ...record } = contact;
+  const { deals: primaryDeals, relatedDeals, relationsAsA, relationsAsB, tasks, activities, ...record } = contact;
   const deals = Array.from(new Map([
     ...(primaryDeals ?? []),
     ...(relatedDeals?.map((link) => link.deal) ?? []),
@@ -70,6 +74,8 @@ function mapContact(contact: {
       ...(relationsAsB?.map((relation) => ({ ...relation.contactA, label: relation.label })) ?? []),
     ],
     nextTask: tasks?.[0] ? { ...tasks[0], dueDate: tasks[0].dueDate?.toISOString().slice(0, 10) ?? null } : null,
+    lastContactAt: activities?.[0]?.createdAt.toISOString() ?? null,
+    archivedAt: contact.archivedAt?.toISOString() ?? null,
     createdAt: contact.createdAt.toISOString(),
     updatedAt: contact.updatedAt.toISOString(),
   };
@@ -80,16 +86,17 @@ export async function registerContactRoutes(
   database: DatabaseConnection,
 ): Promise<void> {
   app.get<{
-    Querystring: { q?: string };
+    Querystring: { q?: string; view?: "active" | "archived" | "all" };
     Reply: ContactListResponse | ApiErrorResponse;
   }>("/contacts", async (request, reply) => {
     const user = await requireUser(request, reply, database);
     if (!user) return reply;
 
     const query = request.query.q?.trim();
+    const statusScope = request.query.view === "all" ? {} : { status: request.query.view === "archived" ? "ARCHIVED" as const : "ACTIVE" as const };
     const contacts = await database.client.contact.findMany({
       where: query ? {
-        AND: [contactScope(user), {
+        AND: [contactScope(user), statusScope, {
           OR: [
             { name: { contains: query, mode: "insensitive" } },
             { phone: { contains: query } },
@@ -97,7 +104,7 @@ export async function registerContactRoutes(
             { telegram: { contains: query, mode: "insensitive" } },
           ],
         }],
-      } : contactScope(user),
+      } : { ...contactScope(user), ...statusScope },
       include: contactInclude(hasOrganizationWideDataAccess(user) ? undefined : user.id),
       orderBy: { createdAt: "desc" },
       take: 200,
@@ -123,7 +130,7 @@ export async function registerContactRoutes(
           phone: { type: "string", minLength: 1, maxLength: 50 },
           email: { type: "string", format: "email", maxLength: 320 },
           telegram: { type: "string", maxLength: 100 },
-          source: { type: "string", enum: ["META", "WEBSITE", "MANUAL"] },
+          source: { type: "string", enum: ["META", "WEBSITE", "CALL", "REFERRAL", "MANUAL"] },
           assigneeId: { anyOf: [{ type: "string", format: "uuid" }, { type: "null" }] },
           comment: { type: "string", maxLength: 5_000 },
         },
@@ -204,7 +211,7 @@ export async function registerContactRoutes(
           phone: { type: "string", minLength: 1, maxLength: 50 },
           email: { anyOf: [{ type: "string", format: "email", maxLength: 320 }, { type: "null" }] },
           telegram: { anyOf: [{ type: "string", maxLength: 100 }, { type: "null" }] },
-          source: { type: "string", enum: ["META", "WEBSITE", "MANUAL"] },
+          source: { type: "string", enum: ["META", "WEBSITE", "CALL", "REFERRAL", "MANUAL"] },
           assigneeId: { anyOf: [{ type: "string", format: "uuid" }, { type: "null" }] },
           comment: { anyOf: [{ type: "string", maxLength: 5_000 }, { type: "null" }] },
         },
@@ -288,6 +295,69 @@ export async function registerContactRoutes(
     }
 
     return { contact: mapContact(contact) };
+  });
+
+  const bulkContactBody = {
+    type: "object",
+    additionalProperties: false,
+    required: ["contactIds"],
+    properties: { contactIds: { type: "array", minItems: 1, maxItems: 100, uniqueItems: true, items: { type: "string", format: "uuid" } } },
+  } as const;
+
+  app.post<{ Body: { contactIds: string[] }; Reply: { archived: number } | ApiErrorResponse }>("/contacts/archive", {
+    schema: { body: bulkContactBody },
+  }, async (request, reply) => {
+    const user = await requireUser(request, reply, database);
+    if (!user) return reply;
+    if (!hasOrganizationWideDataAccess(user)) return reply.status(403).send({ error: "forbidden", message: "Архивировать контакты может только администратор или руководитель." });
+    const contacts = await database.client.contact.findMany({
+      where: { id: { in: request.body.contactIds }, organizationId: user.organization.id, status: "ACTIVE" },
+      select: {
+        id: true,
+        name: true,
+        _count: {
+          select: {
+            deals: { where: { status: "ACTIVE" } },
+            relatedDeals: { where: { deal: { status: "ACTIVE" } } },
+          },
+        },
+      },
+    });
+    if (contacts.length !== request.body.contactIds.length) return reply.status(404).send({ error: "contact_not_found", message: "Один или несколько контактов не найдены." });
+    const busyContact = contacts.find((contact) => contact._count.deals + contact._count.relatedDeals > 0);
+    if (busyContact) return reply.status(409).send({ error: "active_deals", message: `У контакта «${busyContact.name}» есть активная сделка. Сначала закройте её.` });
+    const archivedAt = new Date();
+    await database.client.$transaction(async (transaction) => {
+      await transaction.activityEvent.createMany({ data: contacts.map((contact) => ({ organizationId: user.organization.id, contactId: contact.id, authorId: user.id, category: "CHANGE" as const, title: "Контакт перенесён в архив" })) });
+      await transaction.contact.updateMany({ where: { id: { in: request.body.contactIds }, organizationId: user.organization.id, status: "ACTIVE" }, data: { status: "ARCHIVED", archivedAt } });
+    });
+    return { archived: contacts.length };
+  });
+
+  app.post<{ Body: { contactIds: string[] }; Reply: { restored: number } | ApiErrorResponse }>("/contacts/restore", {
+    schema: { body: bulkContactBody },
+  }, async (request, reply) => {
+    const user = await requireUser(request, reply, database);
+    if (!user) return reply;
+    if (!hasOrganizationWideDataAccess(user)) return reply.status(403).send({ error: "forbidden", message: "Восстанавливать контакты может только администратор или руководитель." });
+    const result = await database.client.contact.updateMany({ where: { id: { in: request.body.contactIds }, organizationId: user.organization.id, status: "ARCHIVED" }, data: { status: "ACTIVE", archivedAt: null } });
+    if (result.count !== request.body.contactIds.length) return reply.status(404).send({ error: "contact_not_found", message: "Один или несколько архивных контактов не найдены." });
+    return { restored: result.count };
+  });
+
+  app.delete<{ Body: { contactIds: string[] }; Reply: { deleted: number } | ApiErrorResponse }>("/contacts", {
+    schema: { body: bulkContactBody },
+  }, async (request, reply) => {
+    const user = await requireUser(request, reply, database);
+    if (!user) return reply;
+    if (!hasOrganizationWideDataAccess(user)) return reply.status(403).send({ error: "forbidden", message: "Удалять контакты может только администратор или руководитель." });
+    const contacts = await database.client.contact.findMany({ where: { id: { in: request.body.contactIds }, organizationId: user.organization.id, status: "ARCHIVED" }, select: { id: true } });
+    if (contacts.length !== request.body.contactIds.length) return reply.status(409).send({ error: "not_archived", message: "Безвозвратно удалить можно только контакты из архива." });
+    await database.client.$transaction(async (transaction) => {
+      await transaction.deal.deleteMany({ where: { contactId: { in: request.body.contactIds }, organizationId: user.organization.id, status: { not: "ACTIVE" } } });
+      await transaction.contact.deleteMany({ where: { id: { in: request.body.contactIds }, organizationId: user.organization.id, status: "ARCHIVED" } });
+    });
+    return { deleted: contacts.length };
   });
 
   app.post<{

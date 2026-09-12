@@ -23,7 +23,7 @@ interface NewDealModalProps {
   initialStageId: string;
   initialContactId?: string;
   stages: Array<{ id: string; title: string }>;
-  contacts: Array<{ id: string; name: string; phone: string | null; source?: Deal["source"]; dealCount?: number }>;
+  contacts: Array<{ id: string; name: string; phone: string | null; source?: Deal["source"]; assigneeId?: string; dealCount?: number }>;
   assignees: Array<{ id: string; name: string }>;
   onCreate: (draft: NewDealDraft) => Promise<void>;
   onClose: () => void;
@@ -44,7 +44,7 @@ export function NewDealModal({ initialStageId, initialContactId, stages, contact
   const [contactName, setContactName] = useState(initialContact?.name || "");
   const [phone, setPhone] = useState(initialContact?.phone || "");
   const [stageId, setStageId] = useState(initialStageId);
-  const [assigneeId, setAssigneeId] = useState("");
+  const [assigneeId, setAssigneeId] = useState(initialContact?.assigneeId || "");
   const [title, setTitle] = useState("");
   const [source, setSource] = useState<Deal["source"]>(initialContact?.source || "Manual");
   const [operation, setOperation] = useState<Deal["operation"]>("Покупка");
@@ -118,6 +118,7 @@ export function NewDealModal({ initialStageId, initialContactId, stages, contact
     setContactName(contact?.name || "");
     setPhone(contact?.phone || "");
     setSource(contact?.source || "Manual");
+    setAssigneeId(contact?.assigneeId || "");
   }
 
   return (
@@ -207,6 +208,8 @@ export function NewDealModal({ initialStageId, initialContactId, stages, contact
                     <option value="Manual">Не указан</option>
                     <option value="Meta">Meta</option>
                     <option value="Website">Сайт</option>
+                    <option value="Call">Звонок</option>
+                    <option value="Referral">Рекомендация</option>
                   </select>
                 </label>
                 <label>

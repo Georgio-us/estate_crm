@@ -54,6 +54,7 @@ test("manager list queries include own records and the shared active unassigned 
   assert.deepEqual(captured.deals, { status: "ACTIVE", organizationId, OR: [{ assigneeId: managerId }, { assigneeId: null, status: "ACTIVE" }] });
   assert.deepEqual(captured.contacts, {
     organizationId,
+    status: "ACTIVE",
     OR: [
       { assigneeId: managerId },
       { deals: { some: { status: "ACTIVE", assigneeId: managerId } } },
@@ -142,7 +143,7 @@ test("lead can see organization data but cannot change administrator settings", 
   const settings = await app.inject({ method: "GET", url: "/pipeline/configuration", headers: { cookie: "estate_crm_session=test-token" } });
 
   assert.equal(contacts.statusCode, 200);
-  assert.deepEqual(contactsWhere, { organizationId });
+  assert.deepEqual(contactsWhere, { organizationId, status: "ACTIVE" });
   assert.equal(settings.statusCode, 403);
   await app.close();
 });

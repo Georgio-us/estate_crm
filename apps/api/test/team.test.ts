@@ -129,6 +129,9 @@ test("admin suspension immediately revokes sessions and Telegram delivery", asyn
     async updateMany({ data }: { data: { active: boolean } }) { writes.push(`telegram-${data.active ? "active" : "inactive"}`); },
     async findUnique() { return null; },
   };
+  client.contact = { async updateMany() { writes.push("contacts-unassigned"); } };
+  client.deal = { async updateMany() { writes.push("deals-unassigned"); } };
+  client.task = { async updateMany() { writes.push("tasks-unassigned"); } };
   client.activityEvent = { async create() { writes.push("audit-created"); } };
   client.$transaction = async (callback: (transaction: typeof client) => unknown) => callback(client);
 
@@ -139,7 +142,16 @@ test("admin suspension immediately revokes sessions and Telegram delivery", asyn
   });
 
   assert.equal(response.statusCode, 200);
-  assert.deepEqual(writes, ["profile-updated", "membership-SUSPENDED", "sessions-revoked", "telegram-inactive", "audit-created"]);
+  assert.deepEqual(writes, [
+    "profile-updated",
+    "membership-SUSPENDED",
+    "sessions-revoked",
+    "telegram-inactive",
+    "contacts-unassigned",
+    "deals-unassigned",
+    "tasks-unassigned",
+    "audit-created",
+  ]);
   await app.close();
 });
 

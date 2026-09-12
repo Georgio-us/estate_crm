@@ -22,7 +22,14 @@ enum MembershipStatus {
 enum ContactSource {
   META
   WEBSITE
+  CALL
+  REFERRAL
   MANUAL
+}
+
+enum ContactStatus {
+  ACTIVE
+  ARCHIVED
 }
 
 enum DealOperation {
@@ -211,6 +218,8 @@ model Contact {
   email             String?
   telegram          String?
   source            ContactSource        @default(MANUAL)
+  status            ContactStatus        @default(ACTIVE)
+  archivedAt        DateTime?            @map("archived_at")
   assigneeId        String?              @map("assignee_id") @db.Uuid
   comment           String?
   createdAt         DateTime             @default(now()) @map("created_at")
@@ -225,7 +234,7 @@ model Contact {
   tasks             Task[]
   integrationEvents IntegrationEvent[]
 
-  @@index([organizationId, createdAt])
+  @@index([organizationId, status, createdAt])
   @@index([organizationId, normalizedPhone])
   @@index([assigneeId])
   @@map("contacts")

@@ -288,6 +288,9 @@ export async function registerTeamRoutes(app: FastifyInstance, config: ApiConfig
       if (nextStatus === "SUSPENDED") {
         await transaction.session.deleteMany({ where: { userId: membership.userId } });
         await transaction.telegramRecipient.updateMany({ where: { organizationId, userId: membership.userId }, data: { active: false } });
+        await transaction.contact.updateMany({ where: { organizationId, assigneeId: membership.userId }, data: { assigneeId: null } });
+        await transaction.deal.updateMany({ where: { organizationId, assigneeId: membership.userId }, data: { assigneeId: null } });
+        await transaction.task.updateMany({ where: { organizationId, assigneeId: membership.userId, status: "ACTIVE" }, data: { assigneeId: null } });
       } else if (membership.status === "SUSPENDED") {
         await transaction.telegramRecipient.updateMany({ where: { organizationId, userId: membership.userId }, data: { active: true } });
       }

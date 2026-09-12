@@ -16,6 +16,8 @@ interface DealCardProps {
 const sourceLabels: Record<Deal["source"], string> = {
   Meta: "Meta",
   Website: "Сайт",
+  Call: "Звонок",
+  Referral: "Рекомендация",
   Manual: "Не указан",
 };
 

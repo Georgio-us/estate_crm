@@ -65,7 +65,6 @@ export function PropertiesCatalog() {
   const [category, setCategory] = useState<"all" | PropertyCategory>("all");
   const [developer, setDeveloper] = useState("all");
   const [construction, setConstruction] = useState("all");
-  const [operation, setOperation] = useState("all");
   const [district, setDistrict] = useState("all");
   const [maxPrice, setMaxPrice] = useState("");
   const [demoEnabled, setDemoEnabled] = useState(true);
@@ -117,11 +116,10 @@ export function PropertiesCatalog() {
         && matchesSearch
         && (section === "all" || (section === "primary" ? property.market === "Первичный" : property.market === "Вторичный"))
         && (category === "all" || property.category === category)
-        && (section !== "secondary" || operation === "all" || property.operation === operation)
         && (district === "all" || property.district === district)
         && (!maxPrice || property.price <= Number(maxPrice));
     });
-  }, [catalogProperties, category, district, maxPrice, operation, search, section]);
+  }, [catalogProperties, category, district, maxPrice, search, section]);
 
   const visibleProjects = useMemo(() => {
     if (section === "secondary" || (category !== "all" && category !== "Квартира")) return [];
@@ -137,7 +135,7 @@ export function PropertiesCatalog() {
     });
   }, [category, construction, developer, district, maxPrice, search, section, shownProjects]);
 
-  const hasFilters = Boolean(search || section !== "all" || category !== "all" || developer !== "all" || construction !== "all" || operation !== "all" || district !== "all" || maxPrice);
+  const hasFilters = Boolean(search || section !== "all" || category !== "all" || developer !== "all" || construction !== "all" || district !== "all" || maxPrice);
   const resultTotal = visibleProjects.length + visibleProperties.length;
   const catalogTotal = shownProjects.filter((project) => project.units.some((unit) => unit.status === "Доступен")).length
     + catalogProperties.filter((property) => property.status === "Доступен").length;
@@ -162,7 +160,7 @@ export function PropertiesCatalog() {
   }
 
   function resetFilters() {
-    setSearch(""); setSection("all"); setCategory("all"); setDeveloper("all"); setConstruction("all"); setOperation("all"); setDistrict("all"); setMaxPrice("");
+    setSearch(""); setSection("all"); setCategory("all"); setDeveloper("all"); setConstruction("all"); setDistrict("all"); setMaxPrice("");
   }
 
   function changeSection(next: CatalogSection) {
@@ -170,7 +168,6 @@ export function PropertiesCatalog() {
     setCategory("all");
     setDeveloper("all");
     setConstruction("all");
-    setOperation("all");
   }
 
   return (
@@ -197,7 +194,6 @@ export function PropertiesCatalog() {
           <FilterSelect label="Тип" value={category} onChange={(value) => setCategory(value as "all" | PropertyCategory)} options={section === "primary" ? ["Квартира", "Коммерция"] : ["Квартира", "Дом", "Участок", "Коммерция"]} />
           {section === "primary" && <FilterSelect label="Застройщик" value={developer} onChange={setDeveloper} options={developers} />}
           {section === "primary" && <FilterSelect label="Строительство" value={construction} onChange={setConstruction} options={["Строится", "Сдан"]} />}
-          {section === "secondary" && <FilterSelect label="Операция" value={operation} onChange={setOperation} options={["Продажа", "Аренда"]} />}
           <FilterSelect label="Район" value={district} onChange={setDistrict} options={["Приморский", "Киевский", "Пересыпский", "Хаджибейский"]} />
           <label className={styles.filter}><span>Цена до</span><input inputMode="numeric" value={maxPrice} onChange={(event) => setMaxPrice(event.target.value.replace(/\D/g, ""))} placeholder="Любая" /></label>
           <span className={styles.resultCount}>{resultTotal} из {catalogTotal}</span>

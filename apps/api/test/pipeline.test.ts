@@ -156,6 +156,7 @@ test("pipeline configuration protects a populated stage from deletion", async ()
 
 test("deal creation links an existing contact inside the current organization", async () => {
   let createdData: Record<string, unknown> = {};
+  const contactAssigneeId = "4b9ae340-7445-4a14-8b1d-d030c882c776";
   const now = new Date("2026-09-07T18:00:00.000Z");
   const database = {
     client: {
@@ -164,8 +165,9 @@ test("deal creation links an existing contact inside the current organization", 
         async findFirst() { return { id: stageId, pipelineId, pipeline: { id: pipelineId, organizationId: user.memberships[0].organization.id } }; },
       },
       contact: {
-        async findFirst() { return { id: contactId, name: "Тестовый контакт", phone: "+380938849214", source: "MANUAL" as const }; },
+        async findFirst() { return { id: contactId, name: "Тестовый контакт", phone: "+380938849214", source: "MANUAL" as const, assigneeId: contactAssigneeId }; },
       },
+      membership: { async findUnique() { return { status: "ACTIVE" as const }; } },
       deal: {
         async create({ data }: { data: Record<string, unknown> }) {
           createdData = data;
@@ -202,6 +204,7 @@ test("deal creation links an existing contact inside the current organization", 
   assert.equal(response.statusCode, 201);
   assert.equal(createdData.organizationId, user.memberships[0].organization.id);
   assert.equal(createdData.contactId, contactId);
+  assert.equal(createdData.assigneeId, contactAssigneeId);
   assert.equal(createdData.title, "Квартира у моря");
   assert.equal(response.json().deal.number, 1001);
   await app.close();

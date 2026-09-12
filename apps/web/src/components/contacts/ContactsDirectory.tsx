@@ -18,9 +18,9 @@ export interface RelatedDeal {
   stageColor: string;
 }
 
-const sourceLabels: Record<Deal["source"], string> = { Meta: "Meta", Website: "Сайт", Manual: "Не указан" };
-const sourceFromApi = { META: "Meta", WEBSITE: "Website", MANUAL: "Manual" } as const;
-const sourceToApi = { Meta: "META", Website: "WEBSITE", Manual: "MANUAL" } as const;
+const sourceLabels: Record<Deal["source"], string> = { Meta: "Meta", Website: "Сайт", Call: "Звонок", Referral: "Рекомендация", Manual: "Не указан" };
+const sourceFromApi = { META: "Meta", WEBSITE: "Website", CALL: "Call", REFERRAL: "Referral", MANUAL: "Manual" } as const;
+const sourceToApi = { Meta: "META", Website: "WEBSITE", Call: "CALL", Referral: "REFERRAL", Manual: "MANUAL" } as const;
 const operationToApi = { Покупка: "PURCHASE", Аренда: "RENT", Продажа: "SALE" } as const;
 
 interface ApiContact {
@@ -30,6 +30,9 @@ interface ApiContact {
   email: string | null;
   telegram: string | null;
   source: keyof typeof sourceFromApi;
+  status: "ACTIVE" | "ARCHIVED";
+  archivedAt: string | null;
+  lastContactAt: string | null;
   assignee: { id: string; name: string } | null;
   dealIds?: string[];
   relatedContacts?: Array<{ id: string; name: string; phone: string | null; label: string | null }>;
@@ -48,11 +51,12 @@ function mapApiContact(contact: ApiContact): Contact {
     email: contact.email || undefined,
     telegram: contact.telegram || undefined,
     source: sourceFromApi[contact.source],
+    status: contact.status,
     assigneeId: contact.assignee?.id,
     assignee: contact.assignee?.name || "Не назначен",
     dealIds: contact.dealIds || [],
     relatedContacts: contact.relatedContacts || [],
-    lastContact: "Нет взаимодействий",
+    lastContact: contact.lastContactAt ? new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(contact.lastContactAt)) : "Нет взаимодействий",
     nextTask: contact.nextTask ? `${contact.nextTask.title}${contact.nextTask.dueTime ? ` · ${contact.nextTask.dueTime}` : ""}` : undefined,
     comment: contact.comment || undefined,
     createdAt: new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", year: "numeric" }).format(new Date(contact.createdAt)),
@@ -79,8 +83,8 @@ function mapRelatedDeal(contact: ApiContact, item: NonNullable<ApiContact["deals
   };
 }
 
-async function requestContacts(): Promise<{ contacts: Contact[]; dealsById: Map<string, RelatedDeal> }> {
-  const response = await fetch("/api/crm/contacts", { cache: "no-store" });
+async function requestContacts(view: "active" | "archived" = "active"): Promise<{ contacts: Contact[]; dealsById: Map<string, RelatedDeal> }> {
+  const response = await fetch(`/api/crm/contacts?view=${view}`, { cache: "no-store" });
   if (!response.ok) throw new Error("Не удалось загрузить контакты.");
   const payload = await response.json() as { contacts: ApiContact[] };
   const dealsById = new Map<string, RelatedDeal>();
@@ -111,6 +115,11 @@ export function ContactsDirectory() {
   const [dealContactId, setDealContactId] = useState<string | null>(null);
   const [dealStages, setDealStages] = useState<Array<{ id: string; title: string }>>([]);
   const [taskContactId, setTaskContactId] = useState<string | null>(null);
+  const [view, setView] = useState<"active" | "archived">("active");
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [notice, setNotice] = useState("");
 
   const [search, setSearch] = useState("");
   const [assignee, setAssignee] = useState("all");
@@ -119,12 +128,12 @@ export function ContactsDirectory() {
 
   useEffect(() => {
     let active = true;
-    void requestContacts().then(
+    void requestContacts(view).then(
       (result) => { if (active) { setContacts(result.contacts); setDealsById(result.dealsById); setLoadState("ready"); } },
       () => { if (active) setLoadState("error"); },
     );
     return () => { active = false; };
-  }, []);
+  }, [view]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -139,7 +148,7 @@ export function ContactsDirectory() {
   async function retryContacts() {
     setLoadState("loading");
     try {
-      const result = await requestContacts();
+      const result = await requestContacts(view);
       setContacts(result.contacts);
       setDealsById(result.dealsById);
       setLoadState("ready");
@@ -149,7 +158,7 @@ export function ContactsDirectory() {
   }
 
   async function refreshContacts(contactId?: string) {
-    const result = await requestContacts();
+    const result = await requestContacts(view);
     setContacts(result.contacts);
     setDealsById(result.dealsById);
     if (contactId) {
@@ -172,9 +181,28 @@ export function ContactsDirectory() {
   }, [assignee, contacts, dealFilter, search, source]);
 
   const hasFilters = Boolean(search || assignee !== "all" || source !== "all" || dealFilter !== "all");
-  const assigneeOptions = useMemo(() => Array.from(new Set(contacts.map((contact) => contact.assignee))), [contacts]);
+  const assigneeOptions = useMemo(() => ["Не назначен", ...teamAssignees.map((item) => item.name)], [teamAssignees]);
 
   function resetFilters() { setSearch(""); setAssignee("all"); setSource("all"); setDealFilter("all"); }
+
+  function changeView(next: "active" | "archived") {
+    setView(next); setSelectionMode(false); setSelectedIds([]); setSelectedId(null); resetFilters();
+  }
+
+  async function runBulkAction(action: "archive" | "restore" | "delete", ids = selectedIds) {
+    if (!ids.length || bulkBusy) return;
+    if (action === "delete" && !window.confirm(`Безвозвратно удалить выбранные контакты (${ids.length}) и связанные с ними закрытые сделки?`)) return;
+    setBulkBusy(true); setNotice("");
+    try {
+      const response = await fetch(action === "delete" ? "/api/crm/contacts" : `/api/crm/contacts/${action}`, { method: action === "delete" ? "DELETE" : "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ contactIds: ids }) });
+      const payload = await response.json() as { message?: string };
+      if (!response.ok) throw new Error(payload.message || "Не удалось изменить контакты.");
+      setSelectedId(null); setSelectedIds([]); setSelectionMode(false);
+      await retryContacts();
+      setNotice(action === "archive" ? "Контакты перенесены в архив" : action === "restore" ? "Контакты восстановлены" : "Контакты удалены");
+    } catch (cause) { setNotice(cause instanceof Error ? cause.message : "Не удалось изменить контакты."); }
+    finally { setBulkBusy(false); }
+  }
 
   async function createContact(draft: NewContactDraft) {
     const response = await fetch("/api/crm/contacts", {
@@ -240,6 +268,7 @@ export function ContactsDirectory() {
     if (!response.ok || !payload.activity) throw new Error(payload.message || "Не удалось сохранить примечание.");
     const activity = mapApiActivity(payload.activity);
     setContactActivities((current) => ({ ...current, [contactId]: [activity, ...(current[contactId] || [])] }));
+    setContacts((current) => current.map((contact) => contact.id === contactId ? { ...contact, lastContact: activity.occurredAt } : contact));
   }
 
   async function linkRelatedContact(relatedContactId: string, label?: string) {
@@ -309,29 +338,35 @@ export function ContactsDirectory() {
 
       <div className={styles.content}>
         <div className={styles.heading}>
-          <div><span className={styles.eyebrow}>Клиентская база</span><h2>Все контакты</h2><p>Люди и компании независимо от количества обращений</p></div>
+          <div>
+            <span className={styles.eyebrow}>Клиентская база</span>
+            <h2>{view === "active" ? "Все контакты" : "Архив контактов"}</h2>
+            <p>{view === "active" ? "Люди и компании независимо от количества обращений" : "Контакты без активных сделок, убранные из рабочей базы"}</p>
+          </div>
           <span>{contacts.length} контактов</span>
         </div>
 
         <section className={styles.workspace}>
           <div className={styles.filters}>
             <Filter label="Ответственный" value={assignee} onChange={setAssignee} options={assigneeOptions} />
-            <Filter label="Источник" value={source} onChange={setSource} options={["Meta", "Website", "Manual"]} optionLabels={{ Website: "Сайт", Manual: "Не указан" }} />
+            <Filter label="Источник" value={source} onChange={setSource} options={["Meta", "Website", "Call", "Referral", "Manual"]} optionLabels={{ Website: "Сайт", Call: "Звонок", Referral: "Рекомендация", Manual: "Не указан" }} />
             <Filter label="Сделки" value={dealFilter} onChange={setDealFilter} options={["with", "without"]} optionLabels={{ with: "Есть активные", without: "Без сделок" }} />
+            {user.organization.role !== "MANAGER" && <button className={styles.archiveViewButton} type="button" onClick={() => changeView(view === "active" ? "archived" : "active")}>{view === "active" ? "Архив" : "Активные контакты"}</button>}
             <span className={styles.resultCount}>{visibleContacts.length} из {contacts.length}</span>
             {hasFilters && <button className={styles.resetButton} type="button" onClick={resetFilters}>Сбросить</button>}
           </div>
 
           {loadState === "loading" ? <StatusState symbol="…" title="Загружаем контакты" text="Получаем клиентскую базу из CRM." /> : loadState === "error" ? <StatusState symbol="!" title="Не удалось загрузить контакты" text="Проверьте соединение с сервером и попробуйте ещё раз." action="Повторить" onAction={() => { void retryContacts(); }} /> : visibleContacts.length ? (
             <div className={styles.tableRegion}>
+              {user.organization.role !== "MANAGER" && <div className={styles.bulkToolbar}><button type="button" onClick={() => { setSelectionMode((current) => !current); setSelectedIds([]); }}>{selectionMode ? "Отменить выбор" : "Режим выбора"}</button>{selectionMode && <><span>Выбрано: {selectedIds.length}</span><button type="button" disabled={!selectedIds.length || bulkBusy} onClick={() => { void runBulkAction(view === "active" ? "archive" : "restore"); }}>{view === "active" ? "В архив" : "Восстановить"}</button>{view === "archived" && <button className={styles.dangerButton} type="button" disabled={!selectedIds.length || bulkBusy} onClick={() => { void runBulkAction("delete"); }}>Удалить навсегда</button>}</>}</div>}
               <div className={styles.tableWrap}>
                 <table>
                   <thead><tr><th>Контакт</th><th>Телефон и каналы</th><th>Ответственный</th><th>Источник</th><th>Активные сделки</th><th>Последний контакт</th><th>Ближайшая задача</th></tr></thead>
                   <tbody>{visibleContacts.map((contact) => {
                     const relatedDeals = contact.dealIds.map((id) => dealsById.get(id)).filter(Boolean);
                     return (
-                      <tr key={contact.id} onClick={() => setSelectedId(contact.id)}>
-                        <td><div className={styles.contactCell}><span className={styles.avatar}>{initials(contact.name)}</span><span><strong>{contact.name}</strong><small>Добавлен {contact.createdAt}</small></span></div></td>
+                      <tr key={contact.id} onClick={() => selectionMode ? setSelectedIds((current) => current.includes(contact.id) ? current.filter((id) => id !== contact.id) : [...current, contact.id]) : setSelectedId(contact.id)}>
+                        <td><div className={styles.contactCell}>{selectionMode && <input type="checkbox" checked={selectedIds.includes(contact.id)} readOnly aria-label={`Выбрать ${contact.name}`} />}<span className={styles.avatar}>{initials(contact.name)}</span><span><strong>{contact.name}</strong><small>Добавлен {contact.createdAt}</small></span></div></td>
                         <td>{contact.phone ? <a href={`tel:${contact.phone.replaceAll(" ", "")}`} onClick={(event) => event.stopPropagation()}>{contact.phone}</a> : <span className={styles.muted}>Телефон не указан</span>}<small>{contact.telegram || contact.email || "Дополнительных каналов нет"}</small></td>
                         <td><span className={styles.assigneeDot}>{contact.assignee === "Не назначен" ? "—" : contact.assignee.slice(0, 1)}</span>{contact.assignee}</td>
                         <td><span className={styles.sourceTag}>{sourceLabels[contact.source]}</span></td>
@@ -348,10 +383,11 @@ export function ContactsDirectory() {
         </section>
       </div>
 
-      {selectedContact && <ContactDrawer key={selectedContact.id} contact={selectedContact} contacts={contacts} deals={selectedDeals} activities={selectedActivities} assignees={teamAssignees} onSave={saveContact} onAddNote={addContactNote} onLinkContact={linkRelatedContact} onUnlinkContact={unlinkRelatedContact} onCreateDeal={() => { void openDealCreation(selectedContact.id).catch(() => undefined); }} onCreateTask={() => setTaskContactId(selectedContact.id)} onClose={() => setSelectedId(null)} />}
+      {selectedContact && <ContactDrawer key={selectedContact.id} contact={selectedContact} contacts={contacts} deals={selectedDeals} activities={selectedActivities} assignees={teamAssignees} canManage={user.organization.role !== "MANAGER"} onSave={saveContact} onAddNote={addContactNote} onLinkContact={linkRelatedContact} onUnlinkContact={unlinkRelatedContact} onCreateDeal={() => { void openDealCreation(selectedContact.id).catch(() => undefined); }} onCreateTask={() => setTaskContactId(selectedContact.id)} onArchive={() => runBulkAction("archive", [selectedContact.id])} onRestore={() => runBulkAction("restore", [selectedContact.id])} onDelete={() => runBulkAction("delete", [selectedContact.id])} onClose={() => setSelectedId(null)} />}
       {isCreating && <NewContactModal onCreate={createContact} onClose={() => setIsCreating(false)} assignees={teamAssignees} />}
-      {dealContactId && dealStages[0] && <NewDealModal initialContactId={dealContactId} initialStageId={dealStages[0].id} stages={dealStages} contacts={contacts.map((item) => ({ id: item.id, name: item.name, phone: item.phone || null, source: item.source, dealCount: item.dealIds.length }))} assignees={teamAssignees} onCreate={createDeal} onClose={() => setDealContactId(null)} />}
-      {taskContactId && <NewTaskModal initialContactId={taskContactId} contacts={taskContacts} deals={taskDeals} assignees={teamAssignees} currentUserId={user.id} onCreate={async (draft) => { await createTask(draft); const items = await requestContactActivities(taskContactId); setContactActivities((current) => ({ ...current, [taskContactId]: items })); }} onClose={() => setTaskContactId(null)} />}
+      {dealContactId && dealStages[0] && <NewDealModal initialContactId={dealContactId} initialStageId={dealStages[0].id} stages={dealStages} contacts={contacts.map((item) => ({ id: item.id, name: item.name, phone: item.phone || null, source: item.source, assigneeId: item.assigneeId, dealCount: item.dealIds.length }))} assignees={teamAssignees} onCreate={createDeal} onClose={() => setDealContactId(null)} />}
+      {taskContactId && <NewTaskModal initialContactId={taskContactId} contacts={taskContacts} deals={taskDeals} assignees={teamAssignees} currentUserId={user.id} onCreate={async (draft) => { await createTask(draft); await refreshContacts(taskContactId); }} onClose={() => setTaskContactId(null)} />}
+      {notice && <div className={styles.notice} role="status">{notice}</div>}
     </section>
   );
 }

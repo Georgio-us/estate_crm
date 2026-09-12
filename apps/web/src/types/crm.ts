@@ -21,7 +21,7 @@ export interface Deal {
   preferredProject?: string;
   comment?: string;
   createdAt?: string;
-  source: "Meta" | "Website" | "Manual";
+  source: "Meta" | "Website" | "Call" | "Referral" | "Manual";
   status?: DealStatus;
   closedAt?: string;
   assigneeId?: string;
@@ -88,6 +88,7 @@ export interface Contact {
   email?: string;
   telegram?: string;
   source: Deal["source"];
+  status: "ACTIVE" | "ARCHIVED";
   assigneeId?: string;
   assignee: string;
   dealIds: string[];

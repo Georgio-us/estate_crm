@@ -34,8 +34,8 @@ import { PipelineDataTransfer, type ImportedDealRow } from "./PipelineDataTransf
 import { PipelineColumn } from "./PipelineColumn";
 import styles from "./pipeline.module.css";
 
-const sourceFromApi = { META: "Meta", WEBSITE: "Website", MANUAL: "Manual" } as const;
-const sourceToApi = { Meta: "META", Website: "WEBSITE", Manual: "MANUAL" } as const;
+const sourceFromApi = { META: "Meta", WEBSITE: "Website", CALL: "Call", REFERRAL: "Referral", MANUAL: "Manual" } as const;
+const sourceToApi = { Meta: "META", Website: "WEBSITE", Call: "CALL", Referral: "REFERRAL", Manual: "MANUAL" } as const;
 const operationFromApi = { PURCHASE: "Покупка", RENT: "Аренда", SALE: "Продажа" } as const;
 const operationToApi = { Покупка: "PURCHASE", Аренда: "RENT", Продажа: "SALE" } as const;
 
@@ -54,6 +54,8 @@ function importedSource(value: string | undefined): keyof typeof sourceFromApi {
   const normalized = value?.trim().toLocaleLowerCase("ru-RU");
   if (normalized === "meta") return "META";
   if (normalized === "website" || normalized === "сайт") return "WEBSITE";
+  if (normalized === "call" || normalized === "звонок") return "CALL";
+  if (normalized === "referral" || normalized === "рекомендация") return "REFERRAL";
   return "MANUAL";
 }
 
@@ -128,7 +130,7 @@ interface ApiDeal {
 }
 
 interface ApiStage { id: string; title: string; color: string; position: number; deals: ApiDeal[] }
-interface ContactOption { id: string; name: string; phone: string | null; source: Deal["source"]; dealIds?: string[]; dealCount?: number }
+interface ContactOption { id: string; name: string; phone: string | null; source: Deal["source"]; assignee?: { id: string; name: string } | null; assigneeId?: string; dealIds?: string[]; dealCount?: number }
 
 function mapApiDeal(deal: ApiDeal): Deal {
   return {
@@ -176,7 +178,7 @@ async function requestContactOptions(): Promise<ContactOption[]> {
   const response = await fetch("/api/crm/contacts", { cache: "no-store" });
   if (!response.ok) throw new Error("Не удалось загрузить контакты.");
   const payload = await response.json() as { contacts: Array<Omit<ContactOption, "source"> & { source: keyof typeof sourceFromApi }> };
-  return payload.contacts.map((contact) => ({ ...contact, source: sourceFromApi[contact.source], dealCount: contact.dealIds?.length || 0 }));
+  return payload.contacts.map((contact) => ({ ...contact, source: sourceFromApi[contact.source], assigneeId: contact.assignee?.id, dealCount: contact.dealIds?.length || 0 }));
 }
 
 async function requestDealActivities(dealId: string): Promise<ActivityEvent[]> {
@@ -918,7 +920,7 @@ export function PipelineBoard() {
         </div>
       </div>
 
-      {filtersOpen && <section className={styles.filterPanel}><label><span>Ответственный</span><select value={assigneeFilter} onChange={(event) => setAssigneeFilter(event.target.value)}>{assignees.map((assignee) => <option key={assignee}>{assignee}</option>)}</select></label><label><span>Источник</span><select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value)}><option>Все</option><option value="Meta">Meta</option><option value="Website">Сайт</option><option value="Manual">Не указан</option></select></label><label><span>Задача</span><select value={taskFilter} onChange={(event) => setTaskFilter(event.target.value)}><option>Все</option><option value="overdue">Просрочена</option><option value="due">На сегодня</option><option value="normal">Запланирована</option><option>Без задачи</option></select></label><div><strong>{visibleDealsCount}</strong><span>найдено</span></div><button type="button" disabled={!activeFilters} onClick={resetFilters}>Сбросить</button></section>}
+      {filtersOpen && <section className={styles.filterPanel}><label><span>Ответственный</span><select value={assigneeFilter} onChange={(event) => setAssigneeFilter(event.target.value)}>{assignees.map((assignee) => <option key={assignee}>{assignee}</option>)}</select></label><label><span>Источник</span><select value={sourceFilter} onChange={(event) => setSourceFilter(event.target.value)}><option>Все</option><option value="Meta">Meta</option><option value="Website">Сайт</option><option value="Call">Звонок</option><option value="Referral">Рекомендация</option><option value="Manual">Не указан</option></select></label><label><span>Задача</span><select value={taskFilter} onChange={(event) => setTaskFilter(event.target.value)}><option>Все</option><option value="overdue">Просрочена</option><option value="due">На сегодня</option><option value="normal">Запланирована</option><option>Без задачи</option></select></label><div><strong>{visibleDealsCount}</strong><span>найдено</span></div><button type="button" disabled={!activeFilters} onClick={resetFilters}>Сбросить</button></section>}
 
       {loadState === "loading" ? <div className={styles.emptyDeals}><strong>Загружаем воронку…</strong><span>Получаем этапы и сделки из CRM.</span></div> : loadState === "error" ? <div className={styles.emptyDeals}><strong>Не удалось загрузить воронку</strong><span>Проверьте соединение и обновите страницу.</span></div> : pipelineView === "active" && view === "board" ? <DndContext
         id="pipeline-dnd"

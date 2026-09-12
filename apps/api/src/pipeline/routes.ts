@@ -30,7 +30,7 @@ function optionalText(value: string | undefined): string | null {
   return value?.trim() || null;
 }
 
-const sourceLabels = { META: "Meta", WEBSITE: "Сайт", MANUAL: "Не указан" } as const;
+const sourceLabels = { META: "Meta", WEBSITE: "Сайт", CALL: "Звонок", REFERRAL: "Рекомендация", MANUAL: "Не указан" } as const;
 const operationLabels = { PURCHASE: "Покупка", RENT: "Аренда", SALE: "Продажа" } as const;
 const lifecycleLabels = { ACTIVE: "Сделка возвращена в работу", WON: "Сделка успешно завершена", LOST: "Сделка закрыта как неуспешная", ARCHIVED: "Сделка перенесена в архив" } as const;
 
@@ -54,7 +54,7 @@ function mapDeal(deal: {
   paymentMethod: "FULL" | "INSTALLMENT" | null;
   neighborhood: string | null;
   preferredProject: string | null;
-  source: "META" | "WEBSITE" | "MANUAL";
+  source: "META" | "WEBSITE" | "CALL" | "REFERRAL" | "MANUAL";
   status: "ACTIVE" | "WON" | "LOST" | "ARCHIVED";
   position: number;
   closedAt: Date | null;
@@ -319,7 +319,7 @@ export async function registerPipelineRoutes(
           paymentMethod: { type: "string", enum: ["FULL", "INSTALLMENT"] },
           neighborhood: { type: "string", maxLength: 160 },
           preferredProject: { type: "string", maxLength: 300 },
-          source: { type: "string", enum: ["META", "WEBSITE", "MANUAL"] },
+          source: { type: "string", enum: ["META", "WEBSITE", "CALL", "REFERRAL", "MANUAL"] },
           comment: { type: "string", maxLength: 5_000 },
         },
         anyOf: [{ required: ["contactId"] }, { required: ["contactName", "phone"] }],
@@ -333,12 +333,6 @@ export async function registerPipelineRoutes(
       return reply.status(403).send({ error: "forbidden", message: "Менеджер может назначать сделки только себе." });
     }
 
-    const stage = await database.client.pipelineStage.findFirst({
-      where: { id: request.body.stageId, pipeline: { organizationId: user.organization.id } },
-      include: { pipeline: true },
-    });
-    if (!stage) return reply.status(400).send({ error: "invalid_stage", message: "Этап воронки не найден." });
-
     if (request.body.assigneeId) {
       const membership = await database.client.membership.findUnique({
         where: { organizationId_userId: { organizationId: user.organization.id, userId: request.body.assigneeId } },
@@ -348,8 +342,14 @@ export async function registerPipelineRoutes(
       }
     }
 
+    const stage = await database.client.pipelineStage.findFirst({
+      where: { id: request.body.stageId, pipeline: { organizationId: user.organization.id } },
+      include: { pipeline: true },
+    });
+    if (!stage) return reply.status(400).send({ error: "invalid_stage", message: "Этап воронки не найден." });
+
     let contact = request.body.contactId ? await database.client.contact.findFirst({
-      where: { id: request.body.contactId, ...contactScope(user) },
+      where: { id: request.body.contactId, status: "ACTIVE", ...contactScope(user) },
     }) : null;
 
     if (!contact && request.body.contactId) {
@@ -366,8 +366,10 @@ export async function registerPipelineRoutes(
       });
       if (contact) {
         return reply.status(409).send({
-          error: "contact_already_exists",
-          message: hasOrganizationWideDataAccess(user)
+          error: contact.status === "ARCHIVED" ? "contact_archived" : "contact_already_exists",
+          message: contact.status === "ARCHIVED"
+            ? `Контакт «${contact.name}» находится в архиве. Восстановите его перед созданием сделки.`
+            : hasOrganizationWideDataAccess(user)
             ? `Контакт «${contact.name}» с таким телефоном уже существует. Выберите его в поле «Контакт из базы».`
             : "Контакт с таким телефоном уже существует. Обратитесь к руководителю.",
         });
@@ -386,6 +388,16 @@ export async function registerPipelineRoutes(
       }
     }
 
+    const inheritedAssigneeId = request.body.assigneeId ?? contact.assigneeId;
+    if (!request.body.assigneeId && inheritedAssigneeId) {
+      const membership = await database.client.membership.findUnique({
+        where: { organizationId_userId: { organizationId: user.organization.id, userId: inheritedAssigneeId } },
+      });
+      if (!membership || membership.status !== "ACTIVE") {
+        return reply.status(400).send({ error: "invalid_assignee", message: "Ответственный не входит в эту организацию." });
+      }
+    }
+
     const dealSource = request.body.contactId ? contact.source : request.body.source ?? "MANUAL";
     const deal = await database.client.deal.create({
       data: {
@@ -393,7 +405,7 @@ export async function registerPipelineRoutes(
         pipelineId: stage.pipelineId,
         stageId: stage.id,
         contactId: contact.id,
-        assigneeId: effectiveAssigneeId(user, request.body.assigneeId),
+        assigneeId: effectiveAssigneeId(user, inheritedAssigneeId),
         title: optionalText(request.body.title) ?? optionalText(request.body.request) ?? contact.name,
         request: optionalText(request.body.request) ?? "",
         budget: optionalText(request.body.budget),
@@ -456,7 +468,7 @@ export async function registerPipelineRoutes(
           paymentMethod: { anyOf: [{ type: "string", enum: ["FULL", "INSTALLMENT"] }, { type: "null" }] },
           neighborhood: { anyOf: [{ type: "string", maxLength: 160 }, { type: "null" }] },
           preferredProject: { anyOf: [{ type: "string", maxLength: 300 }, { type: "null" }] },
-          source: { type: "string", enum: ["META", "WEBSITE", "MANUAL"] },
+          source: { type: "string", enum: ["META", "WEBSITE", "CALL", "REFERRAL", "MANUAL"] },
           comment: { anyOf: [{ type: "string", maxLength: 5_000 }, { type: "null" }] },
         },
       },

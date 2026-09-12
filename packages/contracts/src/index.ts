@@ -207,7 +207,8 @@ export interface UpdateTelegramNotificationPreferencesRequest {
   selectedUserIds: string[];
 }
 
-export type ContactSource = "META" | "WEBSITE" | "MANUAL";
+export type ContactSource = "META" | "WEBSITE" | "CALL" | "REFERRAL" | "MANUAL";
+export type ContactStatus = "ACTIVE" | "ARCHIVED";
 
 export interface ContactAssignee {
   id: string;
@@ -230,6 +231,9 @@ export interface ContactRecord {
   email: string | null;
   telegram: string | null;
   source: ContactSource;
+  status: ContactStatus;
+  archivedAt: string | null;
+  lastContactAt: string | null;
   assignee: ContactAssignee | null;
   dealIds: string[];
   deals: ContactDealSummary[];

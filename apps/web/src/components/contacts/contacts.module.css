@@ -32,6 +32,12 @@
 .filter select { border: 0; outline: 0; background: transparent; color: var(--text); cursor: pointer; font-size: var(--font-size-body-sm); }
 .resultCount { margin-left: auto; color: var(--text-subtle); font-size: var(--font-size-caption); }
 .resetButton { padding: 7px; border: 0; background: transparent; color: #376bbf; cursor: pointer; font-size: var(--font-size-caption); }
+.archiveViewButton { height: var(--control-height); padding: 0 11px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: #fff; color: #4f5f76; cursor: pointer; font-size: var(--font-size-caption); }
+.bulkToolbar { display: flex; min-height: 48px; align-items: center; gap: 10px; border-bottom: 1px solid var(--border); }
+.bulkToolbar button { height: 32px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: #fff; color: var(--text); cursor: pointer; font-size: var(--font-size-caption); }
+.bulkToolbar span { color: var(--text-muted); font-size: var(--font-size-caption); }
+.bulkToolbar .dangerButton { margin-left: auto; border-color: #e1b8b8; color: #a13f3f; }
+.bulkToolbar button:disabled { cursor: default; opacity: .5; }
 
 .tableRegion { position: relative; isolation: isolate; }
 .tableRegion::before {
@@ -88,8 +94,13 @@
 .contactTitleInput:hover { border-bottom-color: var(--border-strong); }
 .contactTitleInput:focus { border-bottom-color: #8eacd9; }
 .headerActions { display: flex; gap: 4px; }
+.contactMenuWrap { position: relative; }
 .headerActions button { display: grid; width: 34px; height: 34px; place-items: center; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text-muted); cursor: pointer; font-size: var(--font-size-heading-sm); }
 .headerActions button:hover { background: var(--surface-muted); }
+.contactMenu { position: absolute; z-index: 8; top: 39px; right: 0; display: grid; width: 220px; overflow: hidden; padding: 5px; border: 1px solid var(--border); border-radius: var(--radius-md); background: #fff; box-shadow: var(--shadow-panel); }
+.contactMenu button { display: block; width: 100%; height: auto; min-height: 36px; padding: 8px 10px; color: var(--text); font-size: var(--font-size-caption); text-align: left; }
+.contactMenu span { padding: 9px 10px; color: var(--text-muted); font-size: var(--font-size-caption); line-height: 1.4; }
+.contactMenu .menuDanger { color: #a13f3f; }
 .drawerWorkspace { display: grid; min-height: 0; flex: 1; grid-template-columns: minmax(350px, 410px) minmax(440px, 1fr); }
 .detailsPane { overflow-y: auto; border-right: 1px solid var(--border); }
 .detailsPane section { padding: 24px 27px; border-bottom: 1px solid var(--border); }
@@ -102,6 +113,7 @@
 .fact input:focus, .fact select:focus { border-color: #a9bee7; background: #fff; box-shadow: var(--shadow-focus); }
 .fact input[aria-invalid="true"] { border-color: #cf7a7a; background: #fff8f8; }
 .fact a { color: #37639f; text-decoration: underline; text-decoration-color: #ccd6e5; text-underline-offset: 3px; }
+.sourceReminder { margin: 3px 0 8px 125px; padding: 8px 9px; border-radius: var(--radius-sm); background: #fff8e7; color: #806326; font-size: var(--font-size-caption); line-height: 1.35; }
 .comment { margin: 0; color: #555551; font-size: var(--font-size-body); line-height: var(--line-height-relaxed); }
 .contactCommentInput { width: 100%; min-height: 80px; padding: 9px 10px; resize: vertical; border: 1px solid var(--border); border-radius: var(--radius-sm); outline: 0; background: #fbfbfa; color: var(--text); font-size: var(--font-size-body-sm); line-height: var(--line-height-relaxed); }
 .contactCommentInput:focus { border-color: #a9bee7; background: #fff; box-shadow: var(--shadow-focus); }
@@ -148,6 +160,7 @@
 .composer > span { display: block; height: 33px; padding: 10px 13px 0; border-bottom: 1px solid var(--border); font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); }
 .composer textarea { width: 100%; min-height: 44px; padding: 9px 13px 3px; resize: none; border: 0; outline: 0; color: var(--text); font-size: var(--font-size-body-sm); }
 .noteError { margin: 0; padding: 0 13px 5px; color: #a33b3b; font-size: var(--font-size-caption); }
+.notice { position: fixed; z-index: 90; right: 24px; bottom: 24px; max-width: min(430px, calc(100vw - 32px)); padding: 12px 15px; border: 1px solid var(--border); border-radius: var(--radius-md); background: #fff; box-shadow: var(--shadow-panel); color: var(--text); font-size: var(--font-size-caption); }
 .composer > div { display: flex; min-height: 33px; align-items: center; justify-content: space-between; padding: 0 8px 7px 11px; }
 .composer button { border: 0; background: transparent; color: var(--text-muted); cursor: pointer; }
 .composer .saveButton { height: 26px; padding: 0 10px; border-radius: var(--radius-sm); background: var(--primary); color: #fff; font-size: var(--font-size-caption); }
@@ -213,6 +226,9 @@
   .filter select { width: 100%; min-width: 0; }
   .resultCount { width: auto; margin-left: 0; }
   .resetButton { justify-self: end; }
+  .archiveViewButton { width: 100%; }
+  .bulkToolbar { flex-wrap: wrap; padding: 8px 16px; }
+  .bulkToolbar .dangerButton { margin-left: 0; }
   .tableRegion { margin-inline: -16px; }
   .tableWrap { overflow: visible; }
   .tableRegion::before { top: 0; }
@@ -233,6 +249,7 @@
   .identity > div { min-width: 0; }
   .headerActions { flex: 0 0 auto; }
   .contactTitleInput { width: 100%; max-width: 100%; min-width: 0; }
+  .contactMenu { position: fixed; top: 82px; right: 14px; }
   .drawerWorkspace { display: block; width: 100%; min-width: 0; overflow: visible; }
   .detailsPane, .activityPane { width: 100%; min-width: 0; overflow: visible; border-right: 0; }
   .activityPane { min-height: 540px; }
@@ -243,6 +260,7 @@
   .modal { width: 100vw; max-height: 94vh; border-radius: var(--radius-lg) var(--radius-lg) 0 0; }
   .modal > footer > span { display: none; }
   .modal > footer div { width: 100%; justify-content: flex-end; }
+  .sourceReminder { margin-left: 0; }
 }
 @media (hover: none) and (pointer: coarse) { .keyboardHint { display: none; } }
 @media (prefers-reduced-motion: reduce) { .drawer { animation: none; } }
