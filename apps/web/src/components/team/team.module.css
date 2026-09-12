@@ -71,7 +71,7 @@
 .modalPrimary:hover {
   background: var(--primary-hover);
 }
-.saveMember:disabled, .saveNotifications:disabled { cursor: default; opacity: .45; }
+.saveMember:disabled { cursor: default; opacity: .45; }
 
 .primaryButton span { margin-right: 5px; }
 
@@ -690,28 +690,7 @@
 .memberAccess input { width: 20px; height: 20px; accent-color: var(--primary); }
 .accessStack { padding: 42px 0 72px; background: var(--surface-workspace); box-shadow: 0 0 0 100vmax var(--surface-workspace); clip-path: inset(0 -100vmax); }
 .accessStack .memberAccess { padding: 0 24px 42px; box-shadow: none; clip-path: none; }
-.notificationPanel { max-width: 820px; margin: 0 auto; padding: 30px 0 0; border-top: 1px solid var(--surface-border); }
-.notificationPanel > header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-5); }
-.notificationPanel h3 { margin: 0 0 5px; }
-.notificationPanel p { margin: 0; color: var(--text-muted); }
-.notificationPanel > a { display: inline-flex; margin-top: 18px; color: var(--primary); font-weight: var(--font-weight-semibold); }
-.connected, .disconnected { padding: 5px 9px; border-radius: var(--radius-pill); font-size: 10px; font-weight: var(--font-weight-semibold); white-space: nowrap; }
-.connected { background: #e8f3eb; color: #3f7853; }
-.disconnected { background: #eeeeeb; color: #777770; }
-.notificationScope { display: grid; grid-template-columns: 1fr 230px; align-items: center; gap: var(--space-5); min-height: 72px; margin-top: 22px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
-.notificationScope select { height: var(--control-height); padding: 0 var(--space-3); border: 1px solid var(--border-strong); border-radius: var(--radius-md); background: var(--surface); }
-.notificationMembers { display: grid; grid-template-columns: 1fr 1fr; border-bottom: 1px solid var(--border); }
-.notificationMembers label, .notificationKinds label { display: flex; align-items: center; gap: 12px; min-height: 62px; border-bottom: 1px solid var(--border); }
-.notificationMembers label:nth-child(odd) { padding-right: 20px; border-right: 1px solid var(--border); }
-.notificationMembers label:nth-child(even) { padding-left: 20px; }
-.notificationMembers label:nth-last-child(-n+2) { border-bottom: 0; }
-.notificationMembers span, .notificationKinds span { display: grid; gap: 2px; }
-.notificationMembers small, .notificationKinds small { color: var(--text-muted); }
-.notificationMembers input, .notificationKinds input { width: 19px; height: 19px; accent-color: var(--primary); }
-.notificationKinds { display: grid; margin-top: 18px; border-top: 1px solid var(--border); }
-.notificationKinds label { justify-content: space-between; }
-.saveNotifications { min-height: var(--control-height); margin-top: 22px; padding: 0 var(--space-4); border: 0; border-radius: var(--radius-md); background: var(--primary); color: #fff; font-weight: var(--font-weight-semibold); cursor: pointer; }
-.notificationFeedback { margin-top: 12px !important; color: #426d50 !important; font-size: var(--font-size-body-sm); }
+.accessStack > section:last-child { max-width: 820px; margin: 0 auto; }
 .suspensionFacts { display: grid; grid-template-columns: 1fr 1fr; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-md); }
 .suspensionFacts span { display: grid; gap: 3px; padding: 16px; color: var(--text-muted); }
 .suspensionFacts span + span { border-left: 1px solid var(--border); }
@@ -793,11 +772,6 @@
   .entityList article { grid-template-columns: 32px 1fr; padding: 14px 0; }
   .entityList time { grid-column: 2; text-align: left; }
   .accessStack { padding-top: 30px; }
-  .notificationPanel { padding-right: 0; padding-left: 0; }
-  .notificationScope { grid-template-columns: 1fr; gap: 8px; padding: 14px 0; }
-  .notificationMembers { grid-template-columns: 1fr; }
-  .notificationMembers label:nth-child(n) { padding: 0; border-right: 0; border-bottom: 1px solid var(--border); }
-  .notificationMembers label:last-child { border-bottom: 0; }
   .modalLayer { align-items: end; padding: 0; }
   .modal { width: 100%; border-radius: 14px 14px 0 0; }
 }

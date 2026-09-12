@@ -58,12 +58,14 @@
 .fieldList { border-top: 1px solid var(--border); }
 .fieldList > div { display: grid; min-height: 58px; grid-template-columns: 22px minmax(120px,1fr) 70px 102px; align-items: center; gap: 9px; border-bottom: 1px solid var(--border); }
 .stageFieldList > div { grid-template-columns: 22px minmax(120px,1fr) 42px 74px 102px; }
-.taskTypeList > div { grid-template-columns: 22px minmax(140px,1fr) minmax(140px,190px) 82px 170px; }
+.taskTypeList > div { grid-template-columns: minmax(140px,1fr) minmax(140px,190px) 82px 90px; }
 .taskTypeList select { min-width: 0; height: 36px; padding: 0 8px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: #fff; }
-.taskTypeList .rowActions button:last-child { width: auto; padding: 0 8px; }
+.archiveTypeButton { min-height: 30px; padding: 0 8px; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text-muted); cursor: pointer; }
+.archiveTypeButton:hover { background: #f0f0ee; }
 .taskTypeList > div:has(.archiveTypeButton) { opacity: 1; }
-.drag { color: #b3b3ae; cursor: grab; }
-.draggingRow { background: #f1f5fc; opacity: .58; }
+.drag { width: 22px; padding: 0; border: 0; background: transparent; color: #b3b3ae; cursor: grab; touch-action: none; }
+.drag:active { cursor: grabbing; }
+.draggingRow { position: relative; z-index: 2; background: #f1f5fc; opacity: .78; }
 .fieldList input { min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text); }
 .fieldType { color: var(--text-subtle); font-size: 10px; }
 .stageColorWrap { position: relative; }
@@ -98,17 +100,39 @@
 .settingsCards article p, .roleCards article p { margin: 0; color: var(--text-muted); line-height: 1.5; }
 .settingsCards article small { margin-top: auto; color: var(--text-subtle); }
 .settingsCards article a { color: var(--primary); }
+.integrationCards { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 18px; padding: 34px 0; }
+.integrationCard { overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-lg); background: #fff; box-shadow: 0 12px 30px rgba(31,35,44,.07); }
+.integrationPreview { position: relative; overflow: hidden; display: flex; min-height: 132px; align-items: flex-end; justify-content: space-between; padding: 24px; color: #fff; }
+.integrationPreview::before { position: absolute; inset: -50%; background: radial-gradient(circle,rgba(255,255,255,.34),transparent 43%); content: ""; transform: translate(-22%,-18%); }
+.integrationPreview svg { position: relative; width: 38px; height: 38px; }
+.integrationPreview strong { position: relative; font-size: var(--font-size-heading-sm); }
+.previewMeta { background: linear-gradient(135deg,#75a8ef,#2375ea 65%); }
+.previewTelegram { background: linear-gradient(135deg,#7ed2ef,#24a9db 65%); }
+.previewInstagram { background: linear-gradient(135deg,#9e53d8,#ef557d 58%,#f5a448); }
+.previewPhone { background: linear-gradient(135deg,#efa575,#df762c 65%); }
+.integrationCardBody { display: flex; min-height: 245px; flex-direction: column; align-items: flex-start; gap: 10px; padding: 24px; }
+.integrationCardBody h3 { margin: 4px 0 0; font-size: var(--font-size-heading-sm); }
+.integrationCardBody p { margin: 0; color: var(--text-muted); line-height: 1.5; }
+.integrationCardBody small { margin-top: auto; color: var(--text-subtle); }
+.integrationCardBody a { color: var(--primary); }
 .statusReady, .statusMuted, .plannedLabel { display: inline-flex; width: fit-content; padding: 5px 9px; border-radius: var(--radius-pill); font-size: 11px; font-weight: var(--font-weight-semibold); }
 .statusReady { background: #e8f4eb; color: #39704a; }
 .statusMuted, .plannedLabel { background: #f0f0ee; color: var(--text-muted); }
 .roleCards article { min-height: 170px; }
 .roleCards article > span { color: var(--text-subtle); font-size: 11px; font-weight: var(--font-weight-semibold); text-transform: uppercase; }
-.memberSettingsList { border-top: 1px solid var(--border); }
-.memberSettingsList article { display: grid; min-height: 78px; grid-template-columns: 42px minmax(0,1fr) auto; align-items: center; gap: 14px; border-bottom: 1px solid var(--border); }
-.memberSettingsList article > div { display: grid; gap: 3px; }
-.memberSettingsList small { color: var(--text-muted); }
-.memberSettingsList a { color: var(--primary); }
 .memberAvatar { display: grid; width: 38px; height: 38px; place-items: center; border-radius: 50%; background: #e8e1d7; color: #685d4d; font-weight: var(--font-weight-heavy); }
+.notificationWorkspace { display: grid; grid-template-columns: 280px minmax(0,1fr); min-height: 560px; margin-top: 34px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: #fff; }
+.notificationWorkspace > nav { padding: 12px; border-right: 1px solid var(--border); }
+.notificationWorkspace > nav button { display: grid; width: 100%; min-height: 68px; grid-template-columns: 38px minmax(0,1fr); align-items: center; gap: 11px; padding: 9px 10px; border: 0; border-radius: var(--radius-md); background: transparent; text-align: left; cursor: pointer; }
+.notificationWorkspace > nav button:hover { background: #f4f4f1; }
+.notificationWorkspace > nav .selectedMember { background: #e9effc; color: #2453a8; }
+.notificationWorkspace > nav button > span:last-child { display: grid; gap: 2px; min-width: 0; }
+.notificationWorkspace > nav small { overflow: hidden; color: var(--text-muted); text-overflow: ellipsis; white-space: nowrap; }
+.notificationEditor { min-width: 0; padding: 28px 34px; }
+.notificationEditor > header { padding-bottom: 24px; }
+.notificationEditor > header > span { color: var(--text-subtle); font-size: 10px; font-weight: var(--font-weight-semibold); letter-spacing: .09em; text-transform: uppercase; }
+.notificationEditor > header h3 { margin: 8px 0 4px; font-size: var(--font-size-heading-md); }
+.notificationEditor > header p { margin: 0; color: var(--text-muted); }
 .explanationBox { margin-top: 30px; padding: 22px 24px; border-radius: var(--radius-lg); background: #f7f8fb; }
 .explanationBox p { margin: 8px 0 0; color: var(--text-muted); line-height: 1.55; }
 .plannedFeatures { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; margin-top: 34px; background: var(--border); border: 1px solid var(--border); }
@@ -155,12 +179,20 @@
 .notice { position: fixed; z-index: 60; right: 24px; bottom: 24px; padding: 12px 16px; border-radius: var(--radius-md); background: #252724; color: #fff; box-shadow: var(--shadow-modal); font-size: var(--font-size-body-sm); }
 
 @media (max-width: 1080px) {
-  .settingsLayout { grid-template-columns: 210px minmax(0,1fr); }
-  .settingsNav { padding-left: 12px; }
+  .settingsLayout { display: block; }
+  .settingsNav { display: flex; gap: 6px; padding: 10px 16px; border-right: 0; border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; }
+  .settingsNav section { display: contents; }
+  .settingsNav section > span { display: none; }
+  .settingsNav button { flex: 0 0 auto; height: 36px; }
+  .content main { width: calc(100% - 32px); }
   .crmWorkspace { grid-template-columns: 320px minmax(0,1fr); }
   .moduleEditor { padding-left: 28px; }
   .dataActions { grid-template-columns: 1fr; }
-  .settingsCards, .roleCards { grid-template-columns: 1fr; }
+  .settingsCards, .roleCards, .integrationCards { grid-template-columns: 1fr; }
+  .notificationWorkspace { display: block; }
+  .notificationWorkspace > nav { display: flex; gap: 7px; border-right: 0; border-bottom: 1px solid var(--border); overflow-x: auto; }
+  .notificationWorkspace > nav button { width: 190px; flex: 0 0 190px; }
+  .notificationEditor { padding: 24px 18px; }
   .dataActions .actionCard { min-height: 112px; border-right: 0; border-bottom: 1px solid var(--border); }
 }
 
@@ -198,16 +230,14 @@
   .fieldHeader > div span { display: none; }
   .fieldList > div { grid-template-columns: 18px minmax(90px,1fr) 70px; }
   .stageFieldList > div { grid-template-columns: 18px minmax(90px,1fr) 38px 68px; }
-  .taskTypeList > div { grid-template-columns: 18px minmax(120px,1fr); padding: 10px 0; }
-  .taskTypeList select, .taskTypeList .fieldType { grid-column: 2 / -1; }
+  .taskTypeList > div { grid-template-columns: minmax(120px,1fr); padding: 10px 0; }
+  .taskTypeList select, .taskTypeList .fieldType { grid-column: 1 / -1; }
   .stageFieldList .rowActions { grid-column: 2 / -1; }
   .colorPalette { right: -62px; }
   .rowActions { grid-column: 2 / -1; justify-content: flex-start; padding-bottom: 8px; }
   .moduleEditor > footer span { display: none; }
   .formGrid, .securityCards, .dataActions { grid-template-columns: 1fr; }
   .settingsCards, .roleCards, .plannedFeatures { grid-template-columns: 1fr; }
-  .memberSettingsList article { grid-template-columns: 38px minmax(0,1fr); padding: 12px 0; }
-  .memberSettingsList article a { grid-column: 2; }
   .actionCard { min-height: 116px; padding: 22px 0; border-right: 0; border-bottom: 1px solid var(--border); background: transparent; }
   .notificationTable { overflow-x: auto; }
   .notificationTable > header, .notificationTable > div { min-width: 620px; }
