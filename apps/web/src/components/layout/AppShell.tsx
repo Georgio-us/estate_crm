@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { AuthBoundary } from "@/components/auth/AuthBoundary";
 import { useCurrentUser } from "@/components/auth/AuthContext";
 import { TasksProvider } from "@/components/tasks/TasksContext";
 import { Sidebar } from "./Sidebar";
+import { reportPilotEvent } from "@/lib/pilot";
 import styles from "./layout.module.css";
 
 interface AppShellProps {
@@ -44,6 +45,7 @@ function WorkspaceShell({ children, pathname, collapsed, mobileOpen, onMobileOpe
   onToggle: () => void;
 }) {
   const user = useCurrentUser();
+  useEffect(() => { reportPilotEvent("page_view", pathname); }, [pathname]);
   const forbidden = (pathname.startsWith("/team") && user.organization.role === "MANAGER")
     || ((pathname.startsWith("/settings") || pathname.startsWith("/subscription")) && user.organization.role !== "ADMIN");
 

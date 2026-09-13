@@ -184,6 +184,7 @@ model Organization {
   telegramRecipients     TelegramRecipient[]
   telegramConnectTokens  TelegramConnectToken[]
   teamInvitations        TeamInvitation[]
+  pilotEvents            PilotEvent[]
 
   @@map("organizations")
 }
@@ -225,6 +226,7 @@ model User {
   telegramSelections      TelegramRecipientSelection[] @relation("TelegramSelectedUser")
   receivedTeamInvitations TeamInvitation[]             @relation("TeamInvitationUser")
   sentTeamInvitations     TeamInvitation[]             @relation("TeamInvitationSender")
+  pilotEvents            PilotEvent[]
 
   @@map("users")
 }
@@ -627,10 +629,34 @@ model Session {
   lastSeenAt DateTime @default(now()) @map("last_seen_at")
   createdAt  DateTime @default(now()) @map("created_at")
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pilotEvents PilotEvent[]
 
   @@index([userId])
   @@index([expiresAt])
   @@map("sessions")
+}
+
+model PilotEvent {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  userId         String?      @map("user_id") @db.Uuid
+  sessionId      String?      @map("session_id") @db.Uuid
+  kind           String
+  name           String
+  path           String?
+  device         String?
+  statusCode     Int?         @map("status_code")
+  durationMs     Int?         @map("duration_ms")
+  requestId      String?      @map("request_id")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  session        Session?     @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, kind, createdAt])
+  @@index([userId, createdAt])
+  @@map("pilot_events")
 }
 
 model Membership {

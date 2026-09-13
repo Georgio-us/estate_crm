@@ -6,10 +6,11 @@ import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, v
 import { CSS } from "@dnd-kit/utilities";
 import { useCallback, useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { MemberNotificationSettings } from "@/components/notifications/MemberNotificationSettings";
+import { PilotDiagnostics } from "./PilotDiagnostics";
 import { UiIcon, type UiIconName } from "@/components/ui/UiIcon";
 import styles from "./settings.module.css";
 
-type Section = "workspace" | "pipeline" | "tasks" | "integrations" | "team" | "notifications" | "security" | "data" | "profile";
+type Section = "workspace" | "pipeline" | "tasks" | "integrations" | "team" | "notifications" | "pilot" | "security" | "data" | "profile";
 type PipelineStageDraft = { id?: string; key: string; title: string; color: string; dealCount: number };
 type ApiTaskKind = "CALL" | "MEETING" | "MESSAGE" | "OTHER";
 type TaskTypeDraft = { id?: string; key: string; name: string; baseKind: ApiTaskKind; position: number; isActive: boolean; taskCount: number };
@@ -24,7 +25,7 @@ const navigation: { group: string; items: { id: Section; label: string; icon: st
   { group: "Рабочие процессы", items: [{ id: "pipeline", label: "Воронка", icon: "▥" }, { id: "tasks", label: "Типы задач", icon: "✓" }] },
   { group: "Коммуникации", items: [{ id: "integrations", label: "Интеграции", icon: "↗" }, { id: "notifications", label: "Уведомления", icon: "◉" }] },
   { group: "Команда", items: [{ id: "team", label: "Участники и роли", icon: "♙" }] },
-  { group: "Система", items: [{ id: "security", label: "Безопасность", icon: "⌾" }, { id: "data", label: "Данные", icon: "⇅" }] },
+  { group: "Система", items: [{ id: "pilot", label: "Диагностика пилота", icon: "◷" }, { id: "security", label: "Безопасность", icon: "⌾" }, { id: "data", label: "Данные", icon: "⇅" }] },
   { group: "Личное", items: [{ id: "profile", label: "Мой профиль", icon: "○" }] },
 ];
 
@@ -45,6 +46,7 @@ export function SettingsCenter() {
         {section === "integrations" && <IntegrationSettings />}
         {section === "notifications" && <NotificationsSettings />}
         {section === "team" && <TeamAccessSettings />}
+        {section === "pilot" && <PilotDiagnostics />}
         {section === "security" && <SecuritySettings onNotify={notify} />}
         {section === "data" && <DataSettings />}
         {section === "profile" && <ProfileSettings onNotify={notify} />}

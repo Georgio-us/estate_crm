@@ -12,6 +12,7 @@ import { registerContactRoutes } from "./contacts/routes.js";
 import { registerDashboardRoutes } from "./dashboard/routes.js";
 import { registerIntegrationRoutes } from "./integrations/routes.js";
 import { registerPipelineRoutes } from "./pipeline/routes.js";
+import { registerPilotRequestTracking, registerPilotRoutes } from "./pilot/routes.js";
 import { registerPropertyRoutes } from "./properties/routes.js";
 import { registerPropertySelectionRoutes } from "./property-selections/routes.js";
 import { registerSettingsRoutes } from "./settings/routes.js";
@@ -31,6 +32,7 @@ export async function buildApp(
   });
 
   await app.register(cookie);
+  registerPilotRequestTracking(app, database);
 
   app.addHook("onClose", async () => {
     await database.disconnect();
@@ -69,6 +71,7 @@ export async function buildApp(
   await registerPropertySelectionRoutes(app, database);
   await registerSettingsRoutes(app, database);
   await registerDashboardRoutes(app, database);
+  await registerPilotRoutes(app, database);
   await registerIntegrationRoutes(app, database);
   await registerTelegramRoutes(app, config, database);
 
