@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import type {
   ApiErrorResponse,
   CreateTeamInvitationRequest,
+  OffboardTeamMemberRequest,
   TeamAuditResponse,
   TeamAssigneeListResponse,
   TeamInvitationLinkResponse,
@@ -17,6 +18,7 @@ import type { DatabaseConnection } from "@estate-crm/database";
 import type { ApiConfig } from "../config.js";
 import { requireUser } from "../auth/require-user.js";
 import { parsePhone } from "../lib/phone.js";
+import { emailConfigured, sendTransactionalEmail } from "../lib/email.js";
 import { createInvitationToken, hashInvitationToken, invitationExpiry } from "./invitations.js";
 
 function localDateAndTime(now: Date, timezone: string) {
@@ -55,7 +57,19 @@ const memberUpdateBody = {
     phone: { anyOf: [{ type: "string", maxLength: 40 }, { type: "null" }] },
     role: { type: "string", enum: ["ADMIN", "LEAD", "MANAGER"] },
     status: { type: "string", enum: ["ACTIVE", "SUSPENDED"] },
-    confirmAssignedWork: { type: "boolean" },
+  },
+} as const;
+
+const offboardBody = {
+  type: "object",
+  additionalProperties: false,
+  required: ["action", "dealAssignments"],
+  properties: {
+    action: { type: "string", enum: ["SUSPEND", "DELETE"] },
+    dealAssignments: { type: "array", maxItems: 1000, items: {
+      type: "object", additionalProperties: false, required: ["dealId", "assigneeId"],
+      properties: { dealId: { type: "string", format: "uuid" }, assigneeId: { type: "string", format: "uuid" } },
+    } },
   },
 } as const;
 
@@ -86,6 +100,22 @@ function canManageNotifications(actor: { id: string; organization: { role: "ADMI
 
 function invitationUrl(config: ApiConfig, token: string) {
   return `${config.webAppUrl || "http://localhost:3000"}/invite/${token}`;
+}
+
+async function deliverInvitation(app: FastifyInstance, config: ApiConfig, input: { id: string; email: string; name: string; token: string }): Promise<boolean> {
+  if (!emailConfigured(config)) return false;
+  try {
+    await sendTransactionalEmail(config, {
+      to: input.email,
+      subject: "Приглашение в Estate CRM",
+      text: `Здравствуйте, ${input.name}!\n\nВас пригласили в Estate CRM. Откройте ссылку, чтобы создать пароль и получить доступ:\n${invitationUrl(config, input.token)}\n\nСсылка действует 7 дней и используется один раз. Если вы не ожидали приглашения, проигнорируйте это письмо.`,
+      idempotencyKey: `invitation-${input.id}-${hashInvitationToken(input.token).slice(0, 16)}`,
+    });
+    return true;
+  } catch (error) {
+    app.log.warn({ invitationId: input.id, error }, "Invitation email delivery failed");
+    return false;
+  }
 }
 
 export async function registerTeamRoutes(app: FastifyInstance, config: ApiConfig, database: DatabaseConnection): Promise<void> {
@@ -235,12 +265,6 @@ export async function registerTeamRoutes(app: FastifyInstance, config: ApiConfig
             id: true,
             name: true,
             phone: true,
-            _count: {
-              select: {
-                assignedDeals: { where: { organizationId, status: "ACTIVE" } },
-                assignedTasks: { where: { organizationId, status: "ACTIVE" } },
-              },
-            },
           },
         },
       },
@@ -261,11 +285,10 @@ export async function registerTeamRoutes(app: FastifyInstance, config: ApiConfig
       const activeAdmins = await database.client.membership.count({ where: { organizationId, role: "ADMIN", status: "ACTIVE" } });
       if (activeAdmins <= 1) return reply.status(409).send({ error: "last_admin", message: "В команде должен остаться хотя бы один активный администратор." });
     }
-    const assignedWork = membership.user._count.assignedDeals + membership.user._count.assignedTasks;
-    if (membership.status === "ACTIVE" && nextStatus === "SUSPENDED" && assignedWork > 0 && !request.body.confirmAssignedWork) {
+    if (membership.status === "ACTIVE" && nextStatus === "SUSPENDED") {
       return reply.status(409).send({
-        error: "assigned_work_confirmation_required",
-        message: `У сотрудника осталось ${membership.user._count.assignedDeals} активных сделок и ${membership.user._count.assignedTasks} задач. Подтвердите отключение.`,
+        error: "offboarding_required",
+        message: "Отключите доступ через передачу сделок в карточке сотрудника.",
       });
     }
 
@@ -285,13 +308,7 @@ export async function registerTeamRoutes(app: FastifyInstance, config: ApiConfig
     await database.client.$transaction(async (transaction) => {
       await transaction.user.update({ where: { id: membership.userId }, data: { name: nextName, phone: nextPhone } });
       await transaction.membership.update({ where: { id: membership.id }, data: { role: nextRole, status: nextStatus } });
-      if (nextStatus === "SUSPENDED") {
-        await transaction.session.deleteMany({ where: { userId: membership.userId } });
-        await transaction.telegramRecipient.updateMany({ where: { organizationId, userId: membership.userId }, data: { active: false } });
-        await transaction.contact.updateMany({ where: { organizationId, assigneeId: membership.userId }, data: { assigneeId: null } });
-        await transaction.deal.updateMany({ where: { organizationId, assigneeId: membership.userId }, data: { assigneeId: null } });
-        await transaction.task.updateMany({ where: { organizationId, assigneeId: membership.userId, status: "ACTIVE" }, data: { assigneeId: null } });
-      } else if (membership.status === "SUSPENDED") {
+      if (membership.status === "SUSPENDED" && nextStatus === "ACTIVE") {
         await transaction.telegramRecipient.updateMany({ where: { organizationId, userId: membership.userId }, data: { active: true } });
       }
       if (nextRole === "MANAGER") {
@@ -306,6 +323,76 @@ export async function registerTeamRoutes(app: FastifyInstance, config: ApiConfig
       });
     });
     return { ok: true };
+  });
+
+  app.post<{ Params: { memberId: string }; Body: OffboardTeamMemberRequest; Reply: { ok: true; deferredDeals: number } | ApiErrorResponse }>("/team/:memberId/offboard", {
+    schema: { params: memberIdParams, body: offboardBody },
+  }, async (request, reply) => {
+    const actor = await requireUser(request, reply, database);
+    if (!actor) return reply;
+    if (actor.organization.role !== "ADMIN") return reply.status(403).send({ error: "forbidden", message: "Удалять и отключать сотрудников может только администратор." });
+    const organizationId = actor.organization.id;
+    const userId = request.params.memberId;
+    if (userId === actor.id) return reply.status(409).send({ error: "cannot_offboard_self", message: "Нельзя удалить или отключить собственный доступ." });
+    const member = await database.client.membership.findUnique({
+      where: { organizationId_userId: { organizationId, userId } },
+      include: { user: { select: { name: true } } },
+    });
+    if (!member) return reply.status(404).send({ error: "member_not_found", message: "Сотрудник не найден." });
+    if (request.body.action === "SUSPEND" && member.status !== "ACTIVE") return reply.status(409).send({ error: "invalid_status", message: "Приостановить можно только активного сотрудника." });
+    if (member.role === "ADMIN" && member.status === "ACTIVE") {
+      const activeAdmins = await database.client.membership.count({ where: { organizationId, role: "ADMIN", status: "ACTIVE" } });
+      if (activeAdmins <= 1) return reply.status(409).send({ error: "last_admin", message: "В команде должен остаться хотя бы один активный администратор." });
+    }
+    const assignments = request.body.dealAssignments;
+    if (new Set(assignments.map((item) => item.dealId)).size !== assignments.length || assignments.some((item) => item.assigneeId === userId)) {
+      return reply.status(400).send({ error: "invalid_assignment", message: "Проверьте выбранных ответственных по сделкам." });
+    }
+    const result = await database.client.$transaction(async (tx) => {
+      const deals = await tx.deal.findMany({ where: { organizationId, assigneeId: userId, status: "ACTIVE" }, select: { id: true, number: true, title: true } });
+      const dealIds = new Set(deals.map((deal) => deal.id));
+      if (assignments.some((item) => !dealIds.has(item.dealId))) return { error: "invalid_assignment" as const };
+      const assigneeIds = [...new Set(assignments.map((item) => item.assigneeId))];
+      if (assigneeIds.length) {
+        const validAssignees = await tx.membership.count({ where: { organizationId, status: "ACTIVE", userId: { in: assigneeIds } } });
+        if (validAssignees !== assigneeIds.length) return { error: "invalid_assignee" as const };
+      }
+      await tx.session.deleteMany({ where: { userId } });
+      await tx.telegramRecipient.updateMany({ where: { organizationId, userId }, data: { active: false } });
+      await tx.contact.updateMany({ where: { organizationId, assigneeId: userId }, data: { assigneeId: null } });
+      await tx.deal.updateMany({ where: { organizationId, assigneeId: userId }, data: { assigneeId: null } });
+      await tx.task.updateMany({ where: { organizationId, assigneeId: userId, status: "ACTIVE" }, data: { assigneeId: null } });
+      for (const assigneeId of assigneeIds) {
+        await tx.deal.updateMany({ where: { organizationId, id: { in: assignments.filter((item) => item.assigneeId === assigneeId).map((item) => item.dealId) } }, data: { assigneeId } });
+      }
+      const assignedIds = new Set(assignments.map((item) => item.dealId));
+      const deferred = deals.filter((deal) => !assignedIds.has(deal.id));
+      const timezone = deferred.length ? (await tx.organization.findUnique({ where: { id: organizationId }, select: { timezone: true } }))?.timezone ?? "Europe/Madrid" : "Europe/Madrid";
+      const dueDate = new Date(`${localDateAndTime(new Date(), timezone).date}T00:00:00.000Z`);
+      if (deferred.length) await tx.task.createMany({ data: deferred.map((deal) => ({
+          organizationId, dealId: deal.id, assigneeId: actor.id, kind: "OTHER", status: "ACTIVE",
+          dueDate,
+          title: `Назначить ответственного: сделка #${deal.number} · ${deal.title}`,
+      })) });
+      if (request.body.action === "DELETE") {
+        await tx.teamInvitation.deleteMany({ where: { organizationId, userId } });
+        const membershipCount = await tx.membership.count({ where: { userId } });
+        if (membershipCount === 1) await tx.user.delete({ where: { id: userId } });
+        else {
+          await tx.membership.delete({ where: { id: member.id } });
+          await tx.telegramRecipient.deleteMany({ where: { organizationId, userId } });
+        }
+      } else {
+        await tx.membership.update({ where: { id: member.id }, data: { status: "SUSPENDED" } });
+      }
+      await tx.activityEvent.create({ data: {
+        organizationId, authorId: actor.id, category: "CHANGE", title: `Изменён участник: ${member.user.name}`,
+        description: `${request.body.action === "DELETE" ? "Сотрудник удалён" : "Доступ отключён"} · Передано сделок: ${assignments.length} · Требуют назначения: ${deferred.length}`,
+      } });
+      return { deferredDeals: deferred.length };
+    });
+    if ("error" in result) return reply.status(400).send({ error: result.error ?? "invalid_assignment", message: "Сделки или ответственные изменились. Обновите команду и повторите действие." });
+    return { ok: true, deferredDeals: result.deferredDeals };
   });
 
   app.get<{ Reply: TeamAuditResponse | ApiErrorResponse }>("/team/audit", async (request, reply) => {
@@ -430,7 +517,8 @@ export async function registerTeamRoutes(app: FastifyInstance, config: ApiConfig
       });
     });
 
-    return reply.status(201).send({ invitationId: invitation.id, connectUrl: invitationUrl(config, token), expiresAt: expiresAt.toISOString() });
+    const emailSent = await deliverInvitation(app, config, { id: invitation.id, email, name, token });
+    return reply.status(201).send({ invitationId: invitation.id, connectUrl: invitationUrl(config, token), expiresAt: expiresAt.toISOString(), emailSent });
   });
 
   app.post<{ Params: { invitationId: string }; Reply: TeamInvitationLinkResponse | ApiErrorResponse }>("/team/invitations/:invitationId/resend", {
@@ -441,6 +529,7 @@ export async function registerTeamRoutes(app: FastifyInstance, config: ApiConfig
     if (currentUser.organization.role !== "ADMIN") return reply.status(403).send({ error: "forbidden", message: "Обновлять приглашения может только администратор." });
     const existing = await database.client.teamInvitation.findFirst({
       where: { id: request.params.invitationId, organizationId: currentUser.organization.id, acceptedAt: null, revokedAt: null },
+      include: { user: { select: { email: true, name: true } } },
     });
     if (!existing) return reply.status(404).send({ error: "invitation_not_found", message: "Активное приглашение не найдено." });
     const token = createInvitationToken();
@@ -449,7 +538,8 @@ export async function registerTeamRoutes(app: FastifyInstance, config: ApiConfig
       where: { id: existing.id },
       data: { tokenHash: hashInvitationToken(token), expiresAt },
     });
-    return { invitationId: invitation.id, connectUrl: invitationUrl(config, token), expiresAt: expiresAt.toISOString() };
+    const emailSent = await deliverInvitation(app, config, { id: invitation.id, email: existing.user.email, name: existing.user.name, token });
+    return { invitationId: invitation.id, connectUrl: invitationUrl(config, token), expiresAt: expiresAt.toISOString(), emailSent };
   });
 
   app.delete<{ Params: { invitationId: string }; Reply: { ok: true } | ApiErrorResponse }>("/team/invitations/:invitationId", {

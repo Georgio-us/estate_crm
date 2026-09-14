@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
 
 import styles from "@/components/auth/auth.module.css";
 import { LogoMark } from "@/components/brand/LogoMark";
@@ -12,6 +13,14 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [recoveryAvailable, setRecoveryAvailable] = useState(false);
+
+  useEffect(() => {
+    void fetch("/api/auth/email-status", { cache: "no-store" })
+      .then(async (response) => response.ok ? await response.json() as { available: boolean } : { available: false })
+      .then((status) => setRecoveryAvailable(status.available))
+      .catch(() => {});
+  }, []);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -83,6 +92,7 @@ export default function LoginPage() {
             {submitting ? "Входим…" : "Войти"}
           </button>
         </form>
+        {recoveryAvailable && <Link className={styles.authLink} href="/forgot-password">Забыли пароль?</Link>}
       </section>
       <aside className={styles.loginAside}>
         <div><span>Агентство недвижимости Delmar</span><h2>Все обращения, сделки и задачи — в одном рабочем пространстве.</h2></div>

@@ -146,7 +146,11 @@ export interface UpdateTeamMemberRequest {
   phone?: string | null;
   role?: MembershipRole;
   status?: Extract<TeamMemberStatus, "ACTIVE" | "SUSPENDED">;
-  confirmAssignedWork?: boolean;
+}
+
+export interface OffboardTeamMemberRequest {
+  action: "SUSPEND" | "DELETE";
+  dealAssignments: Array<{ dealId: string; assigneeId: string }>;
 }
 
 export interface TeamAuditRecord {
@@ -171,6 +175,7 @@ export interface TeamInvitationLinkResponse {
   invitationId: string;
   connectUrl: string;
   expiresAt: string;
+  emailSent: boolean;
 }
 
 export interface PublicTeamInvitationResponse {

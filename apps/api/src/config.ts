@@ -9,6 +9,8 @@ export interface ApiConfig {
   telegramBotUsername?: string;
   publicApiUrl?: string;
   webAppUrl?: string;
+  emailApiKey?: string;
+  emailFrom?: string;
 }
 
 function readPort(value: string | undefined): number {
@@ -39,5 +41,7 @@ export function readApiConfig(environment: NodeJS.ProcessEnv = process.env): Api
     publicApiUrl: (environment.API_PUBLIC_URL?.trim()
       || (environment.RAILWAY_PUBLIC_DOMAIN ? `https://${environment.RAILWAY_PUBLIC_DOMAIN.trim()}` : "")).replace(/\/$/, ""),
     webAppUrl: (environment.APP_URL?.trim() || webOrigins[0] || "http://localhost:3000").replace(/\/$/, ""),
+    emailApiKey: environment.RESEND_API_KEY?.trim() || "",
+    emailFrom: environment.EMAIL_FROM?.trim() || "",
   };
 }

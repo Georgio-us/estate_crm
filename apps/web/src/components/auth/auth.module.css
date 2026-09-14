@@ -105,6 +105,10 @@
   font-size: 13px;
 }
 
+.authLink { width: fit-content; margin-top: 18px; color: var(--primary); font-size: 13px; text-decoration: none; }
+.authLink:hover { text-decoration: underline; }
+.formSuccess { margin: 24px 0 0; padding: 14px 16px; border: 1px solid #b7d6c1; border-radius: var(--radius-md); background: #f0f8f2; color: #276a3d; font-size: 14px; line-height: 1.5; }
+
 .loginAside {
   display: flex;
   min-width: 0;

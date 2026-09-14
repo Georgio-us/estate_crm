@@ -273,6 +273,36 @@ test("admin archives several contacts only when they have no active deals", asyn
   await app.close();
 });
 
+test("permanent contact deletion requires archive and removes linked closed deals", async () => {
+  const contactId = "201f180c-d032-49a0-8aa7-04db19095eb2";
+  let archived = false;
+  const writes: string[] = [];
+  const client: Record<string, any> = {
+    session: { async findUnique() { return { id: "session-1", expiresAt: new Date(Date.now() + 60_000), user: sessionUser }; } },
+    contact: {
+      async findMany() { return archived ? [{ id: contactId }] : []; },
+      async deleteMany() { writes.push("contact-deleted"); },
+    },
+    deal: { async deleteMany() { writes.push("closed-deals-deleted"); } },
+  };
+  client.$transaction = async (callback: (transaction: typeof client) => unknown) => callback(client);
+  const database = { client, async ping() {}, async disconnect() {} } as unknown as DatabaseConnection;
+  const app = await buildApp(config, database);
+
+  const request = () => app.inject({ method: "DELETE", url: "/contacts", headers: { cookie: "estate_crm_session=test-token" }, payload: { contactIds: [contactId] } });
+  const activeResponse = await request();
+  assert.equal(activeResponse.statusCode, 409);
+  assert.equal(activeResponse.json().error, "not_archived");
+  assert.deepEqual(writes, []);
+
+  archived = true;
+  const archivedResponse = await request();
+  assert.equal(archivedResponse.statusCode, 200);
+  assert.equal(archivedResponse.json().deleted, 1);
+  assert.deepEqual(writes, ["closed-deals-deleted", "contact-deleted"]);
+  await app.close();
+});
+
 test("linking contacts creates one symmetric relation and history for both contacts", async () => {
   const firstId = "201f180c-d032-49a0-8aa7-04db19095eb2";
   const secondId = "14a292bd-d84e-447c-b71a-aa185b809b88";

@@ -697,6 +697,18 @@
 .suspensionFacts strong { color: var(--text); font-size: var(--font-size-heading-sm); }
 .modal footer .dangerButton { border-color: #c94e54; background: #c94e54; color: #fff; }
 .modal footer .dangerButton:disabled { opacity: .5; }
+.deleteMember { margin-left: auto; border: 1px solid #dca5a8; border-radius: var(--radius-md); padding: 9px 14px; background: #fff; color: #ad3f45; cursor: pointer; }
+.offboardModal { width: min(680px, 100%); max-height: calc(100vh - 32px); display: flex; flex-direction: column; }
+.offboardModal .modalBody { overflow-y: auto; }
+.offboardDeals { display: grid; gap: 0; border: 1px solid var(--border); border-radius: var(--radius-md); }
+.offboardDeals > strong { padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.offboardDeals label { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; }
+.offboardDeals label + label { border-top: 1px solid var(--border); }
+.offboardDeals label > span { display: grid; min-width: 0; gap: 4px; }
+.offboardDeals label b, .offboardDeals label small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.offboardDeals label small { color: var(--text-muted); }
+.offboardDeals select { max-width: 220px; }
+@media (max-width: 600px) { .offboardDeals label { align-items: stretch; flex-direction: column; } .offboardDeals select { max-width: none; } }
 
 .modalLayer { position: fixed; z-index: 100; inset: 0; display: grid; place-items: center; padding: var(--space-5); }
 .backdrop { position: absolute; inset: 0; border: 0; background: rgba(30, 30, 28, .36); }
@@ -763,6 +775,10 @@
   .auditList article { grid-template-columns: 34px 1fr; padding: 14px 0; }
   .auditList article time { grid-column: 2; text-align: left; }
   .backLink { margin-left: 0; }
+  .readOnlyNote { display: none; }
+  .deleteMember { min-height: 38px; padding: 0 8px; font-size: 0; }
+  .deleteMember::after { content: "Удалить"; font-size: 12px; }
+  .saveMember { padding: 0 9px; font-size: 12px; }
   .memberHero { align-items: flex-start; flex-wrap: wrap; }
   .heroAvatar { width: 58px; height: 58px; }
   .memberHero .memberStatus { margin-left: 78px; }

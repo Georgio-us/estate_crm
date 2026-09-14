@@ -185,6 +185,7 @@ model Organization {
   telegramConnectTokens  TelegramConnectToken[]
   teamInvitations        TeamInvitation[]
   pilotEvents            PilotEvent[]
+  passwordResetTokens    PasswordResetToken[]
 
   @@map("organizations")
 }
@@ -227,6 +228,7 @@ model User {
   receivedTeamInvitations TeamInvitation[]             @relation("TeamInvitationUser")
   sentTeamInvitations     TeamInvitation[]             @relation("TeamInvitationSender")
   pilotEvents            PilotEvent[]
+  passwordResetTokens    PasswordResetToken[]
 
   @@map("users")
 }
@@ -659,6 +661,25 @@ model PilotEvent {
   @@map("pilot_events")
 }
 
+model PasswordResetToken {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String?   @map("organization_id") @db.Uuid
+  userId         String?   @map("user_id") @db.Uuid
+  emailHash      String    @map("email_hash")
+  ipHash         String    @map("ip_hash")
+  tokenHash      String?   @unique @map("token_hash")
+  expiresAt      DateTime? @map("expires_at")
+  consumedAt     DateTime? @map("consumed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  user           User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([emailHash, createdAt])
+  @@index([ipHash, createdAt])
+  @@index([userId, createdAt])
+  @@map("password_reset_tokens")
+}
+
 model Membership {
   id             String           @id @default(uuid()) @db.Uuid
   organizationId String           @map("organization_id") @db.Uuid
@@ -680,7 +701,7 @@ model TeamInvitation {
   id             String       @id @default(uuid()) @db.Uuid
   organizationId String       @map("organization_id") @db.Uuid
   userId         String       @map("user_id") @db.Uuid
-  invitedById    String       @map("invited_by_id") @db.Uuid
+  invitedById    String?      @map("invited_by_id") @db.Uuid
   tokenHash      String       @unique @map("token_hash")
   expiresAt      DateTime     @map("expires_at")
   acceptedAt     DateTime?    @map("accepted_at")
@@ -688,7 +709,7 @@ model TeamInvitation {
   createdAt      DateTime     @default(now()) @map("created_at")
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user           User         @relation("TeamInvitationUser", fields: [userId], references: [id], onDelete: Cascade)
-  invitedBy      User         @relation("TeamInvitationSender", fields: [invitedById], references: [id], onDelete: Restrict)
+  invitedBy      User?        @relation("TeamInvitationSender", fields: [invitedById], references: [id], onDelete: SetNull)
 
   @@index([organizationId, createdAt])
   @@index([userId, expiresAt])

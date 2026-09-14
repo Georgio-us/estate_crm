@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
 import { useCurrentUser } from "@/components/auth/AuthContext";
 import { TaskKindIcon, UiIcon } from "@/components/ui/UiIcon";
@@ -22,9 +23,10 @@ const periodLabels: Record<TaskPeriod, string> = {
 };
 
 export function TasksCenter() {
+  const searchParams = useSearchParams();
   const user = useCurrentUser();
   const { tasks, contacts, deals, assignees, taskTypes, loadState, createTask, updateTask, completeTask: persistCompleteTask, reloadTasks } = useTasks();
-  const [period, setPeriod] = useState<PeriodFilter>("active");
+  const [period, setPeriod] = useState<PeriodFilter>(searchParams.get("period") === "overdue" ? "overdue" : "active");
   const [assignee, setAssignee] = useState("all");
   const [kind, setKind] = useState("all");
   const [search, setSearch] = useState("");

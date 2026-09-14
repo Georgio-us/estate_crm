@@ -72,6 +72,7 @@ test("admin creates a real expiring invitation link", async () => {
   assert.equal(response.statusCode, 201);
   assert.equal(invited, true);
   assert.equal(payload.invitationId, "invite-1");
+  assert.equal(payload.emailSent, false);
   assert.match(payload.connectUrl, /^http:\/\/localhost:3000\/invite\/[A-Za-z0-9_-]+$/);
   await app.close();
 });
@@ -112,50 +113,62 @@ test("manager cannot read the organization team", async () => {
   await app.close();
 });
 
-test("admin suspension immediately revokes sessions and Telegram delivery", async () => {
+test("offboarding suspends access, transfers selected deals and creates an admin task for deferred deals", async () => {
+  const memberId = "7f398049-0273-4c80-9d36-56dc65069437";
+  const assigneeId = "370e22d2-72fc-4201-ad1f-cd4720c5a402";
+  const dealOne = "7d9382a6-dd66-43cb-9dba-d5644e5b20b1";
+  const dealTwo = "fd84b392-086a-4895-9903-37d51790489c";
+  const database = testDatabase("ADMIN") as unknown as { client: Record<string, any>; disconnect(): Promise<void> };
+  const client = database.client;
+  const writes: string[] = [];
+  client.membership.findUnique = async () => ({ id: "membership-2", organizationId: "org-1", userId: memberId, role: "LEAD", status: "ACTIVE", user: { name: "Тимур" } });
+  client.membership.count = async ({ where }: { where: { userId?: string } }) => where.userId ? 1 : 2;
+  client.membership.update = async () => { writes.push("suspended"); };
+  client.session.deleteMany = async () => { writes.push("sessions-revoked"); };
+  client.telegramRecipient = { async updateMany() { writes.push("telegram-disabled"); } };
+  client.contact = { async updateMany() { writes.push("contacts-unassigned"); } };
+  client.deal = {
+    async findMany() { return [{ id: dealOne, number: 1, title: "Первая" }, { id: dealTwo, number: 2, title: "Вторая" }]; },
+    async updateMany({ where, data }: { where: { id?: { in: string[] } }; data: { assigneeId: string | null } }) { writes.push(data.assigneeId ? `deal-${where.id?.in.join(",")}-${data.assigneeId}` : "deals-unassigned"); },
+  };
+  client.task = { async updateMany() { writes.push("tasks-unassigned"); }, async createMany({ data }: { data: Array<{ dealId: string; assigneeId: string }> }) { for (const item of data) writes.push(`admin-task-${item.dealId}-${item.assigneeId}`); } };
+  client.activityEvent = { async create() { writes.push("audit-created"); } };
+  client.$transaction = async (callback: (transaction: typeof client) => unknown) => callback(client);
+  const app = await buildApp(config, database as unknown as DatabaseConnection);
+  const response = await app.inject({ method: "POST", url: `/team/${memberId}/offboard`, headers: { cookie: "estate_crm_session=test-token" }, payload: { action: "SUSPEND", dealAssignments: [{ dealId: dealOne, assigneeId }] } });
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().deferredDeals, 1);
+  assert.ok(writes.includes("sessions-revoked"));
+  assert.ok(writes.includes(`deal-${dealOne}-${assigneeId}`));
+  assert.ok(writes.includes(`admin-task-${dealTwo}-user-1`));
+  assert.ok(writes.includes("suspended"));
+  await app.close();
+});
+
+test("offboarding deletes an invited account and its membership", async () => {
   const memberId = "7f398049-0273-4c80-9d36-56dc65069437";
   const database = testDatabase("ADMIN") as unknown as { client: Record<string, any>; disconnect(): Promise<void> };
   const client = database.client;
   const writes: string[] = [];
-  client.membership.findUnique = async () => ({
-    id: "membership-2", organizationId: "org-1", userId: memberId, role: "LEAD", status: "ACTIVE",
-    user: { id: memberId, name: "Тимур", phone: null, _count: { assignedDeals: 2, assignedTasks: 1 } },
-  });
-  client.membership.count = async () => 2;
-  client.membership.update = async ({ data }: { data: { status: string } }) => { writes.push(`membership-${data.status}`); };
-  client.user = { async update() { writes.push("profile-updated"); } };
-  client.session.deleteMany = async () => { writes.push("sessions-revoked"); };
-  client.telegramRecipient = {
-    async updateMany({ data }: { data: { active: boolean } }) { writes.push(`telegram-${data.active ? "active" : "inactive"}`); },
-    async findUnique() { return null; },
-  };
-  client.contact = { async updateMany() { writes.push("contacts-unassigned"); } };
-  client.deal = { async updateMany() { writes.push("deals-unassigned"); } };
-  client.task = { async updateMany() { writes.push("tasks-unassigned"); } };
+  client.membership.findUnique = async () => ({ id: "membership-2", organizationId: "org-1", userId: memberId, role: "LEAD", status: "INVITED", user: { name: "Тимур" } });
+  client.membership.count = async () => 1;
+  client.session.deleteMany = async () => {};
+  client.telegramRecipient = { async updateMany() {} };
+  client.contact = { async updateMany() {} };
+  client.deal = { async findMany() { return []; }, async updateMany() {} };
+  client.task = { async updateMany() {} };
+  client.teamInvitation.deleteMany = async () => { writes.push("invitations-deleted"); };
+  client.user = { async delete() { writes.push("user-deleted"); } };
   client.activityEvent = { async create() { writes.push("audit-created"); } };
   client.$transaction = async (callback: (transaction: typeof client) => unknown) => callback(client);
-
   const app = await buildApp(config, database as unknown as DatabaseConnection);
-  const response = await app.inject({
-    method: "PATCH", url: `/team/${memberId}`, headers: { cookie: "estate_crm_session=test-token" },
-    payload: { status: "SUSPENDED", confirmAssignedWork: true },
-  });
-
+  const response = await app.inject({ method: "POST", url: `/team/${memberId}/offboard`, headers: { cookie: "estate_crm_session=test-token" }, payload: { action: "DELETE", dealAssignments: [] } });
   assert.equal(response.statusCode, 200);
-  assert.deepEqual(writes, [
-    "profile-updated",
-    "membership-SUSPENDED",
-    "sessions-revoked",
-    "telegram-inactive",
-    "contacts-unassigned",
-    "deals-unassigned",
-    "tasks-unassigned",
-    "audit-created",
-  ]);
+  assert.deepEqual(writes, ["invitations-deleted", "user-deleted", "audit-created"]);
   await app.close();
 });
 
-test("admin must explicitly confirm suspension when employee still owns work", async () => {
+test("legacy member update cannot suspend without the offboarding flow", async () => {
   const memberId = "7f398049-0273-4c80-9d36-56dc65069437";
   const database = testDatabase("ADMIN") as unknown as { client: Record<string, any>; disconnect(): Promise<void> };
   const client = database.client;
@@ -169,6 +182,6 @@ test("admin must explicitly confirm suspension when employee still owns work", a
   const response = await app.inject({ method: "PATCH", url: `/team/${memberId}`, headers: { cookie: "estate_crm_session=test-token" }, payload: { status: "SUSPENDED" } });
 
   assert.equal(response.statusCode, 409);
-  assert.equal(response.json().error, "assigned_work_confirmation_required");
+  assert.equal(response.json().error, "offboarding_required");
   await app.close();
 });

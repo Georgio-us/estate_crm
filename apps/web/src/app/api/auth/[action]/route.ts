@@ -4,6 +4,9 @@ const allowedMethods = {
   login: "POST",
   session: "GET",
   logout: "POST",
+  "request-reset": "POST",
+  "reset-password": "POST",
+  "email-status": "GET",
 } as const;
 
 type AuthAction = keyof typeof allowedMethods;
