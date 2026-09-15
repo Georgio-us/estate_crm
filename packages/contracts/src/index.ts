@@ -667,7 +667,7 @@ export interface CreateNoteRequest {
   text: string;
 }
 
-export type IntegrationProvider = "TEST" | "META_LEAD_ADS" | "INSTAGRAM_DIRECT" | "TELEPHONY" | "TELEGRAM";
+export type IntegrationProvider = "TEST" | "META_LEAD_ADS" | "INSTAGRAM_DIRECT" | "TELEPHONY" | "TELEGRAM" | "VIA";
 export type IntegrationConnectionStatus = "READY" | "CREDENTIALS_REQUIRED" | "CONNECTED" | "ERROR";
 export type IntegrationEventStatus = "RECEIVED" | "PROCESSED" | "DUPLICATE" | "FAILED";
 

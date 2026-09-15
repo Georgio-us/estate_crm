@@ -115,6 +115,15 @@ enum IntegrationProvider {
   INSTAGRAM_DIRECT
   TELEPHONY
   TELEGRAM
+  VIA
+}
+
+enum ViaSharedSelectionStatus {
+  DRAFT
+  CREATED
+  SENT
+  REVOKED
+  FAILED
 }
 
 enum IntegrationConnectionStatus {
@@ -182,6 +191,8 @@ model Organization {
   dealPropertySelections DealPropertySelection[]
   integrationConnections IntegrationConnection[]
   integrationEvents      IntegrationEvent[]
+  viaPairings            ViaPairing[]
+  viaSharedSelections    ViaSharedSelection[]
   notificationOutbox     NotificationOutbox[]
   telegramRecipients     TelegramRecipient[]
   telegramConnectTokens  TelegramConnectToken[]
@@ -234,6 +245,8 @@ model User {
   sentTeamInvitations     TeamInvitation[]             @relation("TeamInvitationSender")
   pilotEvents            PilotEvent[]
   passwordResetTokens    PasswordResetToken[]
+  issuedViaPairings      ViaPairing[]
+  createdViaSelections   ViaSharedSelection[]
 
   @@map("users")
 }
@@ -262,6 +275,7 @@ model Contact {
   activities        ActivityEvent[]
   tasks             Task[]
   integrationEvents IntegrationEvent[]
+  viaSharedSelections ViaSharedSelection[]
 
   @@index([organizationId, status, createdAt])
   @@index([organizationId, normalizedPhone])
@@ -355,6 +369,7 @@ model Deal {
   tasks              Task[]
   integrationEvents  IntegrationEvent[]
   propertySelections DealPropertySelection[]
+  viaSharedSelections ViaSharedSelection[]
 
   @@unique([organizationId, number])
   @@index([pipelineId, status, stageId, position])
@@ -406,6 +421,7 @@ model IntegrationConnection {
   stageId           String?                     @map("stage_id") @db.Uuid
   config            Json?
   webhookSecretHash String?                     @unique @map("webhook_secret_hash")
+  credentialCiphertext String?                   @map("credential_ciphertext")
   lastEventAt       DateTime?                   @map("last_event_at")
   lastError         String?                     @map("last_error")
   createdAt         DateTime                    @default(now()) @map("created_at")
@@ -443,6 +459,46 @@ model IntegrationEvent {
   @@index([organizationId, receivedAt])
   @@index([dealId, receivedAt])
   @@map("integration_events")
+}
+
+model ViaPairing {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  issuedById     String?      @map("issued_by_id") @db.Uuid
+  codeHash       String       @unique @map("code_hash")
+  viaTenant      String       @map("via_tenant")
+  expiresAt      DateTime     @map("expires_at")
+  claimedAt      DateTime?    @map("claimed_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  issuedBy       User?        @relation(fields: [issuedById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, expiresAt])
+  @@map("via_pairings")
+}
+
+model ViaSharedSelection {
+  id                  String                   @id @default(uuid()) @db.Uuid
+  organizationId      String                   @map("organization_id") @db.Uuid
+  dealId              String                   @map("deal_id") @db.Uuid
+  contactId           String?                  @map("contact_id") @db.Uuid
+  contextId           String                   @unique @map("context_id") @db.Uuid
+  viaSelectionId      String                   @map("via_selection_id")
+  shareUrl            String                   @map("share_url")
+  propertyExternalIds Json                     @map("property_external_ids")
+  status              ViaSharedSelectionStatus @default(CREATED)
+  createdById         String?                  @map("created_by_id") @db.Uuid
+  sentAt              DateTime?                @map("sent_at")
+  revokedAt           DateTime?                @map("revoked_at")
+  createdAt           DateTime                 @default(now()) @map("created_at")
+  organization        Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  deal                Deal                     @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  contact             Contact?                 @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  createdBy           User?                    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, viaSelectionId])
+  @@index([dealId, createdAt])
+  @@map("via_shared_selections")
 }
 
 model NotificationOutbox {

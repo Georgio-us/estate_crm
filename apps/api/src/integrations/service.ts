@@ -4,7 +4,7 @@ import type { DatabaseConnection } from "@estate-crm/database";
 import { parsePhone } from "../lib/phone.js";
 
 export interface CanonicalInboundLead {
-  provider: Exclude<IntegrationProvider, "TELEGRAM">;
+  provider: Exclude<IntegrationProvider, "TELEGRAM" | "VIA">;
   externalId: string;
   name: string;
   phone: string;

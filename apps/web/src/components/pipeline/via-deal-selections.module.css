@@ -1,0 +1,23 @@
+.root { display: grid; min-height: 0; flex: 1; align-content: start; gap: 18px; overflow-y: auto; padding: 20px 27px 32px; }
+.root header { display: flex; align-items: start; justify-content: space-between; gap: 12px; }
+.root h3, .root h4 { margin: 0; font-size: var(--font-size-body); }
+.root header p, .shares > p { margin: 5px 0 0; color: var(--text-muted); font-size: var(--font-size-body-sm); }
+.root header > span { padding: 5px 9px; border-radius: var(--radius-pill); background: #e7f0f4; color: #426c81; font-size: var(--font-size-caption); white-space: nowrap; }
+.catalog { display: grid; max-height: 280px; gap: 6px; overflow-y: auto; }
+.catalog > button { justify-self: start; border: 0; background: transparent; color: var(--primary); cursor: pointer; }
+.property { display: flex; min-height: 54px; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-md); cursor: pointer; }
+.property input { width: 18px; height: 18px; accent-color: var(--primary); }
+.property span { display: grid; gap: 3px; }
+.property strong { font-size: var(--font-size-body-sm); }
+.property small, .share small { color: var(--text-muted); font-size: var(--font-size-caption); }
+.primary { justify-self: start; min-height: var(--control-height); padding: 0 15px; border: 0; border-radius: var(--radius-md); background: var(--primary); color: #fff; font-weight: var(--font-weight-semibold); cursor: pointer; }
+.primary:disabled { background: #bfc9da; cursor: default; }
+.shares { display: grid; gap: 10px; }
+.share { display: grid; gap: 10px; padding: 13px; border: 1px solid var(--border); border-radius: var(--radius-md); }
+.share > div:first-child { display: grid; gap: 3px; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.actions a, .actions button { border: 0; background: transparent; color: var(--primary); cursor: pointer; font: inherit; font-size: var(--font-size-body-sm); }
+.actions button:disabled { color: var(--text-subtle); cursor: default; }
+.error { margin: 0; color: #b04448; font-size: var(--font-size-body-sm); }
+.notice { margin: 0; color: #326d51; font-size: var(--font-size-body-sm); }
+@media (max-width: 640px) { .root { padding: 18px; } }

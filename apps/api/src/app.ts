@@ -12,6 +12,7 @@ import { registerPasswordResetRoutes } from "./auth/password-reset.js";
 import { registerContactRoutes } from "./contacts/routes.js";
 import { registerDashboardRoutes } from "./dashboard/routes.js";
 import { registerIntegrationRoutes } from "./integrations/routes.js";
+import { registerViaIntegrationRoutes } from "./integrations/via/routes.js";
 import { registerPipelineRoutes } from "./pipeline/routes.js";
 import { registerPilotRequestTracking, registerPilotRoutes } from "./pilot/routes.js";
 import { registerPropertyRoutes } from "./properties/routes.js";
@@ -87,6 +88,7 @@ export async function buildApp(
   await registerDashboardRoutes(app, database);
   await registerPilotRoutes(app, database);
   await registerIntegrationRoutes(app, database);
+  await registerViaIntegrationRoutes(app, config, database);
   await registerTelegramRoutes(app, config, database);
 
   return app;

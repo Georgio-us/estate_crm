@@ -16,7 +16,7 @@ import type { DatabaseConnection } from "@estate-crm/database";
 import { requireUser } from "../auth/require-user.js";
 import { ingestInboundLead, InvalidInboundLeadError } from "./service.js";
 
-const providers = ["TEST", "META_LEAD_ADS", "INSTAGRAM_DIRECT", "TELEPHONY", "TELEGRAM"] as const;
+const providers = ["TEST", "META_LEAD_ADS", "INSTAGRAM_DIRECT", "TELEPHONY", "TELEGRAM", "VIA"] as const;
 
 function hashWebhookSecret(secret: string): string {
   return createHash("sha256").update(secret).digest("hex");

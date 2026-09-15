@@ -5,6 +5,7 @@ import type { ActivityCategory, ActivityEvent, CrmTask, Deal, DealStatus } from 
 import { isValidPhone } from "@/lib/phone";
 import { demoProjects } from "@/components/properties/demoCatalog";
 import { DealPropertySelectionPanel } from "./DealPropertySelectionPanel";
+import { ViaDealSelections } from "./ViaDealSelections";
 import styles from "./deal-drawer.module.css";
 
 interface DealDrawerProps {
@@ -92,6 +93,7 @@ export function DealDrawer({
   const [visibleActivityCount, setVisibleActivityCount] = useState(historyPageSize);
   const [additionalOpen, setAdditionalOpen] = useState(Boolean(deal.marketPreference || deal.paymentMethod || deal.neighborhood || deal.preferredProject));
   const [selectionOpen, setSelectionOpen] = useState(false);
+  const [viaSelectionOpen, setViaSelectionOpen] = useState(false);
   const [selectionCount, setSelectionCount] = useState(0);
   const [projectOptions, setProjectOptions] = useState(() => demoProjects.map((project) => project.title));
   const composerRef = useRef<HTMLTextAreaElement>(null);
@@ -322,6 +324,7 @@ export function DealDrawer({
                 <PropertySelect label="Жилой комплекс" icon="▤" value={draft.preferredProject || ""} placeholder="Не указан" options={projectOptions} onChange={(value) => updateDraft({ preferredProject: value })} />
               </div>}
               <button className={styles.selectionSummaryButton} type="button" onClick={() => setSelectionOpen(true)}><span><i>⌂</i><span><strong>Подборка</strong><small>{selectionCount ? `${selectionCount} ${selectionCount === 1 ? "объект" : selectionCount < 5 ? "объекта" : "объектов"}` : "Объекты для клиента"}</small></span></span><b>Открыть</b></button>
+              <button className={styles.selectionSummaryButton} type="button" onClick={() => setViaSelectionOpen(true)}><span><i>↗</i><span><strong>Via · отправить подборку</strong><small>Ссылка на объекты из Telegram mini-app</small></span></span><b>Открыть</b></button>
             </section>
 
             <section className={styles.contactSection}>
@@ -438,6 +441,13 @@ export function DealDrawer({
         </div>
       </aside>
       {selectionOpen && <DealPropertySelectionPanel deal={draft} onClose={() => setSelectionOpen(false)} onCountChange={setSelectionCount} onActivityChanged={onRefreshActivities} />}
+      {viaSelectionOpen && <div className={styles.selectionLayer}>
+        <button className={styles.selectionBackdrop} type="button" onClick={() => setViaSelectionOpen(false)} aria-label="Закрыть подборки Via" />
+        <aside className={styles.selectionDrawer} role="dialog" aria-modal="true" aria-label="Подборки Via">
+          <header className={styles.selectionHeader}><div><span>Сделка #{deal.number}</span><h2>Подборки Via</h2><p>{deal.contactName}</p></div><button type="button" onClick={() => setViaSelectionOpen(false)} aria-label="Закрыть">×</button></header>
+          <ViaDealSelections dealId={deal.id} />
+        </aside>
+      </div>}
     </div>
   );
 }

@@ -11,6 +11,9 @@ export interface ApiConfig {
   webAppUrl?: string;
   emailApiKey?: string;
   emailFrom?: string;
+  viaApiBaseUrl?: string;
+  viaTenant?: string;
+  viaEncryptionKey?: string;
   r2AccountId?: string;
   r2Bucket?: string;
   r2AccessKeyId?: string;
@@ -47,6 +50,9 @@ export function readApiConfig(environment: NodeJS.ProcessEnv = process.env): Api
     webAppUrl: (environment.APP_URL?.trim() || webOrigins[0] || "http://localhost:3000").replace(/\/$/, ""),
     emailApiKey: environment.RESEND_API_KEY?.trim() || "",
     emailFrom: environment.EMAIL_FROM?.trim() || "",
+    viaApiBaseUrl: environment.VIA_API_BASE_URL?.trim().replace(/\/$/, "") || "",
+    viaTenant: environment.VIA_TENANT?.trim() || "",
+    viaEncryptionKey: environment.VIA_CREDENTIAL_ENCRYPTION_KEY?.trim() || "",
     r2AccountId: environment.R2_ACCOUNT_ID?.trim() || "",
     r2Bucket: environment.R2_BUCKET?.trim() || "",
     r2AccessKeyId: environment.R2_ACCESS_KEY_ID?.trim() || "",
