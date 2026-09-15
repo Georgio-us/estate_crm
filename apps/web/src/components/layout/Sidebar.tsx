@@ -87,8 +87,15 @@ export function Sidebar({ collapsed, mobileOpen, onMobileClose, onToggle }: Side
   return (
     <aside className={`${styles.sidebar} ${collapsed ? styles.sidebarCollapsed : ""} ${mobileOpen ? styles.sidebarMobileOpen : ""}`}>
       <div className={styles.brand}>
-        <LogoMark className={styles.brandMark} title="Estate CRM" />
-        <span>Estate CRM</span>
+        <button
+          className={styles.brandReload}
+          type="button"
+          aria-label="Обновить Estate CRM"
+          onClick={() => window.location.reload()}
+        >
+          <LogoMark className={styles.brandMark} title="Estate CRM" />
+          <span>Estate CRM</span>
+        </button>
         <button className={styles.collapseButton} type="button" aria-label={collapsed ? "Развернуть меню" : "Свернуть меню"} onClick={onToggle}>
           {collapsed ? "›" : "‹"}
         </button>
