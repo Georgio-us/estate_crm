@@ -343,6 +343,87 @@ test("changing a deal source synchronizes the contact and its other deals", asyn
   await app.close();
 });
 
+test("deal snapshot returns the current assignee and version", async () => {
+  const dealId = "14a292bd-d84e-447c-b71a-aa185b809b88";
+  const now = new Date("2026-09-14T16:07:00.000Z");
+  const assignee = { id: "4de97dcc-f7df-4f69-9a5f-c413e318bcaa", name: "Руководитель" };
+  const database = {
+    client: {
+      session: { async findUnique() { return session(); } },
+      deal: {
+        async findFirst() {
+          return {
+            id: dealId, number: 1036, stageId, contactId, title: "Квартира", request: "Квартира",
+            budget: null, comment: null, operation: "PURCHASE" as const, propertyType: null,
+            district: null, rooms: null, marketPreference: null, paymentMethod: null,
+            neighborhood: null, preferredProject: null, source: "REFERRAL" as const,
+            status: "ACTIVE" as const, position: 0, closedAt: null, createdAt: now, updatedAt: now,
+            contact: { id: contactId, name: "Клиент", phone: null }, relatedContacts: [], tasks: [], assignee,
+          };
+        },
+      },
+    },
+    async ping() {},
+    async disconnect() {},
+  } as unknown as DatabaseConnection;
+
+  const app = await buildApp(config, database);
+  const response = await app.inject({ method: "GET", url: `/deals/${dealId}`, headers: { cookie: "estate_crm_session=test-token" } });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().deal.assignee.id, assignee.id);
+  assert.equal(response.json().deal.updatedAt, now.toISOString());
+  assert.equal(response.json().stageId, stageId);
+  await app.close();
+});
+
+test("stale deal save cannot overwrite another employee's assignment", async () => {
+  const dealId = "14a292bd-d84e-447c-b71a-aa185b809b88";
+  const originalUpdatedAt = new Date("2026-09-14T16:06:00.000Z");
+  const latestUpdatedAt = new Date("2026-09-14T16:07:00.000Z");
+  let writes = 0;
+  let loggedChanges = 0;
+  const database = {
+    client: {
+      session: { async findUnique() { return session(); } },
+      membership: { async findUnique() { return { status: "ACTIVE" }; } },
+      deal: {
+        async findFirst() {
+          return {
+            id: dealId, pipelineId, stageId, contactId, organizationId: user.memberships[0].organization.id,
+            title: "Квартира", request: "Квартира", budget: null, comment: null,
+            operation: "PURCHASE" as const, propertyType: null, district: null, rooms: null,
+            source: "REFERRAL" as const, assigneeId: "4de97dcc-f7df-4f69-9a5f-c413e318bcaa",
+            updatedAt: latestUpdatedAt, stage: { id: stageId, title: "Новый лид" },
+          };
+        },
+        async update({ where }: { where: { id: string; updatedAt?: Date } }) {
+          assert.equal(where.updatedAt?.toISOString(), originalUpdatedAt.toISOString());
+          writes += 1;
+          throw { code: "P2025" };
+        },
+      },
+      activityEvent: { async create() { loggedChanges += 1; } },
+    },
+    async ping() {},
+    async disconnect() {},
+  } as unknown as DatabaseConnection;
+
+  const app = await buildApp(config, database);
+  const response = await app.inject({
+    method: "PATCH",
+    url: `/deals/${dealId}`,
+    headers: { cookie: "estate_crm_session=test-token" },
+    payload: { expectedUpdatedAt: originalUpdatedAt.toISOString(), assigneeId: user.id, title: "Старый черновик" },
+  });
+
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.json().error, "deal_changed");
+  assert.equal(writes, 1);
+  assert.equal(loggedChanges, 0);
+  await app.close();
+});
+
 test("a secondary contact can be linked to a deal and is returned by the API", async () => {
   const dealId = "14a292bd-d84e-447c-b71a-aa185b809b88";
   const relatedContactId = "8de55dd9-a09d-4f6d-9f0b-5cfe2ff895d1";

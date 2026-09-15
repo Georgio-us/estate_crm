@@ -443,6 +443,30 @@ export async function registerPipelineRoutes(
     return reply.status(201).send({ deal: mapDeal(deal), stageId: stage.id });
   });
 
+  app.get<{
+    Params: { dealId: string };
+    Reply: { deal: PipelineDealRecord; stageId: string } | ApiErrorResponse;
+  }>("/deals/:dealId", {
+    schema: {
+      params: { type: "object", required: ["dealId"], properties: { dealId: { type: "string", format: "uuid" } } },
+    },
+  }, async (request, reply) => {
+    const user = await requireUser(request, reply, database);
+    if (!user) return reply;
+
+    const deal = await database.client.deal.findFirst({
+      where: { id: request.params.dealId, ...dealScope(user) },
+      include: {
+        contact: { select: { id: true, name: true, phone: true } },
+        relatedContacts: { include: { contact: { select: { id: true, name: true, phone: true } } } },
+        assignee: { select: { id: true, name: true } },
+        tasks: { where: { status: "ACTIVE" }, orderBy: [{ dueDate: "asc" }, { dueTime: "asc" }], take: 1, select: { id: true, title: true, dueDate: true, dueTime: true } },
+      },
+    });
+    if (!deal) return reply.status(404).send({ error: "deal_not_found", message: "Сделка не найдена." });
+    return { deal: mapDeal(deal), stageId: deal.stageId };
+  });
+
   app.patch<{
     Params: { dealId: string };
     Body: UpdateDealRequest;
@@ -455,6 +479,7 @@ export async function registerPipelineRoutes(
         additionalProperties: false,
         minProperties: 1,
         properties: {
+          expectedUpdatedAt: { type: "string", format: "date-time" },
           stageId: { type: "string", format: "uuid" },
           assigneeId: { anyOf: [{ type: "string", format: "uuid" }, { type: "null" }] },
           title: { type: "string", minLength: 1, maxLength: 300 },
@@ -510,32 +535,40 @@ export async function registerPipelineRoutes(
         ? null
         : effectiveAssigneeId(user, request.body.assigneeId);
 
-    const updated = await database.client.deal.update({
-      where: { id: existing.id },
-      data: {
-        ...(request.body.stageId !== undefined ? { stageId: request.body.stageId } : {}),
-        ...(request.body.assigneeId !== undefined ? { assigneeId: nextAssigneeId } : {}),
-        ...(request.body.title !== undefined ? { title: request.body.title.trim() } : {}),
-        ...(request.body.request !== undefined ? { request: optionalText(request.body.request) ?? "" } : {}),
-        ...(request.body.budget !== undefined ? { budget: optionalText(request.body.budget ?? undefined) } : {}),
-        ...(request.body.operation !== undefined ? { operation: request.body.operation } : {}),
-        ...(request.body.propertyType !== undefined ? { propertyType: optionalText(request.body.propertyType ?? undefined) } : {}),
-        ...(request.body.district !== undefined ? { district: optionalText(request.body.district ?? undefined) } : {}),
-        ...(request.body.rooms !== undefined ? { rooms: optionalText(request.body.rooms ?? undefined) } : {}),
-        ...(request.body.marketPreference !== undefined ? { marketPreference: request.body.marketPreference } : {}),
-        ...(request.body.paymentMethod !== undefined ? { paymentMethod: request.body.paymentMethod } : {}),
-        ...(request.body.neighborhood !== undefined ? { neighborhood: optionalText(request.body.neighborhood ?? undefined) } : {}),
-        ...(request.body.preferredProject !== undefined ? { preferredProject: optionalText(request.body.preferredProject ?? undefined) } : {}),
-        ...(request.body.source !== undefined ? { source: request.body.source } : {}),
-        ...(request.body.comment !== undefined ? { comment: optionalText(request.body.comment ?? undefined) } : {}),
-      },
-      include: {
-        contact: { select: { id: true, name: true, phone: true } },
-        relatedContacts: { include: { contact: { select: { id: true, name: true, phone: true } } } },
-        assignee: { select: { id: true, name: true } },
-        tasks: { where: { status: "ACTIVE" }, orderBy: [{ dueDate: "asc" }, { dueTime: "asc" }], take: 1, select: { id: true, title: true, dueDate: true, dueTime: true } },
-      },
-    });
+    let updated;
+    try {
+      updated = await database.client.deal.update({
+        where: { id: existing.id, ...(request.body.expectedUpdatedAt ? { updatedAt: new Date(request.body.expectedUpdatedAt) } : {}) },
+        data: {
+          ...(request.body.stageId !== undefined ? { stageId: request.body.stageId } : {}),
+          ...(request.body.assigneeId !== undefined ? { assigneeId: nextAssigneeId } : {}),
+          ...(request.body.title !== undefined ? { title: request.body.title.trim() } : {}),
+          ...(request.body.request !== undefined ? { request: optionalText(request.body.request) ?? "" } : {}),
+          ...(request.body.budget !== undefined ? { budget: optionalText(request.body.budget ?? undefined) } : {}),
+          ...(request.body.operation !== undefined ? { operation: request.body.operation } : {}),
+          ...(request.body.propertyType !== undefined ? { propertyType: optionalText(request.body.propertyType ?? undefined) } : {}),
+          ...(request.body.district !== undefined ? { district: optionalText(request.body.district ?? undefined) } : {}),
+          ...(request.body.rooms !== undefined ? { rooms: optionalText(request.body.rooms ?? undefined) } : {}),
+          ...(request.body.marketPreference !== undefined ? { marketPreference: request.body.marketPreference } : {}),
+          ...(request.body.paymentMethod !== undefined ? { paymentMethod: request.body.paymentMethod } : {}),
+          ...(request.body.neighborhood !== undefined ? { neighborhood: optionalText(request.body.neighborhood ?? undefined) } : {}),
+          ...(request.body.preferredProject !== undefined ? { preferredProject: optionalText(request.body.preferredProject ?? undefined) } : {}),
+          ...(request.body.source !== undefined ? { source: request.body.source } : {}),
+          ...(request.body.comment !== undefined ? { comment: optionalText(request.body.comment ?? undefined) } : {}),
+        },
+        include: {
+          contact: { select: { id: true, name: true, phone: true } },
+          relatedContacts: { include: { contact: { select: { id: true, name: true, phone: true } } } },
+          assignee: { select: { id: true, name: true } },
+          tasks: { where: { status: "ACTIVE" }, orderBy: [{ dueDate: "asc" }, { dueTime: "asc" }], take: 1, select: { id: true, title: true, dueDate: true, dueTime: true } },
+        },
+      });
+    } catch (cause) {
+      if (request.body.expectedUpdatedAt && cause && typeof cause === "object" && "code" in cause && cause.code === "P2025") {
+        return reply.status(409).send({ error: "deal_changed", message: "Сделка изменена другим сотрудником. Обновите карточку перед сохранением." });
+      }
+      throw cause;
+    }
 
     if (request.body.source !== undefined && request.body.source !== existing.source && hasOrganizationWideDataAccess(user)) {
       await database.client.contact.update({ where: { id: existing.contactId }, data: { source: request.body.source } });

@@ -383,6 +383,7 @@ export interface CreateDealRequest {
 }
 
 export interface UpdateDealRequest {
+  expectedUpdatedAt?: string;
   stageId?: string;
   assigneeId?: string | null;
   title?: string;

@@ -21,6 +21,7 @@ export interface Deal {
   preferredProject?: string;
   comment?: string;
   createdAt?: string;
+  updatedAt?: string;
   source: "Meta" | "Website" | "Call" | "Referral" | "Manual";
   status?: DealStatus;
   closedAt?: string;

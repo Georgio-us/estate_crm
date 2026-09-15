@@ -127,6 +127,7 @@ interface ApiDeal {
   assignee: { id: string; name: string } | null;
   comment: string | null;
   createdAt: string;
+  updatedAt: string;
 }
 
 interface ApiStage { id: string; title: string; color: string; position: number; deals: ApiDeal[] }
@@ -161,6 +162,7 @@ function mapApiDeal(deal: ApiDeal): Deal {
     assignee: deal.assignee?.name || "Не назначен",
     comment: deal.comment || undefined,
     createdAt: new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(deal.createdAt)),
+    updatedAt: deal.updatedAt,
   };
 }
 
@@ -188,10 +190,24 @@ async function requestDealActivities(dealId: string): Promise<ActivityEvent[]> {
   return payload.activities.map(mapApiActivity);
 }
 
+async function requestDeal(dealId: string): Promise<{ deal: Deal; stageId: string }> {
+  const response = await fetch(`/api/crm/deals/${dealId}`, { cache: "no-store" });
+  const payload = await response.json() as { deal?: ApiDeal; stageId?: string; message?: string };
+  if (!response.ok || !payload.deal || !payload.stageId) throw new DealRequestError(payload.message || "Не удалось обновить сделку.", response.status);
+  return { deal: mapApiDeal(payload.deal), stageId: payload.stageId };
+}
+
+class DealRequestError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+  }
+}
+
 export function PipelineBoard() {
   const router = useRouter();
   const pipelineMenuRef = useRef<HTMLDivElement>(null);
   const deepLinkHandledRef = useRef(false);
+  const closingDealRef = useRef(false);
   const user = useCurrentUser();
   const { tasks, assignees: teamAssignees, createTask, completeTask: persistCompleteTask } = useTasks();
   const [pipelineName, setPipelineName] = useState("Продажа недвижимости");
@@ -455,12 +471,27 @@ export function PipelineBoard() {
     }));
   }
 
+  function applyDealSnapshot(snapshot: { deal: Deal; stageId: string }) {
+    setStages((current) => current.map((stage) => {
+      const withoutDeal = stage.deals.filter((deal) => deal.id !== snapshot.deal.id);
+      return stage.id === snapshot.stageId ? { ...stage, deals: [snapshot.deal, ...withoutDeal] } : { ...stage, deals: withoutDeal };
+    }));
+    setSelected((current) => current?.dealId === snapshot.deal.id ? { ...current, stageId: snapshot.stageId } : current);
+  }
+
+  async function refreshDeal(dealId: string) {
+    const snapshot = await requestDeal(dealId);
+    applyDealSnapshot(snapshot);
+    return snapshot;
+  }
+
   async function saveDeal(nextDeal: Deal, nextStageId: string) {
     if (!selected || !selectedDeal) throw new Error("Сделка больше не открыта.");
     const response = await fetch(`/api/crm/deals/${selected.dealId}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
+        expectedUpdatedAt: nextDeal.updatedAt,
         stageId: nextStageId,
         assigneeId: nextDeal.assigneeId || null,
         title: nextDeal.title || nextDeal.request,
@@ -479,14 +510,14 @@ export function PipelineBoard() {
       }),
     });
     const payload = await response.json() as { deal?: ApiDeal; stageId?: string; message?: string };
+    if (response.status === 409) {
+      try { await refreshDeal(selected.dealId); } catch { /* Keep the original conflict message. */ }
+      throw new Error("Сделка изменена другим сотрудником. Нажмите «Отменить», чтобы увидеть актуальные данные, затем внесите правки заново.");
+    }
     if (!response.ok || !payload.deal || !payload.stageId) throw new Error(payload.message || "Не удалось сохранить сделку.");
     const savedDeal = mapApiDeal(payload.deal);
 
-    setStages((current) => current.map((stage) => {
-      const withoutDeal = stage.deals.filter((deal) => deal.id !== savedDeal.id);
-      return stage.id === payload.stageId ? { ...stage, deals: [savedDeal, ...withoutDeal] } : { ...stage, deals: withoutDeal };
-    }));
-    setSelected({ dealId: savedDeal.id, stageId: payload.stageId });
+    applyDealSnapshot({ deal: savedDeal, stageId: payload.stageId });
     const refreshedActivities = await requestDealActivities(savedDeal.id);
     setActivities((current) => ({ ...current, [savedDeal.id]: refreshedActivities }));
     return { deal: savedDeal, stageId: payload.stageId };
@@ -499,25 +530,54 @@ export function PipelineBoard() {
     if (window.location.search) router.replace("/");
   }
 
-  function requestDealClose() {
-    if (!selectedDeal || selectedDeal.assigneeId || pipelineView !== "active") {
+  async function requestDealClose() {
+    if (!selectedDeal || pipelineView !== "active") {
       closeDealDrawer();
       return;
     }
-    setAssignmentChoiceId("");
-    setAssignmentPromptOpen(true);
+    if (closingDealRef.current) return;
+    closingDealRef.current = true;
+    try {
+      const latest = await refreshDeal(selectedDeal.id);
+      if (latest.deal.assigneeId || latest.deal.status !== "ACTIVE") {
+        closeDealDrawer();
+        return;
+      }
+      setAssignmentChoiceId("");
+      setAssignmentPromptOpen(true);
+    } catch (cause) {
+      if (cause instanceof DealRequestError && cause.status === 404) {
+        closeDealDrawer();
+        setNotice("Сделка больше не доступна в этой воронке.");
+        return;
+      }
+      setNotice(cause instanceof Error ? cause.message : "Не удалось проверить ответственного. Попробуйте ещё раз.");
+    } finally {
+      closingDealRef.current = false;
+    }
   }
 
   async function assignBeforeClose(assigneeId: string) {
-    if (!selectedDeal || !selectedStage) return;
+    if (!selectedDeal) return;
     const assignee = teamAssignees.find((item) => item.id === assigneeId);
     if (!assignee) return;
     setAssignmentActionPending(true);
     try {
-      await saveDeal({ ...selectedDeal, assigneeId: assignee.id, assignee: assignee.name }, selectedStage.id);
+      const latest = await refreshDeal(selectedDeal.id);
+      if (latest.deal.assigneeId) {
+        setNotice(`Сделка уже назначена: ${latest.deal.assignee}`);
+        closeDealDrawer();
+        return;
+      }
+      await saveDeal({ ...latest.deal, assigneeId: assignee.id, assignee: assignee.name }, latest.stageId);
       setNotice(assignee.id === user.id ? "Сделка назначена вам" : `Ответственный: ${assignee.name}`);
       closeDealDrawer();
     } catch (cause) {
+      if (cause instanceof DealRequestError && cause.status === 404) {
+        closeDealDrawer();
+        setNotice("Сделка больше не доступна в этой воронке.");
+        return;
+      }
       setNotice(cause instanceof Error ? cause.message : "Не удалось назначить ответственного");
     } finally {
       setAssignmentActionPending(false);
@@ -529,6 +589,12 @@ export function PipelineBoard() {
     const title = `Назначить ответственного по сделке #${selectedDeal.number}`;
     setAssignmentActionPending(true);
     try {
+      const latest = await refreshDeal(selectedDeal.id);
+      if (latest.deal.assigneeId) {
+        setNotice(`Сделка уже назначена: ${latest.deal.assignee}`);
+        closeDealDrawer();
+        return;
+      }
       const alreadyExists = selectedTasks.some((task) => task.title === title);
       if (!alreadyExists) {
         await createTask({
@@ -543,6 +609,11 @@ export function PipelineBoard() {
       setNotice(alreadyExists ? "Задача о назначении уже активна" : "Задача о назначении поставлена на сегодня");
       closeDealDrawer();
     } catch (cause) {
+      if (cause instanceof DealRequestError && cause.status === 404) {
+        closeDealDrawer();
+        setNotice("Сделка больше не доступна в этой воронке.");
+        return;
+      }
       setNotice(cause instanceof Error ? cause.message : "Не удалось поставить задачу");
     } finally {
       setAssignmentActionPending(false);

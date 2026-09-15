@@ -118,13 +118,18 @@ export function DealDrawer({
     setIsSaving(true);
     setSaveError("");
     try {
-      let nextDraft = draft;
+      const saved = await onSave(draft, draftStageId);
+      let phone = saved.deal.phone;
       if (draft.phone !== deal.phone) {
-        const phone = await onUpdateContactPhone(draft.phone);
-        nextDraft = { ...draft, phone };
+        try {
+          phone = await onUpdateContactPhone(draft.phone);
+        } catch (cause) {
+          setDraft({ ...saved.deal, phone: draft.phone });
+          setDraftStageId(saved.stageId);
+          throw cause;
+        }
       }
-      const saved = await onSave(nextDraft, draftStageId);
-      setDraft(saved.deal);
+      setDraft({ ...saved.deal, phone });
       setDraftStageId(saved.stageId);
     } catch (cause) {
       setSaveError(cause instanceof Error ? cause.message : "Не удалось сохранить сделку.");
