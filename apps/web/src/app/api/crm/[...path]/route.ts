@@ -29,13 +29,17 @@ async function proxyCrmRequest(
       headers,
       body: request.method === "GET" ? undefined : await request.text(),
       cache: "no-store",
+      redirect: "manual",
     });
     const responseHeaders = new Headers();
+    responseHeaders.set("cache-control", "private, no-store");
     const responseContentType = apiResponse.headers.get("content-type");
 
     if (responseContentType) responseHeaders.set("content-type", responseContentType);
+    const location = apiResponse.headers.get("location");
+    if (location && apiResponse.status >= 300 && apiResponse.status < 400) responseHeaders.set("location", location);
 
-    return new Response(await apiResponse.text(), {
+    return new Response(apiResponse.body, {
       status: apiResponse.status,
       headers: responseHeaders,
     });

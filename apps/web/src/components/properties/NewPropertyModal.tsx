@@ -1,14 +1,19 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { PropertyCategory, PropertyMarket } from "@/types/crm";
 import styles from "./properties.module.css";
 
 export interface NewPropertyDraft {
   title: string; address: string; district: string; category: PropertyCategory; market: PropertyMarket;
   operation: "Продажа" | "Аренда"; price: string; rooms: string; area: string; project: string; developer: string; description: string;
+  buildingLabel: string; unitDetail: string; subtype: string; condition: string; documentNotes: string;
+  ownerName: string; ownerContacts: string; assigneeId: string | null; assignmentNote: string;
+  floor: string; totalFloors: string; landArea: string;
 }
 
 export function NewPropertyModal({ onCreate, onClose }: { onCreate: (draft: NewPropertyDraft) => Promise<void>; onClose: () => void }) {
-  const [draft, setDraft] = useState<NewPropertyDraft>({ title: "", address: "", district: "Приморский", category: "Квартира", market: "Вторичный", operation: "Продажа", price: "", rooms: "", area: "", project: "", developer: "", description: "" });
+  const [draft, setDraft] = useState<NewPropertyDraft>({ title: "", address: "", district: "", category: "Квартира", market: "Вторичный", operation: "Продажа", price: "", rooms: "", area: "", project: "", developer: "", description: "", buildingLabel: "", unitDetail: "", subtype: "", condition: "", documentNotes: "", ownerName: "", ownerContacts: "", assigneeId: null, assignmentNote: "Назначить ответственного", floor: "", totalFloors: "", landArea: "" });
+  const [assignees, setAssignees] = useState<Array<{ id: string; name: string }>>([]);
+  useEffect(() => { void fetch("/api/crm/team/assignees").then((response) => response.json()).then((payload: { assignees?: Array<{ id: string; name: string }> }) => setAssignees(payload.assignees ?? [])).catch(() => {}); }, []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const update = (patch: Partial<NewPropertyDraft>) => setDraft((current) => ({ ...current, ...patch }));
@@ -29,14 +34,24 @@ export function NewPropertyModal({ onCreate, onClose }: { onCreate: (draft: NewP
           <Field label="Название объекта" required><input autoFocus aria-label="Название объекта" value={draft.title} onChange={(event) => update({ title: event.target.value })} placeholder="Например, 2-комнатная на Французском бульваре" /></Field>
           <div className={styles.formGrid}>
             <Field label="Тип"><select value={draft.category} onChange={(event) => update({ category: event.target.value as PropertyCategory })}><option>Квартира</option><option>Дом</option><option>Участок</option><option>Коммерция</option></select></Field>
-            <Field label="Рынок"><select value={draft.market} onChange={(event) => update({ market: event.target.value as PropertyMarket })}><option>Первичный</option><option>Вторичный</option></select></Field>
+            <Field label="Рынок"><select value={draft.market} onChange={(event) => update({ market: event.target.value as PropertyMarket })}><option>Вторичный</option><option>Первичный</option></select></Field>
             <Field label="Операция"><select value={draft.operation} onChange={(event) => update({ operation: event.target.value as "Продажа" | "Аренда" })}><option>Продажа</option><option>Аренда</option></select></Field>
-            <Field label="Район"><select value={draft.district} onChange={(event) => update({ district: event.target.value })}><option>Приморский</option><option>Киевский</option><option>Пересыпский</option><option>Хаджибейский</option></select></Field>
+            <Field label="Район"><input value={draft.district} onChange={(event) => update({ district: event.target.value })} placeholder="Район" /></Field>
             <Field label="Цена, USD"><input inputMode="numeric" value={draft.price} onChange={(event) => update({ price: event.target.value })} placeholder="120000" /></Field>
             <Field label="Площадь, м²"><input inputMode="decimal" value={draft.area} onChange={(event) => update({ area: event.target.value })} placeholder="72.5" /></Field>
             {(draft.category === "Квартира" || draft.category === "Дом") && <Field label="Комнаты"><select value={draft.rooms} onChange={(event) => update({ rooms: event.target.value })}><option value="">Не указано</option><option>1</option><option>2</option><option>3</option><option>4+</option></select></Field>}
+            {(draft.category === "Квартира" || draft.category === "Коммерция") && <Field label="Этаж"><input inputMode="numeric" value={draft.floor} onChange={(event) => update({ floor: event.target.value })} /></Field>}
+            <Field label="Этажность"><input inputMode="numeric" value={draft.totalFloors} onChange={(event) => update({ totalFloors: event.target.value })} /></Field>
+            {(draft.category === "Дом" || draft.category === "Участок") && <Field label="Участок, сот."><input inputMode="decimal" value={draft.landArea} onChange={(event) => update({ landArea: event.target.value })} /></Field>}
           </div>
           <Field label="Адрес"><input value={draft.address} onChange={(event) => update({ address: event.target.value })} placeholder="Улица и номер дома" /></Field>
+          {draft.market === "Вторичный" && <>
+            <div className={styles.formGrid}><Field label="ЖК / название дома"><input value={draft.buildingLabel} onChange={(event) => update({ buildingLabel: event.target.value })} /></Field><Field label="Секция / номер квартиры"><input value={draft.unitDetail} onChange={(event) => update({ unitDetail: event.target.value })} /></Field><Field label="Подтип"><input value={draft.subtype} onChange={(event) => update({ subtype: event.target.value })} placeholder="Дом, участок, помещение…" /></Field><Field label="Состояние"><input value={draft.condition} onChange={(event) => update({ condition: event.target.value })} /></Field></div>
+            <div className={styles.formGrid}><Field label="Собственник"><input value={draft.ownerName} onChange={(event) => update({ ownerName: event.target.value })} /></Field><Field label="Контакты собственника"><input value={draft.ownerContacts} onChange={(event) => update({ ownerContacts: event.target.value })} /></Field></div>
+            <Field label="Ответственный"><select value={draft.assigneeId ?? ""} onChange={(event) => update({ assigneeId: event.target.value || null })}><option value="">Назначить позже</option>{assignees.map((person) => <option key={person.id} value={person.id}>{person.name}</option>)}</select></Field>
+            <Field label="Комментарий о назначении"><input value={draft.assignmentNote} onChange={(event) => update({ assignmentNote: event.target.value })} /></Field>
+            <Field label="Документы"><textarea value={draft.documentNotes} onChange={(event) => update({ documentNotes: event.target.value })} /></Field>
+          </>}
           {draft.market === "Первичный" && <div className={styles.formGrid}><Field label="Жилой комплекс"><input value={draft.project} onChange={(event) => update({ project: event.target.value })} placeholder="Название ЖК" /></Field><Field label="Застройщик"><input value={draft.developer} onChange={(event) => update({ developer: event.target.value })} placeholder="Компания" /></Field></div>}
           <Field label="Описание"><textarea value={draft.description} onChange={(event) => update({ description: event.target.value })} placeholder="Краткое описание объекта" /></Field>
         </div>

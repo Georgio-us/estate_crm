@@ -108,6 +108,8 @@ export interface TeamTaskSummary {
   dealTitle: string | null;
 }
 
+export interface TeamPropertySummary { id: string; number: number; title: string; address: string | null; category: PropertyCategory; status: PropertyStatus }
+
 export interface TeamMemberRecord {
   id: string;
   name: string;
@@ -120,10 +122,12 @@ export interface TeamMemberRecord {
   pendingInvitationId: string | null;
   activeDeals: number;
   activeTasks: number;
+  activeProperties: number;
   todayTasks: number;
   overdueTasks: number;
   deals: TeamDealSummary[];
   tasks: TeamTaskSummary[];
+  properties: TeamPropertySummary[];
 }
 
 export interface TeamResponse {
@@ -151,6 +155,7 @@ export interface UpdateTeamMemberRequest {
 export interface OffboardTeamMemberRequest {
   action: "SUSPEND" | "DELETE";
   dealAssignments: Array<{ dealId: string; assigneeId: string }>;
+  propertyAssignments?: Array<{ propertyId: string; assigneeId: string }>;
 }
 
 export interface TeamAuditRecord {
@@ -515,10 +520,12 @@ export interface PropertyRecord {
   market: PropertyMarket;
   operation: PropertyOperation;
   status: PropertyStatus;
-  price: number;
+  price: number | null;
+  priceRaw: string | null;
   currency: Currency;
   rooms: string | null;
-  area: number;
+  area: number | null;
+  areaRaw: string | null;
   floor: number | null;
   totalFloors: number | null;
   landArea: number | null;
@@ -526,6 +533,19 @@ export interface PropertyRecord {
   developer: string | null;
   description: string | null;
   imageUrl: string | null;
+  buildingLabel: string | null;
+  unitDetail: string | null;
+  subtype: string | null;
+  condition: string | null;
+  documentNotes: string | null;
+  ownerName: string | null;
+  ownerContacts: string | null;
+  assigneeId: string | null;
+  assigneeName: string | null;
+  assignmentNote: string | null;
+  sourceSheet: string | null;
+  sourceRow: number | null;
+  photosCount: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -543,10 +563,10 @@ export interface CreatePropertyRequest {
   market: PropertyMarket;
   operation?: PropertyOperation;
   status?: PropertyStatus;
-  price?: number;
+  price?: number | null;
   currency?: Currency;
   rooms?: string | null;
-  area?: number;
+  area?: number | null;
   floor?: number | null;
   totalFloors?: number | null;
   landArea?: number | null;
@@ -554,9 +574,60 @@ export interface CreatePropertyRequest {
   developer?: string | null;
   description?: string | null;
   imageUrl?: string | null;
+  buildingLabel?: string | null;
+  unitDetail?: string | null;
+  subtype?: string | null;
+  condition?: string | null;
+  documentNotes?: string | null;
+  ownerName?: string | null;
+  ownerContacts?: string | null;
+  assigneeId?: string | null;
+  assignmentNote?: string | null;
 }
 
 export type UpdatePropertyRequest = Partial<CreatePropertyRequest>;
+
+export interface PropertyPhotoRecord {
+  id: string;
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  isCover: boolean;
+  sortOrder: number;
+  url: string;
+  createdAt: string;
+}
+
+export interface PropertyEventRecord {
+  id: string;
+  title: string;
+  description: string | null;
+  actorName: string | null;
+  createdAt: string;
+}
+
+export interface PropertyImportRow {
+  sheet: "квартиры" | "дома" | "коммерция" | "аренда";
+  rowNumber: number;
+  cells: string[];
+  headers: string[];
+  crmId?: string | null;
+}
+
+export interface PropertyImportPreviewRow {
+  sheet: PropertyImportRow["sheet"];
+  rowNumber: number;
+  title: string;
+  category: PropertyCategory;
+  action: "CREATE" | "UPDATE" | "SKIP" | "REVIEW";
+  warnings: string[];
+  existingId: string | null;
+}
+
+export interface PropertyImportPreviewResponse {
+  rows: PropertyImportPreviewRow[];
+  counts: { create: number; update: number; skip: number; review: number };
+}
 
 export interface DashboardResponse {
   deals: {

@@ -67,10 +67,10 @@ export interface PropertyListing {
   market: PropertyMarket;
   operation: "Продажа" | "Аренда";
   status: PropertyStatus;
-  price: number;
+  price: number | null;
   currency: "USD" | "EUR" | "UAH";
   rooms?: string;
-  area: number;
+  area: number | null;
   floor?: number;
   totalFloors?: number;
   landArea?: number;
@@ -79,6 +79,21 @@ export interface PropertyListing {
   description: string;
   imageUrl: string;
   updatedAt: string;
+  priceRaw?: string | null;
+  areaRaw?: string | null;
+  buildingLabel?: string | null;
+  unitDetail?: string | null;
+  subtype?: string | null;
+  condition?: string | null;
+  documentNotes?: string | null;
+  ownerName?: string | null;
+  ownerContacts?: string | null;
+  assigneeId?: string | null;
+  assigneeName?: string | null;
+  assignmentNote?: string | null;
+  photosCount?: number;
+  sourceSheet?: string | null;
+  sourceRow?: number | null;
 }
 
 export interface Contact {

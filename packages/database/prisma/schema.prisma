@@ -177,6 +177,8 @@ model Organization {
   tasks                  Task[]
   taskTypes              TaskType[]
   properties             Property[]
+  propertyPhotos         PropertyPhoto[]
+  propertyEvents         PropertyEvent[]
   dealPropertySelections DealPropertySelection[]
   integrationConnections IntegrationConnection[]
   integrationEvents      IntegrationEvent[]
@@ -222,6 +224,9 @@ model User {
   assignedDeals           Deal[]                       @relation("DealAssignee")
   authoredActivities      ActivityEvent[]              @relation("ActivityAuthor")
   assignedTasks           Task[]                       @relation("TaskAssignee")
+  assignedProperties      Property[]                   @relation("PropertyAssignee")
+  propertyPhotoUploads    PropertyPhoto[]              @relation("PropertyPhotoUploader")
+  propertyEvents          PropertyEvent[]              @relation("PropertyEventActor")
   telegramRecipients      TelegramRecipient[]
   telegramConnectTokens   TelegramConnectToken[]
   telegramSelections      TelegramRecipientSelection[] @relation("TelegramSelectedUser")
@@ -577,10 +582,12 @@ model Property {
   market         PropertyMarket
   operation      PropertyOperation       @default(SALE)
   status         PropertyStatus          @default(AVAILABLE)
-  price          Float                   @default(0)
+  price          Float?
+  priceRaw       String?                 @map("price_raw")
   currency       Currency                @default(USD)
   rooms          String?
-  area           Float                   @default(0)
+  area           Float?
+  areaRaw        String?                 @map("area_raw")
   floor          Int?
   totalFloors    Int?                    @map("total_floors")
   landArea       Float?                  @map("land_area")
@@ -588,14 +595,77 @@ model Property {
   developer      String?
   description    String?
   imageUrl       String?                 @map("image_url")
+  buildingLabel  String?                 @map("building_label")
+  unitDetail     String?                 @map("unit_detail")
+  subtype        String?
+  condition      String?
+  documentNotes  String?                 @map("document_notes")
+  ownerName      String?                 @map("owner_name")
+  ownerContacts  String?                 @map("owner_contacts")
+  assigneeId     String?                 @map("assignee_id") @db.Uuid
+  assignmentNote String?                 @map("assignment_note")
+  sourceSheet    String?                 @map("source_sheet")
+  sourceRow      Int?                    @map("source_row")
+  sourceHash     String?                 @map("source_hash")
+  sourceRaw      Json?                   @map("source_raw")
+  importedAt     DateTime?               @map("imported_at")
   createdAt      DateTime                @default(now()) @map("created_at")
   updatedAt      DateTime                @updatedAt @map("updated_at")
   organization   Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignee       User?                   @relation("PropertyAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   dealSelections DealPropertySelection[]
+  photos         PropertyPhoto[]
+  events         PropertyEvent[]
 
   @@unique([organizationId, number])
+  @@unique([organizationId, sourceHash])
   @@index([organizationId, status, updatedAt])
+  @@index([organizationId, market, category])
+  @@index([organizationId, assigneeId])
   @@map("properties")
+}
+
+enum PropertyPhotoStatus {
+  PENDING
+  READY
+}
+
+model PropertyPhoto {
+  id             String              @id @default(uuid()) @db.Uuid
+  organizationId String              @map("organization_id") @db.Uuid
+  propertyId     String              @map("property_id") @db.Uuid
+  uploadedById   String?             @map("uploaded_by_id") @db.Uuid
+  storageKey     String              @unique @map("storage_key")
+  filename       String
+  mimeType       String              @map("mime_type")
+  sizeBytes      Int                 @map("size_bytes")
+  status         PropertyPhotoStatus @default(PENDING)
+  sortOrder      Int                 @default(0) @map("sort_order")
+  isCover        Boolean             @default(false) @map("is_cover")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  readyAt        DateTime?           @map("ready_at")
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  property       Property            @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  uploadedBy     User?               @relation("PropertyPhotoUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, propertyId, status, sortOrder])
+  @@map("property_photos")
+}
+
+model PropertyEvent {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  propertyId     String       @map("property_id") @db.Uuid
+  actorId        String?      @map("actor_id") @db.Uuid
+  title          String
+  description    String?
+  createdAt      DateTime     @default(now()) @map("created_at")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  property       Property     @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  actor          User?        @relation("PropertyEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, propertyId, createdAt])
+  @@map("property_events")
 }
 
 model DealPropertySelection {

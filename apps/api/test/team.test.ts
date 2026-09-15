@@ -21,6 +21,7 @@ function testDatabase(role: "ADMIN" | "LEAD" | "MANAGER") {
         user: {
           id: "user-1", name: "Георгий", email: "admin@example.com", phone: null,
           assignedDeals: [{ id: "deal-1", number: 1001, title: "Квартира", request: "Купить квартиру" }],
+          assignedProperties: [{ id: "property-1", number: 42, title: "Дом", address: "Одесса", category: "HOUSE", status: "AVAILABLE" }],
           assignedTasks: [{ id: "task-1", title: "Позвонить", dueDate: new Date("2020-01-01T00:00:00.000Z"), dueTime: "10:00", contact: { name: "Анна" }, deal: { id: "deal-1", number: 1001, title: "Квартира" } }],
         },
       }]; } },
@@ -40,6 +41,7 @@ test("team returns real organization members and workload", async () => {
   assert.equal(payload.active, 1);
   assert.equal(payload.members[0].name, "Георгий");
   assert.equal(payload.members[0].activeDeals, 1);
+  assert.equal(payload.members[0].activeProperties, 1);
   assert.equal(payload.members[0].activeTasks, 1);
   assert.equal(payload.members[0].overdueTasks, 1);
   assert.equal(payload.members[0].deals[0].number, 1001);
@@ -131,6 +133,7 @@ test("offboarding suspends access, transfers selected deals and creates an admin
     async findMany() { return [{ id: dealOne, number: 1, title: "Первая" }, { id: dealTwo, number: 2, title: "Вторая" }]; },
     async updateMany({ where, data }: { where: { id?: { in: string[] } }; data: { assigneeId: string | null } }) { writes.push(data.assigneeId ? `deal-${where.id?.in.join(",")}-${data.assigneeId}` : "deals-unassigned"); },
   };
+  client.property = { async findMany() { return []; } };
   client.task = { async updateMany() { writes.push("tasks-unassigned"); }, async createMany({ data }: { data: Array<{ dealId: string; assigneeId: string }> }) { for (const item of data) writes.push(`admin-task-${item.dealId}-${item.assigneeId}`); } };
   client.activityEvent = { async create() { writes.push("audit-created"); } };
   client.$transaction = async (callback: (transaction: typeof client) => unknown) => callback(client);
@@ -156,6 +159,7 @@ test("offboarding deletes an invited account and its membership", async () => {
   client.telegramRecipient = { async updateMany() {} };
   client.contact = { async updateMany() {} };
   client.deal = { async findMany() { return []; }, async updateMany() {} };
+  client.property = { async findMany() { return []; } };
   client.task = { async updateMany() {} };
   client.teamInvitation.deleteMany = async () => { writes.push("invitations-deleted"); };
   client.user = { async delete() { writes.push("user-deleted"); } };

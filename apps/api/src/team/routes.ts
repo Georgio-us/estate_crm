@@ -70,6 +70,10 @@ const offboardBody = {
       type: "object", additionalProperties: false, required: ["dealId", "assigneeId"],
       properties: { dealId: { type: "string", format: "uuid" }, assigneeId: { type: "string", format: "uuid" } },
     } },
+    propertyAssignments: { type: "array", maxItems: 1000, items: {
+      type: "object", additionalProperties: false, required: ["propertyId", "assigneeId"],
+      properties: { propertyId: { type: "string", format: "uuid" }, assigneeId: { type: "string", format: "uuid" } },
+    } },
   },
 } as const;
 
@@ -176,6 +180,11 @@ export async function registerTeamRoutes(app: FastifyInstance, config: ApiConfig
               orderBy: { updatedAt: "desc" },
               select: { id: true, number: true, title: true, request: true },
             },
+            assignedProperties: {
+              where: { organizationId },
+              orderBy: { updatedAt: "desc" },
+              select: { id: true, number: true, title: true, address: true, category: true, status: true },
+            },
             assignedTasks: {
               where: { organizationId, status: "ACTIVE" },
               orderBy: [{ dueDate: "asc" }, { dueTime: "asc" }, { createdAt: "desc" }],
@@ -222,9 +231,11 @@ export async function registerTeamRoutes(app: FastifyInstance, config: ApiConfig
         pendingInvitationId: pendingInvitationByUser.get(membership.user.id) ?? null,
         activeDeals: membership.user.assignedDeals.length,
         activeTasks: tasks.length,
+        activeProperties: membership.user.assignedProperties.length,
         todayTasks: tasks.filter((task) => dateOf(task) === today).length,
         overdueTasks: tasks.filter(isOverdue).length,
         deals: membership.user.assignedDeals,
+        properties: membership.user.assignedProperties,
         tasks: tasks.map((task) => ({
           id: task.id,
           title: task.title,
@@ -325,7 +336,7 @@ export async function registerTeamRoutes(app: FastifyInstance, config: ApiConfig
     return { ok: true };
   });
 
-  app.post<{ Params: { memberId: string }; Body: OffboardTeamMemberRequest; Reply: { ok: true; deferredDeals: number } | ApiErrorResponse }>("/team/:memberId/offboard", {
+  app.post<{ Params: { memberId: string }; Body: OffboardTeamMemberRequest; Reply: { ok: true; deferredDeals: number; deferredProperties: number } | ApiErrorResponse }>("/team/:memberId/offboard", {
     schema: { params: memberIdParams, body: offboardBody },
   }, async (request, reply) => {
     const actor = await requireUser(request, reply, database);
@@ -345,14 +356,19 @@ export async function registerTeamRoutes(app: FastifyInstance, config: ApiConfig
       if (activeAdmins <= 1) return reply.status(409).send({ error: "last_admin", message: "В команде должен остаться хотя бы один активный администратор." });
     }
     const assignments = request.body.dealAssignments;
+    const propertyAssignments = request.body.propertyAssignments ?? [];
     if (new Set(assignments.map((item) => item.dealId)).size !== assignments.length || assignments.some((item) => item.assigneeId === userId)) {
       return reply.status(400).send({ error: "invalid_assignment", message: "Проверьте выбранных ответственных по сделкам." });
     }
+    if (new Set(propertyAssignments.map((item) => item.propertyId)).size !== propertyAssignments.length || propertyAssignments.some((item) => item.assigneeId === userId)) return reply.status(400).send({ error: "invalid_assignment", message: "Проверьте ответственных по объектам." });
     const result = await database.client.$transaction(async (tx) => {
       const deals = await tx.deal.findMany({ where: { organizationId, assigneeId: userId, status: "ACTIVE" }, select: { id: true, number: true, title: true } });
+      const properties = await tx.property.findMany({ where: { organizationId, assigneeId: userId }, select: { id: true, title: true, assignmentNote: true } });
       const dealIds = new Set(deals.map((deal) => deal.id));
       if (assignments.some((item) => !dealIds.has(item.dealId))) return { error: "invalid_assignment" as const };
-      const assigneeIds = [...new Set(assignments.map((item) => item.assigneeId))];
+      const propertyIds = new Set(properties.map((property) => property.id));
+      if (propertyAssignments.some((item) => !propertyIds.has(item.propertyId))) return { error: "invalid_assignment" as const };
+      const assigneeIds = [...new Set([...assignments.map((item) => item.assigneeId), ...propertyAssignments.map((item) => item.assigneeId)])];
       if (assigneeIds.length) {
         const validAssignees = await tx.membership.count({ where: { organizationId, status: "ACTIVE", userId: { in: assigneeIds } } });
         if (validAssignees !== assigneeIds.length) return { error: "invalid_assignee" as const };
@@ -362,6 +378,11 @@ export async function registerTeamRoutes(app: FastifyInstance, config: ApiConfig
       await tx.contact.updateMany({ where: { organizationId, assigneeId: userId }, data: { assigneeId: null } });
       await tx.deal.updateMany({ where: { organizationId, assigneeId: userId }, data: { assigneeId: null } });
       await tx.task.updateMany({ where: { organizationId, assigneeId: userId, status: "ACTIVE" }, data: { assigneeId: null } });
+      for (const property of properties) {
+        const replacement = propertyAssignments.find((item) => item.propertyId === property.id);
+        await tx.property.update({ where: { id: property.id }, data: { assigneeId: replacement?.assigneeId ?? null, assignmentNote: replacement ? property.assignmentNote : `Назначить ответственного (ранее ${member.user.name})` } });
+        await tx.propertyEvent.create({ data: { organizationId, propertyId: property.id, actorId: actor.id, title: replacement ? "Ответственный за объект изменён" : "Объект требует ответственного", description: replacement ? "Сотрудник отключён или удалён" : member.user.name } });
+      }
       for (const assigneeId of assigneeIds) {
         await tx.deal.updateMany({ where: { organizationId, id: { in: assignments.filter((item) => item.assigneeId === assigneeId).map((item) => item.dealId) } }, data: { assigneeId } });
       }
@@ -389,10 +410,10 @@ export async function registerTeamRoutes(app: FastifyInstance, config: ApiConfig
         organizationId, authorId: actor.id, category: "CHANGE", title: `Изменён участник: ${member.user.name}`,
         description: `${request.body.action === "DELETE" ? "Сотрудник удалён" : "Доступ отключён"} · Передано сделок: ${assignments.length} · Требуют назначения: ${deferred.length}`,
       } });
-      return { deferredDeals: deferred.length };
+      return { deferredDeals: deferred.length, deferredProperties: properties.length - propertyAssignments.length };
     });
     if ("error" in result) return reply.status(400).send({ error: result.error ?? "invalid_assignment", message: "Сделки или ответственные изменились. Обновите команду и повторите действие." });
-    return { ok: true, deferredDeals: result.deferredDeals };
+    return { ok: true, deferredDeals: result.deferredDeals, deferredProperties: result.deferredProperties };
   });
 
   app.get<{ Reply: TeamAuditResponse | ApiErrorResponse }>("/team/audit", async (request, reply) => {

@@ -17,7 +17,7 @@ interface SelectionRecord {
 interface ApiProperty {
   id: string; code: string; title: string; address: string | null; district: string | null;
   category: "APARTMENT" | "HOUSE" | "LAND" | "COMMERCIAL"; market: "PRIMARY" | "SECONDARY";
-  operation: "SALE" | "RENT"; status: "AVAILABLE" | "RESERVED" | "SOLD"; price: number;
+  operation: "SALE" | "RENT"; status: "AVAILABLE" | "RESERVED" | "SOLD"; price: number | null;
   currency: "USD" | "EUR" | "UAH"; rooms: string | null; area: number; imageUrl: string | null;
 }
 
@@ -185,6 +185,7 @@ export function DealPropertySelectionPanel({ deal, onClose, onCountChange, onAct
   </div>;
 }
 
-function formatPrice(value: number, currency: "USD" | "EUR" | "UAH") {
+function formatPrice(value: number | null, currency: "USD" | "EUR" | "UAH") {
+  if (value === null) return "Цена не указана";
   return `${currency === "USD" ? "$" : currency === "EUR" ? "€" : "₴"}${new Intl.NumberFormat("ru-RU").format(value)}`;
 }

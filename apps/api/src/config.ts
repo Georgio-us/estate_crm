@@ -11,6 +11,10 @@ export interface ApiConfig {
   webAppUrl?: string;
   emailApiKey?: string;
   emailFrom?: string;
+  r2AccountId?: string;
+  r2Bucket?: string;
+  r2AccessKeyId?: string;
+  r2SecretAccessKey?: string;
 }
 
 function readPort(value: string | undefined): number {
@@ -43,5 +47,9 @@ export function readApiConfig(environment: NodeJS.ProcessEnv = process.env): Api
     webAppUrl: (environment.APP_URL?.trim() || webOrigins[0] || "http://localhost:3000").replace(/\/$/, ""),
     emailApiKey: environment.RESEND_API_KEY?.trim() || "",
     emailFrom: environment.EMAIL_FROM?.trim() || "",
+    r2AccountId: environment.R2_ACCOUNT_ID?.trim() || "",
+    r2Bucket: environment.R2_BUCKET?.trim() || "",
+    r2AccessKeyId: environment.R2_ACCESS_KEY_ID?.trim() || "",
+    r2SecretAccessKey: environment.R2_SECRET_ACCESS_KEY?.trim() || "",
   };
 }

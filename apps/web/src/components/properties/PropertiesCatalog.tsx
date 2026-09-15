@@ -2,11 +2,13 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { UiIcon } from "@/components/ui/UiIcon";
+import { useCurrentUser } from "@/components/auth/AuthContext";
 import type { PropertyCategory, PropertyListing } from "@/types/crm";
 import { demoProjects, demoSecondaryProperties, type PropertyProject } from "./demoCatalog";
 import { NewPropertyModal, type NewPropertyDraft } from "./NewPropertyModal";
 import { ProjectDrawer, formatProjectPrice } from "./ProjectDrawer";
 import { PropertyDrawer } from "./PropertyDrawer";
+import { PropertyExcelTransfer } from "./PropertyExcelTransfer";
 import styles from "./properties.module.css";
 
 type ViewMode = "gallery" | "table";
@@ -15,10 +17,14 @@ type CatalogSection = "all" | "primary" | "secondary";
 interface ApiProperty {
   id: string; code: string; title: string; address: string | null; district: string | null;
   category: "APARTMENT" | "HOUSE" | "LAND" | "COMMERCIAL"; market: "PRIMARY" | "SECONDARY";
-  operation: "SALE" | "RENT"; status: "AVAILABLE" | "RESERVED" | "SOLD"; price: number;
-  currency: "USD" | "EUR" | "UAH"; rooms: string | null; area: number; floor: number | null;
+  operation: "SALE" | "RENT"; status: "AVAILABLE" | "RESERVED" | "SOLD"; price: number | null; priceRaw: string | null;
+  currency: "USD" | "EUR" | "UAH"; rooms: string | null; area: number | null; areaRaw: string | null; floor: number | null;
   totalFloors: number | null; landArea: number | null; project: string | null; developer: string | null;
   description: string | null; imageUrl: string | null; updatedAt: string;
+  buildingLabel: string | null; unitDetail: string | null; subtype: string | null; condition: string | null;
+  documentNotes: string | null; ownerName: string | null; ownerContacts: string | null;
+  assigneeId: string | null; assigneeName: string | null; assignmentNote: string | null; photosCount: number;
+  sourceSheet: string | null; sourceRow: number | null;
 }
 
 const categoryFromApi = { APARTMENT: "Квартира", HOUSE: "Дом", LAND: "Участок", COMMERCIAL: "Коммерция" } as const;
@@ -36,31 +42,40 @@ function mapApiProperty(property: ApiProperty): PropertyListing {
     id: property.id, code: property.code, title: property.title, address: property.address || "Адрес не указан",
     district: property.district || "Не указан", category: categoryFromApi[property.category], market: marketFromApi[property.market],
     operation: operationFromApi[property.operation], status: statusFromApi[property.status], price: property.price,
-    currency: property.currency, rooms: property.rooms || undefined, area: property.area, floor: property.floor || undefined,
-    totalFloors: property.totalFloors || undefined, landArea: property.landArea || undefined, project: property.project || undefined,
+    currency: property.currency, rooms: property.rooms || undefined, area: property.area, floor: property.floor ?? undefined,
+    totalFloors: property.totalFloors ?? undefined, landArea: property.landArea ?? undefined, project: property.project || undefined,
     developer: property.developer || undefined, description: property.description || "Описание ещё не добавлено.",
     imageUrl: property.imageUrl || fallbackImage,
+    priceRaw: property.priceRaw, areaRaw: property.areaRaw, buildingLabel: property.buildingLabel, unitDetail: property.unitDetail,
+    subtype: property.subtype, condition: property.condition, documentNotes: property.documentNotes,
+    ownerName: property.ownerName, ownerContacts: property.ownerContacts, assigneeId: property.assigneeId,
+    assigneeName: property.assigneeName, assignmentNote: property.assignmentNote, photosCount: property.photosCount,
+    sourceSheet: property.sourceSheet, sourceRow: property.sourceRow,
     updatedAt: new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }).format(new Date(property.updatedAt)),
   };
 }
 
 function propertyPayload(property: PropertyListing | NewPropertyDraft) {
+  const numeric = (value: string | number | undefined) => value === undefined || value === "" ? null : Number(value);
   return {
     title: property.title, address: property.address || null, district: property.district || null,
     category: categoryToApi[property.category], market: marketToApi[property.market], operation: operationToApi[property.operation],
     ...( "status" in property ? { status: statusToApi[property.status] } : {}),
-    price: Number(property.price) || 0, currency: "currency" in property ? property.currency : "USD",
-    rooms: property.rooms || null, area: Number(property.area) || 0,
-    ...( "floor" in property ? { floor: property.floor || null, totalFloors: property.totalFloors || null, landArea: property.landArea || null, imageUrl: property.imageUrl || null } : {}),
+    price: property.price === "" || property.price === null ? null : Number(property.price), currency: "currency" in property ? property.currency : "USD",
+    rooms: property.rooms || null, area: property.area === "" || property.area === null ? null : Number(property.area),
+    ...( "floor" in property ? { floor: numeric(property.floor), totalFloors: numeric(property.totalFloors), landArea: numeric(property.landArea) } : {}),
     project: property.project || null, developer: property.developer || null, description: property.description || null,
+    ...( "ownerName" in property ? { ownerName: property.ownerName || null, ownerContacts: property.ownerContacts || null, buildingLabel: property.buildingLabel || null, unitDetail: property.unitDetail || null, subtype: property.subtype || null, condition: property.condition || null, documentNotes: property.documentNotes || null, assigneeId: property.assigneeId || null, assignmentNote: property.assignmentNote || null } : {}),
   };
 }
 
 export function PropertiesCatalog() {
+  const currentUser = useCurrentUser();
   const [properties, setProperties] = useState<PropertyListing[]>([]);
   const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
   const [view, setView] = useState<ViewMode>("gallery");
   const [section, setSection] = useState<CatalogSection>("all");
+  const [myOnly, setMyOnly] = useState(false);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<"all" | PropertyCategory>("all");
   const [developer, setDeveloper] = useState("all");
@@ -115,11 +130,12 @@ export function PropertiesCatalog() {
       return property.status === "Доступен"
         && matchesSearch
         && (section === "all" || (section === "primary" ? property.market === "Первичный" : property.market === "Вторичный"))
+        && (!myOnly || property.assigneeId === currentUser.id)
         && (category === "all" || property.category === category)
         && (district === "all" || property.district === district)
-        && (!maxPrice || property.price <= Number(maxPrice));
+        && (!maxPrice || (property.price !== null && property.price <= Number(maxPrice)));
     });
-  }, [catalogProperties, category, district, maxPrice, search, section]);
+  }, [catalogProperties, category, currentUser.id, district, maxPrice, myOnly, search, section]);
 
   const visibleProjects = useMemo(() => {
     if (section === "secondary" || (category !== "all" && category !== "Квартира")) return [];
@@ -135,7 +151,7 @@ export function PropertiesCatalog() {
     });
   }, [category, construction, developer, district, maxPrice, search, section, shownProjects]);
 
-  const hasFilters = Boolean(search || section !== "all" || category !== "all" || developer !== "all" || construction !== "all" || district !== "all" || maxPrice);
+  const hasFilters = Boolean(search || section !== "all" || myOnly || category !== "all" || developer !== "all" || construction !== "all" || district !== "all" || maxPrice);
   const resultTotal = visibleProjects.length + visibleProperties.length;
   const catalogTotal = shownProjects.filter((project) => project.units.some((unit) => unit.status === "Доступен")).length
     + catalogProperties.filter((property) => property.status === "Доступен").length;
@@ -160,11 +176,12 @@ export function PropertiesCatalog() {
   }
 
   function resetFilters() {
-    setSearch(""); setSection("all"); setCategory("all"); setDeveloper("all"); setConstruction("all"); setDistrict("all"); setMaxPrice("");
+    setSearch(""); setSection("all"); setMyOnly(false); setCategory("all"); setDeveloper("all"); setConstruction("all"); setDistrict("all"); setMaxPrice("");
   }
 
   function changeSection(next: CatalogSection) {
     setSection(next);
+    setMyOnly(false);
     setCategory("all");
     setDeveloper("all");
     setConstruction("all");
@@ -189,6 +206,7 @@ export function PropertiesCatalog() {
           <button className={section === "primary" ? styles.catalogTabActive : ""} type="button" onClick={() => changeSection("primary")}>Новостройки</button>
           <button className={section === "secondary" ? styles.catalogTabActive : ""} type="button" onClick={() => changeSection("secondary")}>Вторичная недвижимость</button>
         </div>
+        {section === "secondary" && <div className={styles.propertyCatalogActions}><button type="button" aria-pressed={myOnly} onClick={() => setMyOnly((value) => !value)}>{myOnly ? "Все объекты" : "Мои объекты"}</button><PropertyExcelTransfer onImported={loadProperties} /></div>}
 
         <div className={styles.filters}>
           <FilterSelect label="Тип" value={category} onChange={(value) => setCategory(value as "all" | PropertyCategory)} options={section === "primary" ? ["Квартира", "Коммерция"] : ["Квартира", "Дом", "Участок", "Коммерция"]} />
@@ -216,7 +234,7 @@ export function PropertiesCatalog() {
       </div>
 
       {selectedProject && <ProjectDrawer project={selectedProject} onClose={() => setSelectedProjectId(null)} />}
-      {selectedProperty && <PropertyDrawer property={selectedProperty} readOnly={isSelectedDemo} onSave={saveProperty} onClose={() => setSelectedId(null)} />}
+      {selectedProperty && <PropertyDrawer property={selectedProperty} readOnly={isSelectedDemo} onSave={saveProperty} onClose={() => setSelectedId(null)} onRefresh={loadProperties} />}
       {isCreating && <NewPropertyModal onCreate={createProperty} onClose={() => setIsCreating(false)} />}
     </section>
   );
@@ -241,7 +259,7 @@ function ProjectCard({ project, onOpen }: { project: PropertyProject; onOpen: ()
 function PropertyCard({ property, onOpen, isDemo }: { property: PropertyListing; onOpen: () => void; isDemo: boolean }) {
   return <button className={styles.propertyCard} type="button" onClick={onOpen}>
     <div className={styles.propertyImage} role="img" aria-label={`Фото: ${property.title}`} style={{ backgroundImage: `linear-gradient(180deg, transparent 55%, rgba(20, 20, 18, .16)), url("${property.imageUrl}")` }}><span className={`${styles.status} ${styles[`status_${property.status}`]}`}>{property.status}</span>{isDemo ? <span className={styles.demoImagePill}>Демо</span> : <span className={styles.code}>{property.code}</span>}</div>
-    <div className={styles.cardBody}><div className={styles.cardTitle}><h3>{property.title}</h3><span>›</span></div><p>{property.address}</p><div className={styles.tags}><span>{property.category}</span><span>{property.market}</span>{property.project && <span>{property.project}</span>}</div><div className={styles.cardFacts}><strong>{formatPrice(property)}</strong><span>{[property.rooms && `${property.rooms} комн.`, `${property.area} м²`, property.floor && `${property.floor}/${property.totalFloors} эт.`].filter(Boolean).join(" · ")}</span></div></div>
+    <div className={styles.cardBody}><div className={styles.cardTitle}><h3>{property.title}</h3><span>›</span></div><p>{property.address}</p><div className={styles.tags}><span>{property.category}</span><span>{property.market}</span>{property.project && <span>{property.project}</span>}</div><div className={styles.cardFacts}><strong>{formatPrice(property)}</strong><span>{[property.rooms && `${property.rooms} комн.`, property.area !== null && `${property.area} м²`, property.floor && `${property.floor}/${property.totalFloors} эт.`].filter(Boolean).join(" · ")}</span></div></div>
   </button>;
 }
 
@@ -250,7 +268,7 @@ function ProjectTable({ projects, onOpen }: { projects: PropertyProject[]; onOpe
 }
 
 function PropertyTable({ properties, onOpen }: { properties: PropertyListing[]; onOpen: (id: string) => void }) {
-  return <div className={styles.tableWrap}><table><thead><tr><th>Объект</th><th>Тип</th><th>Рынок</th><th>Район</th><th>Параметры</th><th>Цена</th><th>Статус</th></tr></thead><tbody>{properties.map((property) => <tr key={property.id} onClick={() => onOpen(property.id)}><td><span className={styles.tableThumb} style={{ backgroundImage: `url("${property.imageUrl}")` }} /><span><strong>{property.title}</strong><small>{property.code} · {property.address}</small></span></td><td>{property.category}</td><td>{property.market}</td><td>{property.district}</td><td>{[property.rooms && `${property.rooms} комн.`, `${property.area} м²`].filter(Boolean).join(" · ")}</td><td><strong>{formatPrice(property)}</strong></td><td><span className={`${styles.status} ${styles[`status_${property.status}`]}`}>{property.status}</span></td></tr>)}</tbody></table></div>;
+  return <div className={styles.tableWrap}><table><thead><tr><th>Объект</th><th>Тип</th><th>Рынок</th><th>Район</th><th>Параметры</th><th>Цена</th><th>Статус</th></tr></thead><tbody>{properties.map((property) => <tr key={property.id} onClick={() => onOpen(property.id)}><td><span className={styles.tableThumb} style={{ backgroundImage: `url("${property.imageUrl}")` }} /><span><strong>{property.title}</strong><small>{property.code} · {property.address}</small></span></td><td>{property.category}</td><td>{property.market}</td><td>{property.district}</td><td>{[property.rooms && `${property.rooms} комн.`, property.area !== null && `${property.area} м²`].filter(Boolean).join(" · ")}</td><td><strong>{formatPrice(property)}</strong></td><td><span className={`${styles.status} ${styles[`status_${property.status}`]}`}>{property.status}</span></td></tr>)}</tbody></table></div>;
 }
 
 function LoadingState() { return <div className={styles.emptyState}><span>◌</span><h3>Загружаем объекты</h3></div>; }
@@ -259,6 +277,7 @@ function EmptyState({ onReset, hasFilters }: { onReset: () => void; hasFilters: 
 
 export function formatPrice(property: Pick<PropertyListing, "price" | "currency" | "operation">) {
   const symbol = property.currency === "USD" ? "$" : property.currency === "EUR" ? "€" : "₴";
+  if (property.price === null) return "Цена не указана";
   const value = new Intl.NumberFormat("ru-RU").format(property.price);
   return property.operation === "Аренда" ? `${symbol}${value} / мес.` : `${symbol}${value}`;
 }

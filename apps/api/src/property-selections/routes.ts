@@ -56,7 +56,7 @@ export async function registerPropertySelectionRoutes(app: FastifyInstance, data
     const deal = await database.client.deal.findFirst({ where: { id: request.params.dealId, ...dealScope(user) }, select: { id: true, contactId: true } });
     if (!deal) return reply.status(404).send({ error: "deal_not_found", message: "Сделка не найдена." });
     if (request.body.propertyId) {
-      const property = await database.client.property.findFirst({ where: { id: request.body.propertyId, organizationId: user.organization.id }, select: { id: true } });
+      const property = await database.client.property.findFirst({ where: { id: request.body.propertyId, organizationId: user.organization.id, status: "AVAILABLE" }, select: { id: true } });
       if (!property) return reply.status(400).send({ error: "invalid_property", message: "Объект не найден в каталоге организации." });
     }
     const selection = await database.client.dealPropertySelection.upsert({
