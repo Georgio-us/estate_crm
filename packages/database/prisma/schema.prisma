@@ -60,6 +60,19 @@ enum DealPropertySelectionStatus {
   OFFERED
 }
 
+enum PropertySelectionShareStatus {
+  CREATED
+  SENT
+  OPENED
+  REVOKED
+}
+
+enum PropertySelectionSource {
+  CRM
+  VIA
+  DEMO
+}
+
 enum ActivityCategory {
   NOTE
   TASK
@@ -166,39 +179,40 @@ enum NotificationDeliveryStatus {
 }
 
 model Organization {
-  id                     String                  @id @default(uuid()) @db.Uuid
-  name                   String
-  companyName            String?                 @map("company_name")
-  phone                  String?
-  email                  String?
-  slug                   String                  @unique
-  timezone               String                  @default("Europe/Madrid")
-  locale                 String                  @default("ru")
-  currency               Currency                @default(USD)
-  createdAt              DateTime                @default(now()) @map("created_at")
-  updatedAt              DateTime                @updatedAt @map("updated_at")
-  memberships            Membership[]
-  contacts               Contact[]
-  pipelines              Pipeline[]
-  deals                  Deal[]
-  activities             ActivityEvent[]
-  contactRelations       ContactRelation[]
-  tasks                  Task[]
-  taskTypes              TaskType[]
-  properties             Property[]
-  propertyPhotos         PropertyPhoto[]
-  propertyEvents         PropertyEvent[]
-  dealPropertySelections DealPropertySelection[]
-  integrationConnections IntegrationConnection[]
-  integrationEvents      IntegrationEvent[]
-  viaPairings            ViaPairing[]
-  viaSharedSelections    ViaSharedSelection[]
-  notificationOutbox     NotificationOutbox[]
-  telegramRecipients     TelegramRecipient[]
-  telegramConnectTokens  TelegramConnectToken[]
-  teamInvitations        TeamInvitation[]
-  pilotEvents            PilotEvent[]
-  passwordResetTokens    PasswordResetToken[]
+  id                      String                   @id @default(uuid()) @db.Uuid
+  name                    String
+  companyName             String?                  @map("company_name")
+  phone                   String?
+  email                   String?
+  slug                    String                   @unique
+  timezone                String                   @default("Europe/Madrid")
+  locale                  String                   @default("ru")
+  currency                Currency                 @default(USD)
+  createdAt               DateTime                 @default(now()) @map("created_at")
+  updatedAt               DateTime                 @updatedAt @map("updated_at")
+  memberships             Membership[]
+  contacts                Contact[]
+  pipelines               Pipeline[]
+  deals                   Deal[]
+  activities              ActivityEvent[]
+  contactRelations        ContactRelation[]
+  tasks                   Task[]
+  taskTypes               TaskType[]
+  properties              Property[]
+  propertyPhotos          PropertyPhoto[]
+  propertyEvents          PropertyEvent[]
+  dealPropertySelections  DealPropertySelection[]
+  propertySelectionShares PropertySelectionShare[]
+  integrationConnections  IntegrationConnection[]
+  integrationEvents       IntegrationEvent[]
+  viaPairings             ViaPairing[]
+  viaSharedSelections     ViaSharedSelection[]
+  notificationOutbox      NotificationOutbox[]
+  telegramRecipients      TelegramRecipient[]
+  telegramConnectTokens   TelegramConnectToken[]
+  teamInvitations         TeamInvitation[]
+  pilotEvents             PilotEvent[]
+  passwordResetTokens     PasswordResetToken[]
 
   @@map("organizations")
 }
@@ -222,60 +236,62 @@ model TaskType {
 }
 
 model User {
-  id                      String                       @id @default(uuid()) @db.Uuid
-  email                   String                       @unique
-  name                    String
-  phone                   String?
-  passwordHash            String?                      @map("password_hash")
-  createdAt               DateTime                     @default(now()) @map("created_at")
-  updatedAt               DateTime                     @updatedAt @map("updated_at")
-  memberships             Membership[]
-  sessions                Session[]
-  assignedContacts        Contact[]                    @relation("ContactAssignee")
-  assignedDeals           Deal[]                       @relation("DealAssignee")
-  authoredActivities      ActivityEvent[]              @relation("ActivityAuthor")
-  assignedTasks           Task[]                       @relation("TaskAssignee")
-  assignedProperties      Property[]                   @relation("PropertyAssignee")
-  propertyPhotoUploads    PropertyPhoto[]              @relation("PropertyPhotoUploader")
-  propertyEvents          PropertyEvent[]              @relation("PropertyEventActor")
-  telegramRecipients      TelegramRecipient[]
-  telegramConnectTokens   TelegramConnectToken[]
-  telegramSelections      TelegramRecipientSelection[] @relation("TelegramSelectedUser")
-  receivedTeamInvitations TeamInvitation[]             @relation("TeamInvitationUser")
-  sentTeamInvitations     TeamInvitation[]             @relation("TeamInvitationSender")
-  pilotEvents            PilotEvent[]
-  passwordResetTokens    PasswordResetToken[]
-  issuedViaPairings      ViaPairing[]
-  createdViaSelections   ViaSharedSelection[]
+  id                             String                       @id @default(uuid()) @db.Uuid
+  email                          String                       @unique
+  name                           String
+  phone                          String?
+  passwordHash                   String?                      @map("password_hash")
+  createdAt                      DateTime                     @default(now()) @map("created_at")
+  updatedAt                      DateTime                     @updatedAt @map("updated_at")
+  memberships                    Membership[]
+  sessions                       Session[]
+  assignedContacts               Contact[]                    @relation("ContactAssignee")
+  assignedDeals                  Deal[]                       @relation("DealAssignee")
+  authoredActivities             ActivityEvent[]              @relation("ActivityAuthor")
+  assignedTasks                  Task[]                       @relation("TaskAssignee")
+  assignedProperties             Property[]                   @relation("PropertyAssignee")
+  propertyPhotoUploads           PropertyPhoto[]              @relation("PropertyPhotoUploader")
+  propertyEvents                 PropertyEvent[]              @relation("PropertyEventActor")
+  telegramRecipients             TelegramRecipient[]
+  telegramConnectTokens          TelegramConnectToken[]
+  telegramSelections             TelegramRecipientSelection[] @relation("TelegramSelectedUser")
+  receivedTeamInvitations        TeamInvitation[]             @relation("TeamInvitationUser")
+  sentTeamInvitations            TeamInvitation[]             @relation("TeamInvitationSender")
+  pilotEvents                    PilotEvent[]
+  passwordResetTokens            PasswordResetToken[]
+  issuedViaPairings              ViaPairing[]
+  createdViaSelections           ViaSharedSelection[]
+  createdPropertySelectionShares PropertySelectionShare[]
 
   @@map("users")
 }
 
 model Contact {
-  id                String               @id @default(uuid()) @db.Uuid
-  organizationId    String               @map("organization_id") @db.Uuid
-  name              String
-  phone             String?
-  normalizedPhone   String?              @map("normalized_phone")
-  email             String?
-  telegram          String?
-  source            ContactSource        @default(MANUAL)
-  status            ContactStatus        @default(ACTIVE)
-  archivedAt        DateTime?            @map("archived_at")
-  assigneeId        String?              @map("assignee_id") @db.Uuid
-  comment           String?
-  createdAt         DateTime             @default(now()) @map("created_at")
-  updatedAt         DateTime             @updatedAt @map("updated_at")
-  organization      Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  assignee          User?                @relation("ContactAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  deals             Deal[]
-  relatedDeals      DealRelatedContact[]
-  relationsAsA      ContactRelation[]    @relation("ContactRelationA")
-  relationsAsB      ContactRelation[]    @relation("ContactRelationB")
-  activities        ActivityEvent[]
-  tasks             Task[]
-  integrationEvents IntegrationEvent[]
-  viaSharedSelections ViaSharedSelection[]
+  id                      String                   @id @default(uuid()) @db.Uuid
+  organizationId          String                   @map("organization_id") @db.Uuid
+  name                    String
+  phone                   String?
+  normalizedPhone         String?                  @map("normalized_phone")
+  email                   String?
+  telegram                String?
+  source                  ContactSource            @default(MANUAL)
+  status                  ContactStatus            @default(ACTIVE)
+  archivedAt              DateTime?                @map("archived_at")
+  assigneeId              String?                  @map("assignee_id") @db.Uuid
+  comment                 String?
+  createdAt               DateTime                 @default(now()) @map("created_at")
+  updatedAt               DateTime                 @updatedAt @map("updated_at")
+  organization            Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignee                User?                    @relation("ContactAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  deals                   Deal[]
+  relatedDeals            DealRelatedContact[]
+  relationsAsA            ContactRelation[]        @relation("ContactRelationA")
+  relationsAsB            ContactRelation[]        @relation("ContactRelationB")
+  activities              ActivityEvent[]
+  tasks                   Task[]
+  integrationEvents       IntegrationEvent[]
+  viaSharedSelections     ViaSharedSelection[]
+  propertySelectionShares PropertySelectionShare[]
 
   @@index([organizationId, status, createdAt])
   @@index([organizationId, normalizedPhone])
@@ -334,42 +350,43 @@ model PipelineStage {
 }
 
 model Deal {
-  id                 String                  @id @default(uuid()) @db.Uuid
-  number             Int                     @default(autoincrement())
-  organizationId     String                  @map("organization_id") @db.Uuid
-  pipelineId         String                  @map("pipeline_id") @db.Uuid
-  stageId            String                  @map("stage_id") @db.Uuid
-  contactId          String                  @map("contact_id") @db.Uuid
-  assigneeId         String?                 @map("assignee_id") @db.Uuid
-  title              String
-  request            String
-  budget             String?
-  comment            String?
-  operation          DealOperation           @default(PURCHASE)
-  propertyType       String?                 @map("property_type")
-  district           String?
-  rooms              String?
-  marketPreference   DealMarketPreference?   @map("market_preference")
-  paymentMethod      DealPaymentMethod?      @map("payment_method")
-  neighborhood       String?
-  preferredProject   String?                 @map("preferred_project")
-  source             ContactSource           @default(MANUAL)
-  status             DealStatus              @default(ACTIVE)
-  position           Int                     @default(0)
-  closedAt           DateTime?               @map("closed_at")
-  createdAt          DateTime                @default(now()) @map("created_at")
-  updatedAt          DateTime                @updatedAt @map("updated_at")
-  organization       Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  pipeline           Pipeline                @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
-  stage              PipelineStage           @relation(fields: [stageId], references: [id], onDelete: Restrict)
-  contact            Contact                 @relation(fields: [contactId], references: [id], onDelete: Restrict)
-  assignee           User?                   @relation("DealAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  activities         ActivityEvent[]
-  relatedContacts    DealRelatedContact[]
-  tasks              Task[]
-  integrationEvents  IntegrationEvent[]
-  propertySelections DealPropertySelection[]
-  viaSharedSelections ViaSharedSelection[]
+  id                      String                   @id @default(uuid()) @db.Uuid
+  number                  Int                      @default(autoincrement())
+  organizationId          String                   @map("organization_id") @db.Uuid
+  pipelineId              String                   @map("pipeline_id") @db.Uuid
+  stageId                 String                   @map("stage_id") @db.Uuid
+  contactId               String                   @map("contact_id") @db.Uuid
+  assigneeId              String?                  @map("assignee_id") @db.Uuid
+  title                   String
+  request                 String
+  budget                  String?
+  comment                 String?
+  operation               DealOperation            @default(PURCHASE)
+  propertyType            String?                  @map("property_type")
+  district                String?
+  rooms                   String?
+  marketPreference        DealMarketPreference?    @map("market_preference")
+  paymentMethod           DealPaymentMethod?       @map("payment_method")
+  neighborhood            String?
+  preferredProject        String?                  @map("preferred_project")
+  source                  ContactSource            @default(MANUAL)
+  status                  DealStatus               @default(ACTIVE)
+  position                Int                      @default(0)
+  closedAt                DateTime?                @map("closed_at")
+  createdAt               DateTime                 @default(now()) @map("created_at")
+  updatedAt               DateTime                 @updatedAt @map("updated_at")
+  organization            Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pipeline                Pipeline                 @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  stage                   PipelineStage            @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  contact                 Contact                  @relation(fields: [contactId], references: [id], onDelete: Restrict)
+  assignee                User?                    @relation("DealAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  activities              ActivityEvent[]
+  relatedContacts         DealRelatedContact[]
+  tasks                   Task[]
+  integrationEvents       IntegrationEvent[]
+  propertySelections      DealPropertySelection[]
+  viaSharedSelections     ViaSharedSelection[]
+  propertySelectionShares PropertySelectionShare[]
 
   @@unique([organizationId, number])
   @@index([pipelineId, status, stageId, position])
@@ -412,24 +429,24 @@ model ActivityEvent {
 }
 
 model IntegrationConnection {
-  id                String                      @id @default(uuid()) @db.Uuid
-  organizationId    String                      @map("organization_id") @db.Uuid
-  provider          IntegrationProvider
-  status            IntegrationConnectionStatus @default(CREDENTIALS_REQUIRED)
-  enabled           Boolean                     @default(false)
-  pipelineId        String?                     @map("pipeline_id") @db.Uuid
-  stageId           String?                     @map("stage_id") @db.Uuid
-  config            Json?
-  webhookSecretHash String?                     @unique @map("webhook_secret_hash")
-  credentialCiphertext String?                   @map("credential_ciphertext")
-  lastEventAt       DateTime?                   @map("last_event_at")
-  lastError         String?                     @map("last_error")
-  createdAt         DateTime                    @default(now()) @map("created_at")
-  updatedAt         DateTime                    @updatedAt @map("updated_at")
-  organization      Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  pipeline          Pipeline?                   @relation(fields: [pipelineId], references: [id], onDelete: SetNull)
-  stage             PipelineStage?              @relation(fields: [stageId], references: [id], onDelete: SetNull)
-  events            IntegrationEvent[]
+  id                   String                      @id @default(uuid()) @db.Uuid
+  organizationId       String                      @map("organization_id") @db.Uuid
+  provider             IntegrationProvider
+  status               IntegrationConnectionStatus @default(CREDENTIALS_REQUIRED)
+  enabled              Boolean                     @default(false)
+  pipelineId           String?                     @map("pipeline_id") @db.Uuid
+  stageId              String?                     @map("stage_id") @db.Uuid
+  config               Json?
+  webhookSecretHash    String?                     @unique @map("webhook_secret_hash")
+  credentialCiphertext String?                     @map("credential_ciphertext")
+  lastEventAt          DateTime?                   @map("last_event_at")
+  lastError            String?                     @map("last_error")
+  createdAt            DateTime                    @default(now()) @map("created_at")
+  updatedAt            DateTime                    @updatedAt @map("updated_at")
+  organization         Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  pipeline             Pipeline?                   @relation(fields: [pipelineId], references: [id], onDelete: SetNull)
+  stage                PipelineStage?              @relation(fields: [stageId], references: [id], onDelete: SetNull)
+  events               IntegrationEvent[]
 
   @@unique([organizationId, provider])
   @@index([organizationId, status])
@@ -628,51 +645,52 @@ model Task {
 }
 
 model Property {
-  id             String                  @id @default(uuid()) @db.Uuid
-  number         Int                     @default(autoincrement())
-  organizationId String                  @map("organization_id") @db.Uuid
-  title          String
-  address        String?
-  district       String?
-  category       PropertyCategory
-  market         PropertyMarket
-  operation      PropertyOperation       @default(SALE)
-  status         PropertyStatus          @default(AVAILABLE)
-  price          Float?
-  pricePerSquareMeter Float?             @map("price_per_square_meter")
-  priceRaw       String?                 @map("price_raw")
-  currency       Currency                @default(USD)
-  rooms          String?
-  area           Float?
-  areaRaw        String?                 @map("area_raw")
-  floor          Int?
-  totalFloors    Int?                    @map("total_floors")
-  landArea       Float?                  @map("land_area")
-  project        String?
-  developer      String?
-  description    String?
-  imageUrl       String?                 @map("image_url")
-  buildingLabel  String?                 @map("building_label")
-  unitDetail     String?                 @map("unit_detail")
-  subtype        String?
-  condition      String?
-  documentNotes  String?                 @map("document_notes")
-  ownerName      String?                 @map("owner_name")
-  ownerContacts  String?                 @map("owner_contacts")
-  assigneeId     String?                 @map("assignee_id") @db.Uuid
-  assignmentNote String?                 @map("assignment_note")
-  sourceSheet    String?                 @map("source_sheet")
-  sourceRow      Int?                    @map("source_row")
-  sourceHash     String?                 @map("source_hash")
-  sourceRaw      Json?                   @map("source_raw")
-  importedAt     DateTime?               @map("imported_at")
-  createdAt      DateTime                @default(now()) @map("created_at")
-  updatedAt      DateTime                @updatedAt @map("updated_at")
-  organization   Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  assignee       User?                   @relation("PropertyAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  dealSelections DealPropertySelection[]
-  photos         PropertyPhoto[]
-  events         PropertyEvent[]
+  id                          String                       @id @default(uuid()) @db.Uuid
+  number                      Int                          @default(autoincrement())
+  organizationId              String                       @map("organization_id") @db.Uuid
+  title                       String
+  address                     String?
+  district                    String?
+  category                    PropertyCategory
+  market                      PropertyMarket
+  operation                   PropertyOperation            @default(SALE)
+  status                      PropertyStatus               @default(AVAILABLE)
+  price                       Float?
+  pricePerSquareMeter         Float?                       @map("price_per_square_meter")
+  priceRaw                    String?                      @map("price_raw")
+  currency                    Currency                     @default(USD)
+  rooms                       String?
+  area                        Float?
+  areaRaw                     String?                      @map("area_raw")
+  floor                       Int?
+  totalFloors                 Int?                         @map("total_floors")
+  landArea                    Float?                       @map("land_area")
+  project                     String?
+  developer                   String?
+  description                 String?
+  imageUrl                    String?                      @map("image_url")
+  buildingLabel               String?                      @map("building_label")
+  unitDetail                  String?                      @map("unit_detail")
+  subtype                     String?
+  condition                   String?
+  documentNotes               String?                      @map("document_notes")
+  ownerName                   String?                      @map("owner_name")
+  ownerContacts               String?                      @map("owner_contacts")
+  assigneeId                  String?                      @map("assignee_id") @db.Uuid
+  assignmentNote              String?                      @map("assignment_note")
+  sourceSheet                 String?                      @map("source_sheet")
+  sourceRow                   Int?                         @map("source_row")
+  sourceHash                  String?                      @map("source_hash")
+  sourceRaw                   Json?                        @map("source_raw")
+  importedAt                  DateTime?                    @map("imported_at")
+  createdAt                   DateTime                     @default(now()) @map("created_at")
+  updatedAt                   DateTime                     @updatedAt @map("updated_at")
+  organization                Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignee                    User?                        @relation("PropertyAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  dealSelections              DealPropertySelection[]
+  propertySelectionShareItems PropertySelectionShareItem[]
+  photos                      PropertyPhoto[]
+  events                      PropertyEvent[]
 
   @@unique([organizationId, number])
   @@unique([organizationId, sourceHash])
@@ -726,21 +744,22 @@ model PropertyEvent {
 }
 
 model DealPropertySelection {
-  id             String                      @id @default(uuid()) @db.Uuid
-  organizationId String                      @map("organization_id") @db.Uuid
-  dealId         String                      @map("deal_id") @db.Uuid
-  propertyId     String?                     @map("property_id") @db.Uuid
-  catalogKey     String                      @map("catalog_key")
-  status         DealPropertySelectionStatus @default(CANDIDATE)
+  id             String                       @id @default(uuid()) @db.Uuid
+  organizationId String                       @map("organization_id") @db.Uuid
+  dealId         String                       @map("deal_id") @db.Uuid
+  propertyId     String?                      @map("property_id") @db.Uuid
+  catalogKey     String                       @map("catalog_key")
+  status         DealPropertySelectionStatus  @default(CANDIDATE)
   title          String
   subtitle       String?
-  priceLabel     String?                     @map("price_label")
-  imageUrl       String?                     @map("image_url")
-  createdAt      DateTime                    @default(now()) @map("created_at")
-  updatedAt      DateTime                    @updatedAt @map("updated_at")
-  organization   Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  deal           Deal                        @relation(fields: [dealId], references: [id], onDelete: Cascade)
-  property       Property?                   @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  priceLabel     String?                      @map("price_label")
+  imageUrl       String?                      @map("image_url")
+  createdAt      DateTime                     @default(now()) @map("created_at")
+  updatedAt      DateTime                     @updatedAt @map("updated_at")
+  organization   Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  deal           Deal                         @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  property       Property?                    @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  shareItems     PropertySelectionShareItem[]
 
   @@unique([dealId, catalogKey])
   @@index([organizationId, status])
@@ -748,16 +767,65 @@ model DealPropertySelection {
   @@map("deal_property_selections")
 }
 
+model PropertySelectionShare {
+  id             String                       @id @default(uuid()) @db.Uuid
+  organizationId String                       @map("organization_id") @db.Uuid
+  dealId         String                       @map("deal_id") @db.Uuid
+  contactId      String?                      @map("contact_id") @db.Uuid
+  createdById    String?                      @map("created_by_id") @db.Uuid
+  publicToken    String                       @unique @map("public_token")
+  status         PropertySelectionShareStatus @default(CREATED)
+  expiresAt      DateTime                     @map("expires_at")
+  sentAt         DateTime?                    @map("sent_at")
+  openedAt       DateTime?                    @map("opened_at")
+  lastViewedAt   DateTime?                    @map("last_viewed_at")
+  revokedAt      DateTime?                    @map("revoked_at")
+  viewCount      Int                          @default(0) @map("view_count")
+  createdAt      DateTime                     @default(now()) @map("created_at")
+  updatedAt      DateTime                     @updatedAt @map("updated_at")
+  organization   Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  deal           Deal                         @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  contact        Contact?                     @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  createdBy      User?                        @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  items          PropertySelectionShareItem[]
+
+  @@index([organizationId, dealId, createdAt])
+  @@index([status, expiresAt])
+  @@map("property_selection_shares")
+}
+
+model PropertySelectionShareItem {
+  id                  String                  @id @default(uuid()) @db.Uuid
+  shareId             String                  @map("share_id") @db.Uuid
+  propertySelectionId String?                 @map("property_selection_id") @db.Uuid
+  propertyId          String?                 @map("property_id") @db.Uuid
+  source              PropertySelectionSource @default(CRM)
+  externalId          String?                 @map("external_id")
+  title               String
+  subtitle            String?
+  priceLabel          String?                 @map("price_label")
+  imageUrl            String?                 @map("image_url")
+  sortOrder           Int                     @default(0) @map("sort_order")
+  share               PropertySelectionShare  @relation(fields: [shareId], references: [id], onDelete: Cascade)
+  propertySelection   DealPropertySelection?  @relation(fields: [propertySelectionId], references: [id], onDelete: SetNull)
+  property            Property?               @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+
+  @@index([shareId, sortOrder])
+  @@index([propertySelectionId])
+  @@index([propertyId])
+  @@map("property_selection_share_items")
+}
+
 model Session {
-  id         String   @id @default(uuid()) @db.Uuid
-  tokenHash  String   @unique @map("token_hash")
-  userId     String   @map("user_id") @db.Uuid
-  expiresAt  DateTime @map("expires_at")
-  userAgent  String?  @map("user_agent")
-  ipAddress  String?  @map("ip_address")
-  lastSeenAt DateTime @default(now()) @map("last_seen_at")
-  createdAt  DateTime @default(now()) @map("created_at")
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String       @id @default(uuid()) @db.Uuid
+  tokenHash   String       @unique @map("token_hash")
+  userId      String       @map("user_id") @db.Uuid
+  expiresAt   DateTime     @map("expires_at")
+  userAgent   String?      @map("user_agent")
+  ipAddress   String?      @map("ip_address")
+  lastSeenAt  DateTime     @default(now()) @map("last_seen_at")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   pilotEvents PilotEvent[]
 
   @@index([userId])
@@ -789,17 +857,17 @@ model PilotEvent {
 }
 
 model PasswordResetToken {
-  id             String    @id @default(uuid()) @db.Uuid
-  organizationId String?   @map("organization_id") @db.Uuid
-  userId         String?   @map("user_id") @db.Uuid
-  emailHash      String    @map("email_hash")
-  ipHash         String    @map("ip_hash")
-  tokenHash      String?   @unique @map("token_hash")
-  expiresAt      DateTime? @map("expires_at")
-  consumedAt     DateTime? @map("consumed_at")
-  createdAt      DateTime  @default(now()) @map("created_at")
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String?       @map("organization_id") @db.Uuid
+  userId         String?       @map("user_id") @db.Uuid
+  emailHash      String        @map("email_hash")
+  ipHash         String        @map("ip_hash")
+  tokenHash      String?       @unique @map("token_hash")
+  expiresAt      DateTime?     @map("expires_at")
+  consumedAt     DateTime?     @map("consumed_at")
+  createdAt      DateTime      @default(now()) @map("created_at")
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
-  user           User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user           User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([emailHash, createdAt])
   @@index([ipHash, createdAt])

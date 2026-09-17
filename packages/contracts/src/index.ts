@@ -437,6 +437,52 @@ export interface UpdateDealPropertySelectionRequest {
   status: DealPropertySelectionStatus;
 }
 
+export type PropertySelectionShareStatus = "CREATED" | "SENT" | "OPENED" | "REVOKED" | "EXPIRED";
+export type PropertySelectionSource = "CRM" | "VIA" | "DEMO";
+
+export interface PropertySelectionShareItemRecord {
+  id: string;
+  propertySelectionId: string | null;
+  source: PropertySelectionSource;
+  title: string;
+  subtitle: string | null;
+  priceLabel: string | null;
+  imageUrl: string | null;
+  sortOrder: number;
+}
+
+export interface PropertySelectionShareRecord {
+  id: string;
+  status: PropertySelectionShareStatus;
+  publicPath: string;
+  expiresAt: string;
+  sentAt: string | null;
+  openedAt: string | null;
+  revokedAt: string | null;
+  viewCount: number;
+  createdAt: string;
+  items: PropertySelectionShareItemRecord[];
+}
+
+export interface CreatePropertySelectionShareRequest {
+  selectionIds: string[];
+}
+
+export interface PublicPropertySelectionShareRecord {
+  status: Exclude<PropertySelectionShareStatus, "CREATED" | "SENT"> | "AVAILABLE";
+  organizationName: string;
+  clientName: string | null;
+  managerName: string | null;
+  expiresAt: string;
+  items: Array<{
+    id: string;
+    title: string;
+    subtitle: string | null;
+    priceLabel: string | null;
+    imageUrl: string | null;
+  }>;
+}
+
 export type TaskKind = "CALL" | "MEETING" | "MESSAGE" | "OTHER";
 export type TaskStatus = "ACTIVE" | "COMPLETED";
 

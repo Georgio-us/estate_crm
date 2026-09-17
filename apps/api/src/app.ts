@@ -19,6 +19,7 @@ import { registerPropertyRoutes } from "./properties/routes.js";
 import { registerPropertyTransferRoutes } from "./properties/transfer-routes.js";
 import { registerPropertyPhotoRoutes } from "./properties/photo-routes.js";
 import { registerPropertySelectionRoutes } from "./property-selections/routes.js";
+import { registerPropertySelectionShareRoutes } from "./property-selections/share-routes.js";
 import { registerSettingsRoutes } from "./settings/routes.js";
 import { registerTaskRoutes } from "./tasks/routes.js";
 import { registerTeamRoutes } from "./team/routes.js";
@@ -84,6 +85,7 @@ export async function buildApp(
   await registerPropertyTransferRoutes(app, database);
   await registerPropertyPhotoRoutes(app, database, config);
   await registerPropertySelectionRoutes(app, database);
+  await registerPropertySelectionShareRoutes(app, database);
   await registerSettingsRoutes(app, database);
   await registerDashboardRoutes(app, database);
   await registerPilotRoutes(app, database);
