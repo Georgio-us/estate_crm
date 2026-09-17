@@ -250,6 +250,18 @@
 .propertyCatalogActions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
 .propertyCatalogActions > button { min-height: 36px; padding: 8px 14px; border: 1px solid var(--color-border, #ddd); border-radius: 10px; background: #fff; color: inherit; font: inherit; cursor: pointer; }
 .propertyExcelTransfer > button, .propertyExcelButton, .propertyExcelPreview > button { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; padding: 8px 14px; border: 1px solid var(--color-border, #ddd); border-radius: 10px; background: #fff; color: inherit; font: inherit; cursor: pointer; }
+.propertyScopeSelect { position: relative; }
+.propertyScopeSelect > button { display: inline-flex; min-width: 142px; min-height: 36px; align-items: center; justify-content: space-between; gap: 18px; padding: 8px 11px 8px 13px; border: 1px solid var(--color-border, #ddd); border-radius: 10px; outline: 0; background: #fff; color: var(--text); font: inherit; cursor: pointer; transition: border-color .16s ease, box-shadow .16s ease, background-color .16s ease; }
+.propertyScopeSelect > button:hover { border-color: #b8c1cf; background: #fbfcfe; }
+.propertyScopeSelect > button:focus-visible, .propertyScopeSelect > button[aria-expanded="true"] { border-color: #9fb6e4; box-shadow: var(--shadow-focus); }
+.propertyScopeSelect > button:disabled { cursor: default; opacity: .58; }
+.propertyScopeSelect > button i { color: var(--text-muted); font-size: 17px; font-style: normal; line-height: 1; transition: transform .16s ease; }
+.propertyScopeSelect > button[aria-expanded="true"] i { transform: rotate(180deg); }
+.propertyScopeMenu { position: absolute; z-index: 30; top: calc(100% + 7px); left: 0; display: grid; min-width: 218px; padding: 6px; border: 1px solid var(--border); border-radius: 12px; background: #fff; box-shadow: 0 16px 38px rgb(22 31 46 / 16%), 0 3px 10px rgb(22 31 46 / 8%); }
+.propertyScopeMenu > button { display: grid; grid-template-columns: 18px 1fr; align-items: center; gap: 8px; width: 100%; padding: 9px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.propertyScopeMenu > button:hover, .propertyScopeMenu > button:focus-visible { outline: 0; background: var(--surface-muted); }
+.propertyScopeMenu > button > span { color: var(--primary); font-weight: 700; }
+.propertyScopeSelected { background: #eef3fc !important; color: #234f9c !important; }
 .propertyExcelTransfer > p { width: 100%; margin: 0; }
 .propertyExcelPreview { width: 100%; padding: 14px; border: 1px solid var(--color-border, #ddd); border-radius: 12px; background: #fff; }
 .propertyExcelRows { max-height: 260px; overflow-y: auto; margin: 10px 0; }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import styles from "./properties.module.css";
 type PropertyImportRow = { sheet: "квартиры" | "дома" | "коммерция" | "аренда"; rowNumber: number; cells: string[]; headers: string[]; crmId?: string | null; operation?: "SALE" | "RENT" };
 type PreviewRow = { sheet: PropertyImportRow["sheet"]; rowNumber: number; title: string; operation: "SALE" | "RENT"; action: "CREATE" | "UPDATE" | "SKIP" | "REVIEW"; warnings: string[] };
@@ -8,6 +8,12 @@ type PropertyImportPreviewResponse = { rows: PreviewRow[]; counts: { create: num
 
 const supported = ["квартиры", "дома", "коммерция"] as const;
 const sourceColumnCount = { квартиры: 11, дома: 13, коммерция: 11 };
+const scopeOptions = [
+  { value: "all", label: "Все разделы" },
+  { value: "квартиры", label: "Только квартиры" },
+  { value: "дома", label: "Только дома" },
+  { value: "коммерция", label: "Только коммерция" },
+] as const;
 
 export function PropertyExcelTransfer({ onImported }: { onImported: () => Promise<void> }) {
   const [rows, setRows] = useState<PropertyImportRow[]>([]);
@@ -16,6 +22,23 @@ export function PropertyExcelTransfer({ onImported }: { onImported: () => Promis
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [scope, setScope] = useState<"all" | typeof supported[number]>("all");
+  const [scopeOpen, setScopeOpen] = useState(false);
+  const scopeControl = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function closeOnOutsideClick(event: PointerEvent) {
+      if (!scopeControl.current?.contains(event.target as Node)) setScopeOpen(false);
+    }
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setScopeOpen(false);
+    }
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, []);
 
   async function readFile(file: File) {
     setBusy(true); setMessage(""); setPreview(null);
@@ -83,7 +106,14 @@ export function PropertyExcelTransfer({ onImported }: { onImported: () => Promis
   }
 
   return <div className={styles.propertyExcelTransfer}>
-    <select aria-label="Раздел для импорта" value={scope} disabled={busy} onChange={(event) => setScope(event.target.value as typeof scope)}><option value="all">Все разделы</option><option value="квартиры">Только квартиры</option><option value="дома">Только дома</option><option value="коммерция">Только коммерция</option></select>
+    <div className={styles.propertyScopeSelect} ref={scopeControl}>
+      <button type="button" aria-label="Раздел для импорта" aria-haspopup="listbox" aria-expanded={scopeOpen} disabled={busy} onClick={() => setScopeOpen((current) => !current)}>
+        <span>{scopeOptions.find((option) => option.value === scope)?.label}</span><i aria-hidden="true">⌄</i>
+      </button>
+      {scopeOpen && <div className={styles.propertyScopeMenu} role="listbox" aria-label="Раздел для импорта">
+        {scopeOptions.map((option) => <button type="button" role="option" aria-selected={scope === option.value} className={scope === option.value ? styles.propertyScopeSelected : ""} onClick={() => { setScope(option.value); setScopeOpen(false); }} key={option.value}><span aria-hidden="true">{scope === option.value ? "✓" : ""}</span>{option.label}</button>)}
+      </div>}
+    </div>
     <label className={styles.propertyExcelButton}>Импорт Excel<input type="file" accept=".xlsx,.xls" hidden disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void readFile(file); event.target.value = ""; }} /></label>
     <button type="button" disabled={busy} onClick={() => { void exportFile(); }}>Экспорт Excel</button>
     {message && <p role="status">{message}</p>}
