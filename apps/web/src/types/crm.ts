@@ -69,6 +69,7 @@ export interface PropertyListing {
   operation: "Продажа" | "Аренда";
   status: PropertyStatus;
   price: number | null;
+  pricePerSquareMeter?: number | null;
   currency: "USD" | "EUR" | "UAH";
   rooms?: string;
   area: number | null;

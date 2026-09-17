@@ -522,6 +522,7 @@ export interface PropertyRecord {
   operation: PropertyOperation;
   status: PropertyStatus;
   price: number | null;
+  pricePerSquareMeter: number | null;
   priceRaw: string | null;
   currency: Currency;
   rooms: string | null;
@@ -565,6 +566,7 @@ export interface CreatePropertyRequest {
   operation?: PropertyOperation;
   status?: PropertyStatus;
   price?: number | null;
+  pricePerSquareMeter?: number | null;
   currency?: Currency;
   rooms?: string | null;
   area?: number | null;

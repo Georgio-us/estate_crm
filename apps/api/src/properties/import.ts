@@ -18,6 +18,11 @@ function numberValue(raw: string) {
   return Number.isFinite(value) ? value : null;
 }
 
+function pricePerSquareMeterValue(raw: string) {
+  const match = raw.trim().match(/^(\d+(?:[.,]\d+)?)\s*\/\s*м(?:2|²)$/i);
+  return match?.[1] ? numberValue(match[1]) : null;
+}
+
 function intValue(raw: string) {
   const value = Number(raw.trim());
   return Number.isInteger(value) && value >= 0 ? value : null;
@@ -39,8 +44,9 @@ export function adaptImportRow(row: PropertyImportRow) {
   const category: "LAND" | "HOUSE" | "COMMERCIAL" | "APARTMENT" = house ? (/участ|земл/i.test(subtype ?? "") ? "LAND" : "HOUSE") : row.sheet === "коммерция" ? "COMMERCIAL" : "APARTMENT";
   const priceRaw = text(c[house ? 9 : 7] ?? "");
   const areaRaw = text(c[house ? 5 : 4] ?? "");
-  const price = numberValue(priceRaw ?? "");
   const area = numberValue(areaRaw ?? "");
+  const pricePerSquareMeter = pricePerSquareMeterValue(priceRaw ?? "");
+  const price = numberValue(priceRaw ?? "") ?? (pricePerSquareMeter !== null && area !== null ? Math.round(pricePerSquareMeter * area * 100) / 100 : null);
   if (priceRaw && price === null) warnings.push(`Цену «${priceRaw}» нужно проверить вручную.`);
   if (areaRaw && area === null) warnings.push(`Площадь «${areaRaw}» нужно проверить вручную.`);
   const floorRaw = c[house ? 4 : row.sheet === "коммерция" ? 3 : 3] ?? "";
@@ -53,7 +59,7 @@ export function adaptImportRow(row: PropertyImportRow) {
   return { warnings, data: {
     title, address, district: house ? text(c[0] ?? "") : null, category, market: "SECONDARY" as const,
     operation: "SALE" as const, status: "AVAILABLE" as const, currency: "USD" as const,
-    price, priceRaw, area, areaRaw, rooms: house ? null : row.sheet === "квартиры" ? text(c[2] ?? "") : null,
+    price, pricePerSquareMeter, priceRaw, area, areaRaw, rooms: house ? null : row.sheet === "квартиры" ? text(c[2] ?? "") : null,
     floor: house ? null : intValue(floorParts[0] ?? ""), totalFloors: house ? intValue(floorRaw) : intValue(floorParts[1] ?? ""),
     landArea: house ? numberValue(c[3] ?? "") : null, project: buildingLabel,
     buildingLabel, unitDetail: row.sheet === "квартиры" ? address : null, subtype,
@@ -66,7 +72,7 @@ export function adaptImportRow(row: PropertyImportRow) {
   } };
 }
 
-export const importedFieldNames = ["title", "address", "district", "category", "price", "priceRaw", "area", "areaRaw", "rooms", "floor", "totalFloors", "landArea", "project", "buildingLabel", "unitDetail", "subtype", "condition", "description", "documentNotes", "ownerName", "ownerContacts", "assignmentNote"] as const;
+export const importedFieldNames = ["title", "address", "district", "category", "price", "pricePerSquareMeter", "priceRaw", "area", "areaRaw", "rooms", "floor", "totalFloors", "landArea", "project", "buildingLabel", "unitDetail", "subtype", "condition", "description", "documentNotes", "ownerName", "ownerContacts", "assignmentNote"] as const;
 
 export function sourceChanges(row: PropertyImportRow, previousCells: string[]) {
   const previous = adaptImportRow({ ...row, cells: previousCells }).data as Record<string, unknown> | null;

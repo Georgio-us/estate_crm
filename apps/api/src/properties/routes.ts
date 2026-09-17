@@ -13,7 +13,7 @@ function mapProperty(property: {
   id: string; number: number; title: string; address: string | null; district: string | null;
   category: "APARTMENT" | "HOUSE" | "LAND" | "COMMERCIAL"; market: "PRIMARY" | "SECONDARY";
   operation: "SALE" | "RENT"; status: "AVAILABLE" | "RESERVED" | "SOLD";
-  price: number | null; currency: "USD" | "EUR" | "UAH"; rooms: string | null; area: number | null; floor: number | null;
+  price: number | null; pricePerSquareMeter?: number | null; currency: "USD" | "EUR" | "UAH"; rooms: string | null; area: number | null; floor: number | null;
   priceRaw?: string | null; areaRaw?: string | null;
   totalFloors: number | null; landArea: number | null; project: string | null; developer: string | null;
   description: string | null; imageUrl: string | null; createdAt: Date; updatedAt: Date;
@@ -25,7 +25,7 @@ function mapProperty(property: {
   return {
     id: property.id, title: property.title, address: property.address, district: property.district,
     category: property.category, market: property.market, operation: property.operation, status: property.status,
-    price: property.price, priceRaw: property.priceRaw ?? null, currency: property.currency, rooms: property.rooms, area: property.area, areaRaw: property.areaRaw ?? null,
+    price: property.price, pricePerSquareMeter: property.pricePerSquareMeter ?? null, priceRaw: property.priceRaw ?? null, currency: property.currency, rooms: property.rooms, area: property.area, areaRaw: property.areaRaw ?? null,
     floor: property.floor, totalFloors: property.totalFloors, landArea: property.landArea,
     project: property.project, developer: property.developer, description: property.description,
     imageUrl: property.photos?.length ? `/api/crm/properties/${property.id}/photos/${property.photos.find((photo) => photo.isCover)?.id ?? property.photos[0]?.id}/content` : property.imageUrl,
@@ -51,6 +51,7 @@ const propertyFields = {
   operation: { type: "string", enum: ["SALE", "RENT"] },
   status: { type: "string", enum: ["AVAILABLE", "RESERVED", "SOLD"] },
   price: { anyOf: [{ type: "number", minimum: 0 }, { type: "null" }] },
+  pricePerSquareMeter: { anyOf: [{ type: "number", minimum: 0 }, { type: "null" }] },
   currency: { type: "string", enum: ["USD", "EUR", "UAH"] },
   rooms: { anyOf: [{ type: "string", maxLength: 40 }, { type: "null" }] },
   area: { anyOf: [{ type: "number", minimum: 0 }, { type: "null" }] },
@@ -82,6 +83,7 @@ function propertyData(body: CreatePropertyRequest | UpdatePropertyRequest) {
     ...(body.operation !== undefined ? { operation: body.operation } : {}),
     ...(body.status !== undefined ? { status: body.status } : {}),
     ...(body.price !== undefined ? { price: body.price } : {}),
+    ...(body.pricePerSquareMeter !== undefined ? { pricePerSquareMeter: body.pricePerSquareMeter } : {}),
     ...(body.currency !== undefined ? { currency: body.currency } : {}),
     ...(body.rooms !== undefined ? { rooms: optionalText(body.rooms) } : {}),
     ...(body.area !== undefined ? { area: body.area } : {}),

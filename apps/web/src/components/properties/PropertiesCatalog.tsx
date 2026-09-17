@@ -17,7 +17,7 @@ type CatalogSection = "all" | "primary" | "secondary";
 interface ApiProperty {
   id: string; code: string; title: string; address: string | null; district: string | null;
   category: "APARTMENT" | "HOUSE" | "LAND" | "COMMERCIAL"; market: "PRIMARY" | "SECONDARY";
-  operation: "SALE" | "RENT"; status: "AVAILABLE" | "RESERVED" | "SOLD"; price: number | null; priceRaw: string | null;
+  operation: "SALE" | "RENT"; status: "AVAILABLE" | "RESERVED" | "SOLD"; price: number | null; pricePerSquareMeter: number | null; priceRaw: string | null;
   currency: "USD" | "EUR" | "UAH"; rooms: string | null; area: number | null; areaRaw: string | null; floor: number | null;
   totalFloors: number | null; landArea: number | null; project: string | null; developer: string | null;
   description: string | null; imageUrl: string | null; updatedAt: string;
@@ -41,7 +41,7 @@ function mapApiProperty(property: ApiProperty): PropertyListing {
   return {
     id: property.id, code: property.code, title: property.title, address: property.address || "Адрес не указан",
     district: property.district || "Не указан", category: categoryFromApi[property.category], market: marketFromApi[property.market],
-    operation: operationFromApi[property.operation], status: statusFromApi[property.status], price: property.price,
+    operation: operationFromApi[property.operation], status: statusFromApi[property.status], price: property.price, pricePerSquareMeter: property.pricePerSquareMeter,
     currency: property.currency, rooms: property.rooms || undefined, area: property.area, floor: property.floor ?? undefined,
     totalFloors: property.totalFloors ?? undefined, landArea: property.landArea ?? undefined, project: property.project || undefined,
     developer: property.developer || undefined, description: property.description || "Описание ещё не добавлено.",
@@ -61,7 +61,7 @@ function propertyPayload(property: PropertyListing | NewPropertyDraft) {
     title: property.title, address: property.address || null, district: property.district || null,
     category: categoryToApi[property.category], market: marketToApi[property.market], operation: operationToApi[property.operation],
     ...( "status" in property ? { status: statusToApi[property.status] } : {}),
-    price: property.price === "" || property.price === null ? null : Number(property.price), currency: "currency" in property ? property.currency : "USD",
+    price: property.price === "" || property.price === null ? null : Number(property.price), pricePerSquareMeter: property.pricePerSquareMeter === "" || property.pricePerSquareMeter === null || property.pricePerSquareMeter === undefined ? null : Number(property.pricePerSquareMeter), currency: "currency" in property ? property.currency : "USD",
     rooms: property.rooms || null, area: property.area === "" || property.area === null ? null : Number(property.area),
     ...( "floor" in property ? { floor: numeric(property.floor), totalFloors: numeric(property.totalFloors), landArea: numeric(property.landArea) } : {}),
     project: property.project || null, developer: property.developer || null, description: property.description || null,

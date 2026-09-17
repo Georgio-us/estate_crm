@@ -59,6 +59,29 @@ test("Excel preview, apply, repeated upload and export keep owner and source cel
   await app.close();
 });
 
+test("price per square meter is stored separately and produces the total price", async () => {
+  const records: Array<Record<string, any>> = [];
+  const client: Record<string, any> = {
+    session: { async findUnique() { return { id: "session-1", expiresAt: new Date(Date.now() + 60_000), user: { id: "user-1", name: "Admin", email: "admin@example.com", memberships: [{ role: "ADMIN", organization: { id: "org-1", name: "CRM", slug: "crm" } }] } }; } },
+    property: {
+      async findMany({ where }: { where: Record<string, any> }) { return where.market === "SECONDARY" ? records.map((record) => ({ ...record, assignee: null, photos: [] })) : []; },
+      async create({ data }: { data: Record<string, any> }) { records.push({ ...data, id: "f48ab88b-b1cb-4adf-b930-3537767cfb92", number: 1 }); },
+    },
+  };
+  const database = { client, async ping() {}, async disconnect() {} } as unknown as DatabaseConnection;
+  const app = await buildApp(config, database);
+  const rows = [{ sheet: "квартиры", rowNumber: 5, cells: ["66 Жемчужина", "Краснова, 2-24-5", "1", "24/24", "48.7", "от строителей", "ипподром, терраса", "1300/м2", "Собственник", "+380000000", "Юля"], headers: ["ЖК", "Адрес, секция, № кв.", "Кол-во комнат", "Этаж/Эт-сть", "м²", "Состояние", "Описание, документы", "Цена,$", "ФИО", "Контакты", "Риелтор"] }];
+  const preview = await app.inject({ method: "POST", url: "/properties/import/preview", headers: cookie, payload: { rows } });
+  assert.equal(preview.statusCode, 200);
+  assert.deepEqual(preview.json().rows[0].warnings, []);
+  const applied = await app.inject({ method: "POST", url: "/properties/import/apply", headers: cookie, payload: { rows } });
+  assert.equal(applied.statusCode, 200);
+  assert.equal(records[0]?.pricePerSquareMeter, 1300);
+  assert.equal(records[0]?.price, 63310);
+  assert.equal(records[0]?.priceRaw, "1300/м2");
+  await app.close();
+});
+
 test("photos above 15 MB require explicit confirmation before R2 configuration", async () => {
   const propertyId = "f48ab88b-b1cb-4adf-b930-3537767cfb92";
   const client: Record<string, any> = {
