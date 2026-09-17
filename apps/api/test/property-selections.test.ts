@@ -30,7 +30,7 @@ test("a deal property selection can be added, marked as offered and removed", as
       dealPropertySelection: {
         async findMany() { return [selection]; },
         async findFirst() { return { ...selection, deal: { contactId } }; },
-        async upsert() { return selection; },
+        async upsert({ update }: { update: { status: "CANDIDATE" } }) { selection = { ...selection, status: update.status }; return selection; },
         async update({ data }: { data: { status: "CANDIDATE" | "OFFERED" } }) { selection = { ...selection, status: data.status }; return selection; },
         async delete() { return selection; },
       },
@@ -50,12 +50,16 @@ test("a deal property selection can be added, marked as offered and removed", as
   assert.equal(offered.statusCode, 200);
   assert.equal(offered.json().selection.status, "OFFERED");
 
+  const addedAgain = await app.inject({ method: "POST", url: `/deals/${dealId}/property-selections`, headers, payload: { propertyId, catalogKey: selection.catalogKey, title: selection.title, subtitle: selection.subtitle, priceLabel: selection.priceLabel } });
+  assert.equal(addedAgain.statusCode, 201);
+  assert.equal(addedAgain.json().selection.status, "CANDIDATE");
+
   const listed = await app.inject({ method: "GET", url: `/deals/${dealId}/property-selections`, headers });
   assert.equal(listed.statusCode, 200);
   assert.equal(listed.json().selections[0].title, "Квартира у моря");
 
   const removed = await app.inject({ method: "DELETE", url: `/deals/${dealId}/property-selections/${selectionId}`, headers });
   assert.equal(removed.statusCode, 200);
-  assert.deepEqual(activityTitles, ["Объект добавлен в подборку", "Объект предложен клиенту", "Объект удалён из подборки"]);
+  assert.deepEqual(activityTitles, ["Объект добавлен в подборку", "Объект предложен клиенту", "Объект добавлен в подборку", "Объект удалён из подборки"]);
   await app.close();
 });

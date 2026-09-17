@@ -68,7 +68,7 @@ export async function registerPropertySelectionRoutes(app: FastifyInstance, data
       },
       update: {
         propertyId: request.body.propertyId || null, title: request.body.title.trim(), subtitle: optionalText(request.body.subtitle),
-        priceLabel: optionalText(request.body.priceLabel), imageUrl: optionalText(request.body.imageUrl),
+        priceLabel: optionalText(request.body.priceLabel), imageUrl: optionalText(request.body.imageUrl), status: "CANDIDATE",
       },
     });
     await database.client.activityEvent.create({ data: { organizationId: user.organization.id, contactId: deal.contactId, dealId: deal.id, authorId: user.id, category: "OBJECT", title: "Объект добавлен в подборку", description: selection.title } });
