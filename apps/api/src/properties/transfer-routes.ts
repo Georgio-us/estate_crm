@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { DatabaseConnection } from "@estate-crm/database";
 import type { PropertyImportPreviewResponse, PropertyImportRow } from "@estate-crm/contracts";
 import { requireUser } from "../auth/require-user.js";
-import { adaptImportRow, sourceChanges, sourceHash, sourceHeaders } from "./import.js";
+import { adaptImportRow, expandImportRows, sourceChanges, sourceHash, sourceHeaders } from "./import.js";
 
 const rowSchema = { type: "object", additionalProperties: false, required: ["sheet", "rowNumber", "cells", "headers"], properties: {
   sheet: { type: "string", enum: ["квартиры", "дома", "коммерция", "аренда"] },
@@ -10,22 +10,24 @@ const rowSchema = { type: "object", additionalProperties: false, required: ["she
   cells: { type: "array", minItems: 1, maxItems: 30, items: { type: "string", maxLength: 10_000 } },
   headers: { type: "array", minItems: 1, maxItems: 30, items: { type: "string", maxLength: 300 } },
   crmId: { anyOf: [{ type: "string", format: "uuid" }, { type: "null" }] },
+  operation: { type: "string", enum: ["SALE", "RENT"] },
 } } as const;
 
 type ImportBody = { rows: PropertyImportRow[]; confirmedRows?: string[] };
 
 async function previewRows(database: DatabaseConnection, organizationId: string, rows: PropertyImportRow[]): Promise<PropertyImportPreviewResponse> {
+  rows = expandImportRows(rows);
   const hashes = rows.map(sourceHash);
   const crmIds = rows.flatMap((row) => row.crmId ? [row.crmId] : []);
   const existing = await database.client.property.findMany({ where: { organizationId, OR: [{ sourceHash: { in: hashes } }, { id: { in: crmIds } }, { sourceSheet: { in: ["квартиры", "дома", "коммерция"] }, sourceRow: { in: rows.map((row) => row.rowNumber) } }] } });
   const byHash = new Map(existing.filter((item) => item.sourceHash).map((item) => [item.sourceHash, item]));
   const byId = new Map(existing.map((item) => [item.id, item]));
-  const bySourceRow = new Map(existing.filter((item) => item.sourceSheet && item.sourceRow).map((item) => [`${item.sourceSheet}:${item.sourceRow}`, item]));
+  const bySourceRow = new Map(existing.filter((item) => item.sourceSheet && item.sourceRow).map((item) => [`${item.sourceSheet}:${item.sourceRow}:${item.operation}`, item]));
   const seen = new Set<string>();
   const result = rows.map((row) => {
     const adapted = adaptImportRow(row);
     const hash = sourceHash(row);
-    const match = row.crmId ? byId.get(row.crmId) : byHash.get(hash) ?? bySourceRow.get(`${row.sheet}:${row.rowNumber}`);
+    const match = row.crmId ? byId.get(row.crmId) : byHash.get(hash) ?? bySourceRow.get(`${row.sheet}:${row.rowNumber}:${row.operation ?? "SALE"}`);
     const warnings = [...adapted.warnings];
     if (row.sheet !== "аренда" && sourceHeaders[row.sheet].some((expected, index) => row.headers[index]?.trim().toLocaleLowerCase("ru") !== expected.toLocaleLowerCase("ru"))) warnings.push("Заголовки листа не совпадают с форматом БАЗА.xlsx.");
     let action: "CREATE" | "UPDATE" | "SKIP" | "REVIEW" = "CREATE";
@@ -45,12 +47,12 @@ async function previewRows(database: DatabaseConnection, organizationId: string,
     else if (match) { action = "REVIEW"; warnings.push("Строка источника изменилась без CRM ID. Сначала выгрузите базу из CRM и обновите строку с её ID."); }
     else if (!row.crmId && adapted.data.address) {
       // Changed imports without a CRM ID must be reviewed instead of creating a duplicate.
-      const key = `${row.sheet}:${row.rowNumber}`;
+      const key = `${row.sheet}:${row.rowNumber}:${row.operation ?? "SALE"}`;
       if (seen.has(key)) { action = "REVIEW"; warnings.push("Повтор строки в файле."); }
     }
     if (adapted.data && seen.has(hash)) { action = "REVIEW"; warnings.push("Повтор объекта в файле."); }
     seen.add(hash);
-    return { sheet: row.sheet, rowNumber: row.rowNumber, title: adapted.data?.title ?? `Строка ${row.rowNumber}`, category: adapted.data?.category ?? "COMMERCIAL", action, warnings, existingId: match?.id ?? null };
+    return { sheet: row.sheet, rowNumber: row.rowNumber, title: adapted.data?.title ?? `Строка ${row.rowNumber}`, category: adapted.data?.category ?? "COMMERCIAL", operation: row.operation ?? "SALE", action, warnings, existingId: match?.id ?? null };
   });
   return { rows: result, counts: { create: result.filter((row) => row.action === "CREATE").length, update: result.filter((row) => row.action === "UPDATE").length, skip: result.filter((row) => row.action === "SKIP").length, review: result.filter((row) => row.action === "REVIEW").length } };
 }
@@ -66,11 +68,12 @@ export async function registerPropertyTransferRoutes(app: FastifyInstance, datab
     const preview = await previewRows(database, user.organization.id, request.body.rows);
     if (preview.counts.review) return reply.status(409).send({ error: "import_requires_review", message: "Исправьте строки, требующие решения, перед импортом.", preview });
     const confirmed = new Set(request.body.confirmedRows ?? []);
-    const uncertain = preview.rows.filter((row) => (row.action === "CREATE" || row.action === "UPDATE") && row.warnings.length && !confirmed.has(`${row.sheet}:${row.rowNumber}`));
+    const uncertain = preview.rows.filter((row) => (row.action === "CREATE" || row.action === "UPDATE") && row.warnings.length && !confirmed.has(`${row.sheet}:${row.rowNumber}:${row.operation}`));
     if (uncertain.length) return reply.status(409).send({ error: "import_requires_confirmation", message: "Подтвердите строки с замечаниями.", preview });
     let created = 0, updated = 0;
-    for (let index = 0; index < request.body.rows.length; index++) {
-      const decision = preview.rows[index]; const row = request.body.rows[index];
+    const expandedRows = expandImportRows(request.body.rows);
+    for (let index = 0; index < expandedRows.length; index++) {
+      const decision = preview.rows[index]; const row = expandedRows[index];
       if (!decision || !row || decision.action === "SKIP") continue;
       const adapted = adaptImportRow(row); if (!adapted.data) continue;
       if (decision.action === "CREATE") {
@@ -92,7 +95,7 @@ export async function registerPropertyTransferRoutes(app: FastifyInstance, datab
     const user = await requireUser(request, reply, database); if (!user) return reply;
     const properties = await database.client.property.findMany({ where: { organizationId: user.organization.id, market: "SECONDARY" }, include: { assignee: { select: { name: true } }, photos: { where: { status: "READY" }, select: { id: true } } }, orderBy: [{ sourceSheet: "asc" }, { sourceRow: "asc" }, { number: "asc" }] });
     const extraCols = Object.fromEntries(Object.keys(sourceHeaders).map((name) => [name, Math.max(0, ...properties.filter((property) => property.sourceSheet === name).map((property) => ((property.sourceRaw as { cells?: string[] } | null)?.cells?.length ?? 0) - sourceHeaders[name as keyof typeof sourceHeaders].length))])) as Record<string, number>;
-    const sheets = Object.fromEntries(Object.entries(sourceHeaders).map(([name, headers]) => [name, [headers.concat(Array.from({ length: extraCols[name] ?? 0 }, (_, index) => `Доп. поле ${index + 1}`), ["CRM ID", "Код CRM", "Ответственный CRM", "Статус CRM", "Фото", "Комментарий о назначении", "Название CRM", "Площадь CRM", "Цена CRM", "Цена за м² CRM"])]])) as Record<string, string[][]>;
+    const sheets = Object.fromEntries(Object.entries(sourceHeaders).map(([name, headers]) => [name, [headers.concat(Array.from({ length: extraCols[name] ?? 0 }, (_, index) => `Доп. поле ${index + 1}`), ["CRM ID", "Код CRM", "Операция CRM", "Валюта CRM", "Ответственный CRM", "Статус CRM", "Фото", "Комментарий о назначении", "Название CRM", "Площадь CRM", "Цена CRM", "Цена за м² CRM"])]])) as Record<string, string[][]>;
     for (const property of properties) {
       const sheet = property.sourceSheet && property.sourceSheet in sourceHeaders ? property.sourceSheet : property.category === "COMMERCIAL" ? "коммерция" : property.category === "APARTMENT" ? "квартиры" : "дома";
       const headers = sourceHeaders[sheet as keyof typeof sourceHeaders];
@@ -106,7 +109,7 @@ export async function registerPropertyTransferRoutes(app: FastifyInstance, datab
         if (sheet === "дома") { cells[0] = property.district ?? cells[0]; cells[1] = property.address ?? cells[1]; cells[2] = property.subtype ?? cells[2]; cells[3] = property.landArea === null ? cells[3] : String(property.landArea); cells[4] = property.totalFloors === null ? cells[4] : String(property.totalFloors); cells[5] = property.area === null ? cells[5] : String(property.area); cells[6] = property.condition ?? cells[6]; cells[7] = property.description ?? cells[7]; cells[8] = property.documentNotes ?? cells[8]; cells[9] = property.pricePerSquareMeter === null ? (property.price === null ? cells[9] : String(property.price)) : `${property.pricePerSquareMeter}/м²`; cells[10] = property.ownerName ?? cells[10]; cells[11] = property.ownerContacts ?? cells[11]; }
         else { cells[0] = property.buildingLabel ?? cells[0]; cells[sheet === "коммерция" ? 2 : 1] = property.address ?? cells[sheet === "коммерция" ? 2 : 1]; cells[4] = property.area === null ? cells[4] : String(property.area); cells[5] = property.condition ?? cells[5]; cells[6] = property.description ?? cells[6]; cells[7] = property.pricePerSquareMeter === null ? (property.price === null ? cells[7] : String(property.price)) : `${property.pricePerSquareMeter}/м²`; cells[8] = property.ownerName ?? cells[8]; cells[9] = property.ownerContacts ?? cells[9]; }
       }
-      sheets[sheet]?.push(cells.concat([property.id, `OD-${property.number}`, property.assignee?.name ?? "", property.status, String(property.photos.length), property.assignmentNote ?? "", property.title, String(property.area ?? property.areaRaw ?? ""), String(property.price ?? property.priceRaw ?? ""), String(property.pricePerSquareMeter ?? "")]));
+      sheets[sheet]?.push(cells.concat([property.id, `OD-${property.number}`, property.operation, property.currency, property.assignee?.name ?? "", property.status, String(property.photos.length), property.assignmentNote ?? "", property.title, String(property.area ?? property.areaRaw ?? ""), String(property.price ?? property.priceRaw ?? ""), String(property.pricePerSquareMeter ?? "")]));
     }
     return { sheets, total: properties.length };
   });

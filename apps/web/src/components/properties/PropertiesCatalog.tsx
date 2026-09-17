@@ -12,7 +12,7 @@ import { PropertyExcelTransfer } from "./PropertyExcelTransfer";
 import styles from "./properties.module.css";
 
 type ViewMode = "gallery" | "table";
-type CatalogSection = "all" | "primary" | "secondary";
+type CatalogSection = "all" | "primary" | "secondary" | "rent";
 
 interface ApiProperty {
   id: string; code: string; title: string; address: string | null; district: string | null;
@@ -61,7 +61,7 @@ function propertyPayload(property: PropertyListing | NewPropertyDraft) {
     title: property.title, address: property.address || null, district: property.district || null,
     category: categoryToApi[property.category], market: marketToApi[property.market], operation: operationToApi[property.operation],
     ...( "status" in property ? { status: statusToApi[property.status] } : {}),
-    price: property.price === "" || property.price === null ? null : Number(property.price), pricePerSquareMeter: property.pricePerSquareMeter === "" || property.pricePerSquareMeter === null || property.pricePerSquareMeter === undefined ? null : Number(property.pricePerSquareMeter), currency: "currency" in property ? property.currency : "USD",
+    price: property.price === "" || property.price === null ? null : Number(property.price), pricePerSquareMeter: property.pricePerSquareMeter === "" || property.pricePerSquareMeter === null || property.pricePerSquareMeter === undefined ? null : Number(property.pricePerSquareMeter), currency: property.currency,
     rooms: property.rooms || null, area: property.area === "" || property.area === null ? null : Number(property.area),
     ...( "floor" in property ? { floor: numeric(property.floor), totalFloors: numeric(property.totalFloors), landArea: numeric(property.landArea) } : {}),
     project: property.project || null, developer: property.developer || null, description: property.description || null,
@@ -129,7 +129,7 @@ export function PropertiesCatalog() {
       const matchesSearch = !query || [property.title, property.address, property.code, property.project, property.developer].some((value) => value?.toLocaleLowerCase("ru").includes(query));
       return property.status === "Доступен"
         && matchesSearch
-        && (section === "all" || (section === "primary" ? property.market === "Первичный" : property.market === "Вторичный"))
+        && (section === "all" || (section === "primary" ? property.market === "Первичный" : section === "rent" ? property.operation === "Аренда" : property.market === "Вторичный" && property.operation === "Продажа"))
         && (!myOnly || property.assigneeId === currentUser.id)
         && (category === "all" || property.category === category)
         && (district === "all" || property.district === district)
@@ -138,7 +138,7 @@ export function PropertiesCatalog() {
   }, [catalogProperties, category, currentUser.id, district, maxPrice, myOnly, search, section]);
 
   const visibleProjects = useMemo(() => {
-    if (section === "secondary" || (category !== "all" && category !== "Квартира")) return [];
+    if (section === "secondary" || section === "rent" || (category !== "all" && category !== "Квартира")) return [];
     const query = search.trim().toLocaleLowerCase("ru");
     return shownProjects.filter((project) => {
       const matchesSearch = !query || [project.title, project.address, project.city, project.district, project.developer].some((value) => value.toLocaleLowerCase("ru").includes(query));
@@ -205,8 +205,9 @@ export function PropertiesCatalog() {
           <button className={section === "all" ? styles.catalogTabActive : ""} type="button" onClick={() => changeSection("all")}>Все</button>
           <button className={section === "primary" ? styles.catalogTabActive : ""} type="button" onClick={() => changeSection("primary")}>Новостройки</button>
           <button className={section === "secondary" ? styles.catalogTabActive : ""} type="button" onClick={() => changeSection("secondary")}>Вторичная недвижимость</button>
+          <button className={section === "rent" ? styles.catalogTabActive : ""} type="button" onClick={() => changeSection("rent")}>Аренда</button>
         </div>
-        {section === "secondary" && <div className={styles.propertyCatalogActions}><button type="button" aria-pressed={myOnly} onClick={() => setMyOnly((value) => !value)}>{myOnly ? "Все объекты" : "Мои объекты"}</button><PropertyExcelTransfer onImported={loadProperties} /></div>}
+        {(section === "secondary" || section === "rent") && <div className={styles.propertyCatalogActions}><button type="button" aria-pressed={myOnly} onClick={() => setMyOnly((value) => !value)}>{myOnly ? "Все объекты" : "Мои объекты"}</button><PropertyExcelTransfer onImported={loadProperties} /></div>}
 
         <div className={styles.filters}>
           <FilterSelect label="Тип" value={category} onChange={(value) => setCategory(value as "all" | PropertyCategory)} options={section === "primary" ? ["Квартира", "Коммерция"] : ["Квартира", "Дом", "Участок", "Коммерция"]} />
@@ -226,7 +227,7 @@ export function PropertiesCatalog() {
             {visibleProjects.length > 0 && <CatalogGroup title="Новостройки" description="Жилые комплексы и доступные предложения" count={visibleProjects.length}>
               {view === "gallery" ? <div className={styles.gallery}>{visibleProjects.map((project) => <ProjectCard project={project} onOpen={() => setSelectedProjectId(project.id)} key={project.id} />)}</div> : <ProjectTable projects={visibleProjects} onOpen={setSelectedProjectId} />}
             </CatalogGroup>}
-            {visibleProperties.length > 0 && <CatalogGroup title={section === "primary" ? "Отдельные юниты" : section === "secondary" ? "Вторичная недвижимость" : "Отдельные объекты"} description={section === "primary" ? "Объекты первичного рынка вне проектного каталога" : "Квартиры, дома, участки и коммерческие помещения"} count={visibleProperties.length}>
+            {visibleProperties.length > 0 && <CatalogGroup title={section === "primary" ? "Отдельные юниты" : section === "secondary" ? "Вторичная недвижимость" : section === "rent" ? "Аренда" : "Отдельные объекты"} description={section === "primary" ? "Объекты первичного рынка вне проектного каталога" : "Квартиры, дома, участки и коммерческие помещения"} count={visibleProperties.length}>
               {view === "gallery" ? <div className={styles.gallery}>{visibleProperties.map((property) => <PropertyCard property={property} isDemo={property.id.startsWith("demo-")} onOpen={() => setSelectedId(property.id)} key={property.id} />)}</div> : <PropertyTable properties={visibleProperties} onOpen={setSelectedId} />}
             </CatalogGroup>}
           </div>

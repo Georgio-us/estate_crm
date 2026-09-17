@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import styles from "./properties.module.css";
-type PropertyImportRow = { sheet: "квартиры" | "дома" | "коммерция" | "аренда"; rowNumber: number; cells: string[]; headers: string[]; crmId?: string | null };
-type PreviewRow = { sheet: PropertyImportRow["sheet"]; rowNumber: number; title: string; action: "CREATE" | "UPDATE" | "SKIP" | "REVIEW"; warnings: string[] };
+type PropertyImportRow = { sheet: "квартиры" | "дома" | "коммерция" | "аренда"; rowNumber: number; cells: string[]; headers: string[]; crmId?: string | null; operation?: "SALE" | "RENT" };
+type PreviewRow = { sheet: PropertyImportRow["sheet"]; rowNumber: number; title: string; operation: "SALE" | "RENT"; action: "CREATE" | "UPDATE" | "SKIP" | "REVIEW"; warnings: string[] };
 type PropertyImportPreviewResponse = { rows: PreviewRow[]; counts: { create: number; update: number; skip: number; review: number } };
 
 const supported = ["квартиры", "дома", "коммерция"] as const;
@@ -15,6 +15,7 @@ export function PropertyExcelTransfer({ onImported }: { onImported: () => Promis
   const [confirmed, setConfirmed] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [scope, setScope] = useState<"all" | typeof supported[number]>("all");
 
   async function readFile(file: File) {
     setBusy(true); setMessage(""); setPreview(null);
@@ -23,20 +24,23 @@ export function PropertyExcelTransfer({ onImported }: { onImported: () => Promis
       const XLSX = await import("xlsx");
       const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
       const parsed: PropertyImportRow[] = [];
-      for (const sheetName of supported) {
+      for (const sheetName of scope === "all" ? supported : [scope]) {
         const actualName = workbook.SheetNames.find((name) => name.toLocaleLowerCase("ru").trim() === sheetName);
         if (!actualName) continue;
         const sheet = workbook.Sheets[actualName]; if (!sheet) continue;
         const values = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: "", raw: false });
         const header = (values[0] ?? []).map(String);
         const idColumn = header.findIndex((value) => value.trim().toLocaleLowerCase("ru") === "crm id");
+        const operationColumn = header.findIndex((value) => value.trim().toLocaleLowerCase("ru") === "операция crm");
         values.slice(1).forEach((value, index) => {
           const cells = value.map((cell) => String(cell ?? ""));
           if (!cells.some((cell) => cell.trim())) return;
           const crmId = idColumn >= 0 ? cells[idColumn]?.trim() || null : null;
+          const operationRaw = operationColumn >= 0 ? cells[operationColumn]?.trim().toUpperCase() : "";
+          const operation = operationRaw === "SALE" || operationRaw === "RENT" ? operationRaw : undefined;
           const sourceCells = cells.slice(0, idColumn >= 0 ? idColumn : 30);
           while (sourceCells.length > sourceColumnCount[sheetName] && !sourceCells[sourceCells.length - 1]?.trim()) sourceCells.pop();
-          parsed.push({ sheet: sheetName, rowNumber: index + 2, cells: sourceCells, headers: header, ...(crmId ? { crmId } : {}) });
+          parsed.push({ sheet: sheetName, rowNumber: index + 2, cells: sourceCells, headers: header, ...(crmId ? { crmId } : {}), ...(operation ? { operation } : {}) });
         });
       }
       if (!parsed.length) throw new Error("Не найдены строки листов «квартиры», «дома» или «коммерция».");
@@ -79,12 +83,13 @@ export function PropertyExcelTransfer({ onImported }: { onImported: () => Promis
   }
 
   return <div className={styles.propertyExcelTransfer}>
+    <select aria-label="Раздел для импорта" value={scope} disabled={busy} onChange={(event) => setScope(event.target.value as typeof scope)}><option value="all">Все разделы</option><option value="квартиры">Только квартиры</option><option value="дома">Только дома</option><option value="коммерция">Только коммерция</option></select>
     <label className={styles.propertyExcelButton}>Импорт Excel<input type="file" accept=".xlsx,.xls" hidden disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; if (file) void readFile(file); event.target.value = ""; }} /></label>
     <button type="button" disabled={busy} onClick={() => { void exportFile(); }}>Экспорт Excel</button>
     {message && <p role="status">{message}</p>}
     {preview && <div className={styles.propertyExcelPreview}><strong>Проверка: {preview.counts.create} новых, {preview.counts.update} обновлений, {preview.counts.skip} пропущено, {preview.counts.review} требуют решения</strong>
-      <div className={styles.propertyExcelRows}>{preview.rows.map((row) => <div key={`${row.sheet}-${row.rowNumber}`}><span>{row.sheet} · {row.rowNumber} · {row.title} · {row.action}</span>{row.warnings.length > 0 && <label><input type="checkbox" checked={confirmed.includes(`${row.sheet}:${row.rowNumber}`)} onChange={(event) => setConfirmed((current) => event.target.checked ? [...current, `${row.sheet}:${row.rowNumber}`] : current.filter((key) => key !== `${row.sheet}:${row.rowNumber}`))} /> Подтверждаю: {row.warnings.join(" ")}</label>}</div>)}</div>
-      <button type="button" disabled={busy || preview.counts.review > 0 || preview.rows.some((row) => (row.action === "CREATE" || row.action === "UPDATE") && row.warnings.length && !confirmed.includes(`${row.sheet}:${row.rowNumber}`))} onClick={() => { void apply(); }}>Применить импорт</button>
+      <div className={styles.propertyExcelRows}>{preview.rows.map((row) => { const key = `${row.sheet}:${row.rowNumber}:${row.operation}`; return <div key={key}><span>{row.sheet} · {row.rowNumber} · {row.operation === "RENT" ? "аренда" : "продажа"} · {row.title} · {row.action}</span>{row.warnings.length > 0 && <label><input type="checkbox" checked={confirmed.includes(key)} onChange={(event) => setConfirmed((current) => event.target.checked ? [...current, key] : current.filter((item) => item !== key))} /> Подтверждаю: {row.warnings.join(" ")}</label>}</div>; })}</div>
+      <button type="button" disabled={busy || preview.counts.review > 0 || preview.rows.some((row) => (row.action === "CREATE" || row.action === "UPDATE") && row.warnings.length && !confirmed.includes(`${row.sheet}:${row.rowNumber}:${row.operation}`))} onClick={() => { void apply(); }}>Применить импорт</button>
     </div>}
   </div>;
 }

@@ -4,14 +4,14 @@ import styles from "./properties.module.css";
 
 export interface NewPropertyDraft {
   title: string; address: string; district: string; category: PropertyCategory; market: PropertyMarket;
-  operation: "Продажа" | "Аренда"; price: string; pricePerSquareMeter: string; rooms: string; area: string; project: string; developer: string; description: string;
+  operation: "Продажа" | "Аренда"; price: string; pricePerSquareMeter: string; currency: "USD" | "EUR" | "UAH"; rooms: string; area: string; project: string; developer: string; description: string;
   buildingLabel: string; unitDetail: string; subtype: string; condition: string; documentNotes: string;
   ownerName: string; ownerContacts: string; assigneeId: string | null; assignmentNote: string;
   floor: string; totalFloors: string; landArea: string;
 }
 
 export function NewPropertyModal({ onCreate, onClose }: { onCreate: (draft: NewPropertyDraft) => Promise<void>; onClose: () => void }) {
-  const [draft, setDraft] = useState<NewPropertyDraft>({ title: "", address: "", district: "", category: "Квартира", market: "Вторичный", operation: "Продажа", price: "", pricePerSquareMeter: "", rooms: "", area: "", project: "", developer: "", description: "", buildingLabel: "", unitDetail: "", subtype: "", condition: "", documentNotes: "", ownerName: "", ownerContacts: "", assigneeId: null, assignmentNote: "Назначить ответственного", floor: "", totalFloors: "", landArea: "" });
+  const [draft, setDraft] = useState<NewPropertyDraft>({ title: "", address: "", district: "", category: "Квартира", market: "Вторичный", operation: "Продажа", price: "", pricePerSquareMeter: "", currency: "USD", rooms: "", area: "", project: "", developer: "", description: "", buildingLabel: "", unitDetail: "", subtype: "", condition: "", documentNotes: "", ownerName: "", ownerContacts: "", assigneeId: null, assignmentNote: "Назначить ответственного", floor: "", totalFloors: "", landArea: "" });
   const [assignees, setAssignees] = useState<Array<{ id: string; name: string }>>([]);
   useEffect(() => { void fetch("/api/crm/team/assignees").then((response) => response.json()).then((payload: { assignees?: Array<{ id: string; name: string }> }) => setAssignees(payload.assignees ?? [])).catch(() => {}); }, []);
   const [saving, setSaving] = useState(false);
@@ -36,9 +36,10 @@ export function NewPropertyModal({ onCreate, onClose }: { onCreate: (draft: NewP
             <Field label="Тип"><select value={draft.category} onChange={(event) => update({ category: event.target.value as PropertyCategory })}><option>Квартира</option><option>Дом</option><option>Участок</option><option>Коммерция</option></select></Field>
             <Field label="Рынок"><select value={draft.market} onChange={(event) => update({ market: event.target.value as PropertyMarket })}><option>Вторичный</option><option>Первичный</option></select></Field>
             <Field label="Операция"><select value={draft.operation} onChange={(event) => update({ operation: event.target.value as "Продажа" | "Аренда" })}><option>Продажа</option><option>Аренда</option></select></Field>
+            <Field label="Валюта"><select value={draft.currency} onChange={(event) => update({ currency: event.target.value as NewPropertyDraft["currency"] })}><option value="USD">USD — доллар</option><option value="UAH">UAH — гривна</option><option value="EUR">EUR — евро</option></select></Field>
             <Field label="Район"><input value={draft.district} onChange={(event) => update({ district: event.target.value })} placeholder="Район" /></Field>
-            <Field label="Общая цена, USD"><input inputMode="numeric" value={draft.price} onChange={(event) => update({ price: event.target.value })} placeholder="120000" /></Field>
-            <Field label="Цена за м², USD"><input inputMode="decimal" value={draft.pricePerSquareMeter} onChange={(event) => { const pricePerSquareMeter = event.target.value; update({ pricePerSquareMeter, ...(pricePerSquareMeter && draft.area ? { price: String(Math.round(Number(pricePerSquareMeter) * Number(draft.area) * 100) / 100) } : {}) }); }} placeholder="1300" /></Field>
+            <Field label={`Общая цена, ${draft.currency}`}><input inputMode="numeric" value={draft.price} onChange={(event) => update({ price: event.target.value })} placeholder="120000" /></Field>
+            <Field label={`Цена за м², ${draft.currency}`}><input inputMode="decimal" value={draft.pricePerSquareMeter} onChange={(event) => { const pricePerSquareMeter = event.target.value; update({ pricePerSquareMeter, ...(pricePerSquareMeter && draft.area ? { price: String(Math.round(Number(pricePerSquareMeter) * Number(draft.area) * 100) / 100) } : {}) }); }} placeholder="1300" /></Field>
             <Field label="Площадь, м²"><input inputMode="decimal" value={draft.area} onChange={(event) => { const area = event.target.value; update({ area, ...(area && draft.pricePerSquareMeter ? { price: String(Math.round(Number(area) * Number(draft.pricePerSquareMeter) * 100) / 100) } : {}) }); }} placeholder="72.5" /></Field>
             {(draft.category === "Квартира" || draft.category === "Дом") && <Field label="Комнаты"><select value={draft.rooms} onChange={(event) => update({ rooms: event.target.value })}><option value="">Не указано</option><option>1</option><option>2</option><option>3</option><option>4+</option></select></Field>}
             {(draft.category === "Квартира" || draft.category === "Коммерция") && <Field label="Этаж"><input inputMode="numeric" value={draft.floor} onChange={(event) => update({ floor: event.target.value })} /></Field>}

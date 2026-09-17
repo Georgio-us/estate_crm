@@ -615,6 +615,7 @@ export interface PropertyImportRow {
   cells: string[];
   headers: string[];
   crmId?: string | null;
+  operation?: PropertyOperation;
 }
 
 export interface PropertyImportPreviewRow {
@@ -622,6 +623,7 @@ export interface PropertyImportPreviewRow {
   rowNumber: number;
   title: string;
   category: PropertyCategory;
+  operation: PropertyOperation;
   action: "CREATE" | "UPDATE" | "SKIP" | "REVIEW";
   warnings: string[];
   existingId: string | null;

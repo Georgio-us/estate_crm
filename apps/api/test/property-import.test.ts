@@ -82,6 +82,33 @@ test("price per square meter is stored separately and produces the total price",
   await app.close();
 });
 
+test("commercial sale and rent rows expand into separate currency-aware properties", async () => {
+  const records: Array<Record<string, any>> = [];
+  const client: Record<string, any> = {
+    session: { async findUnique() { return { id: "session-1", expiresAt: new Date(Date.now() + 60_000), user: { id: "user-1", name: "Admin", email: "admin@example.com", memberships: [{ role: "ADMIN", organization: { id: "org-1", name: "CRM", slug: "crm" } }] } }; } },
+    property: {
+      async findMany() { return []; },
+      async create({ data }: { data: Record<string, any> }) { records.push({ ...data, id: `00000000-0000-4000-8000-${String(records.length + 1).padStart(12, "0")}`, number: records.length + 1 }); },
+    },
+  };
+  const app = await buildApp(config, { client, async ping() {}, async disconnect() {} } as unknown as DatabaseConnection);
+  const headers = ["ЖК", "Обьект", "Адрес, секция, №", "Этаж", "м²", "Состояние", "Описание, документы", "Цена,$", "ФИО", "Контакты", "Риелтор"];
+  const rows = [
+    { sheet: "коммерция", rowNumber: 5, cells: ["Бизнес центр", "аренда/продажа", "Вице. Адмирала Жукова 17/19", "3", "185", "с ремонтом", "СДАН", "900 / 200 000", "Женя", "", "Юля"], headers },
+    { sheet: "коммерция", rowNumber: 10, cells: ["БЦ Розенталь", "продажа и аренда", "пр. Ярослава мудрого", "2", "2", "от строителей", "ремонт обсуждается, аренда 8000 грн", "23000", "Людмила", "", "Юля"], headers },
+  ];
+  const preview = await app.inject({ method: "POST", url: "/properties/import/preview", headers: cookie, payload: { rows } });
+  assert.equal(preview.statusCode, 200);
+  assert.equal(preview.json().counts.create, 4);
+  assert.deepEqual(preview.json().rows.map((row: Record<string, any>) => row.operation), ["SALE", "RENT", "SALE", "RENT"]);
+  const confirmedRows = ["коммерция:10:SALE", "коммерция:10:RENT"];
+  const applied = await app.inject({ method: "POST", url: "/properties/import/apply", headers: cookie, payload: { rows, confirmedRows } });
+  assert.equal(applied.statusCode, 200);
+  assert.deepEqual(records.map((record) => [record.operation, record.price, record.currency]), [["SALE", 200000, "USD"], ["RENT", 900, "USD"], ["SALE", 23000, "USD"], ["RENT", 8000, "UAH"]]);
+  assert.notEqual(records[0]?.sourceHash, records[1]?.sourceHash);
+  await app.close();
+});
+
 test("photos above 15 MB require explicit confirmation before R2 configuration", async () => {
   const propertyId = "f48ab88b-b1cb-4adf-b930-3537767cfb92";
   const client: Record<string, any> = {
