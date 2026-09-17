@@ -19,7 +19,7 @@ function mapProperty(property: {
   description: string | null; imageUrl: string | null; createdAt: Date; updatedAt: Date;
   buildingLabel?: string | null; unitDetail?: string | null; subtype?: string | null; condition?: string | null;
   documentNotes?: string | null; ownerName?: string | null; ownerContacts?: string | null;
-  assigneeId?: string | null; assignmentNote?: string | null; sourceSheet?: string | null; sourceRow?: number | null;
+  assigneeId?: string | null; assignmentNote?: string | null; sourceSheet?: string | null; sourceRow?: number | null; sourceHash?: string | null;
   assignee?: { name: string } | null; photos?: Array<{ id: string; isCover: boolean; sortOrder: number }>;
 }): PropertyRecord {
   return {
@@ -35,6 +35,8 @@ function mapProperty(property: {
     ownerContacts: property.ownerContacts ?? null, assigneeId: property.assigneeId ?? null,
     assigneeName: property.assignee?.name ?? null, assignmentNote: property.assignmentNote ?? null,
     sourceSheet: property.sourceSheet ?? null, sourceRow: property.sourceRow ?? null,
+    sourceProvider: property.sourceHash?.startsWith("via:") ? "VIA" : property.sourceSheet ? "EXCEL" : "CRM",
+    externalSourceId: property.sourceHash?.startsWith("via:") ? property.sourceHash.slice(4) : null,
     photosCount: property.photos?.length ?? 0,
     code: `OD-${property.number}`,
     createdAt: property.createdAt.toISOString(),

@@ -71,7 +71,7 @@ export function PropertyDrawer({ property, onSave, onClose, onRefresh, readOnly 
       <aside className={styles.drawer} role="dialog" aria-modal="true" aria-label={`Объект ${property.title}`}>
         <header className={styles.drawerHeader}>
           <div><span>Объекты / {draft.category}</span><h2>{draft.title}</h2><p>{draft.code} · обновлён {draft.updatedAt}</p></div>
-          <div>{readOnly && <span className={styles.demoPill}>Демо</span>}{!readOnly && <button type="button" aria-label="Меню объекта">•••</button>}<button type="button" onClick={onClose} aria-label="Закрыть">×</button></div>
+          <div>{readOnly && <span className={styles.demoPill}>Демо</span>}{!readOnly && property.sourceProvider === "VIA" && <span className={styles.demoPill}>Via → CRM</span>}{!readOnly && <button type="button" aria-label="Меню объекта">•••</button>}<button type="button" onClick={onClose} aria-label="Закрыть">×</button></div>
         </header>
         <div className={styles.drawerBody}>
           <div className={styles.visualPane}>

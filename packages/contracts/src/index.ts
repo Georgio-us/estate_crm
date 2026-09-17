@@ -556,6 +556,7 @@ export type PropertyMarket = "PRIMARY" | "SECONDARY";
 export type PropertyOperation = "SALE" | "RENT";
 export type PropertyStatus = "AVAILABLE" | "RESERVED" | "SOLD";
 export type Currency = "USD" | "EUR" | "UAH";
+export type PropertySourceProvider = "CRM" | "EXCEL" | "VIA";
 
 export interface PropertyRecord {
   id: string;
@@ -593,6 +594,8 @@ export interface PropertyRecord {
   assignmentNote: string | null;
   sourceSheet: string | null;
   sourceRow: number | null;
+  sourceProvider: PropertySourceProvider;
+  externalSourceId: string | null;
   photosCount: number;
   createdAt: string;
   updatedAt: string;

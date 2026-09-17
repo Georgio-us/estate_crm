@@ -105,6 +105,7 @@ test("CRM creates a Via selection from a scoped deal and records it without copy
   const user = { id: userId, email: "manager@example.com", name: "Менеджер", memberships: [{ role: "ADMIN", organization: { id: organizationId, name: "Delmar", slug: "delmar" } }] };
   const selections: Array<Record<string, unknown>> = [];
   const activity: Array<Record<string, unknown>> = [];
+  let importedProperty: { id: string; sourceHash: string; data: Record<string, unknown> } | null = null;
   const database = { client: {
     session: { async findUnique() { return { id: "session-1", expiresAt: new Date(Date.now() + 60_000), user }; } },
     integrationConnection: { async findUnique() { return connection; } },
@@ -112,6 +113,10 @@ test("CRM creates a Via selection from a scoped deal and records it without copy
     viaSharedSelection: {
       async create(args: { data: Record<string, unknown> }) { const selection = { ...args.data, createdAt: new Date(), sentAt: null, revokedAt: null }; selections.push(selection); return selection; },
       async findMany() { return selections; },
+    },
+    property: {
+      async findFirst(args: { where: { sourceHash?: string } }) { return importedProperty?.sourceHash === args.where.sourceHash ? { id: importedProperty.id } : null; },
+      async create(args: { data: Record<string, unknown> }) { importedProperty = { id: randomUUID(), sourceHash: String(args.data.sourceHash), data: args.data }; return importedProperty; },
     },
     activityEvent: { async create(args: { data: Record<string, unknown> }) { activity.push(args.data); } },
     async $transaction(callback: (client: unknown) => Promise<unknown>) { return callback(this); },
@@ -123,7 +128,7 @@ test("CRM creates a Via selection from a scoped deal and records it without copy
     remoteCalls.push(url.pathname);
     assert.equal(url.origin, "https://via.example.com");
     assert.equal(init?.headers && (init.headers as Record<string, string>)["x-integration-connection"], connection.id);
-    if (url.pathname.endsWith("/properties")) return Response.json({ items: [{ externalId: "via-101", title: "Квартира у моря", active: true }], nextCursor: null });
+    if (url.pathname.endsWith("/properties")) return Response.json({ items: [{ externalId: "via-101", title: "Квартира у моря", active: true, operation: "sale", propertyType: "apartment", price: 125000, currency: "EUR", rooms: "2", areaM2: 67, district: "Приморский", previewImageUrl: "https://via.example.com/property.jpg" }], nextCursor: null });
     if (url.pathname.endsWith("/selections")) return Response.json({ selectionId: "via-share-101", shareUrl: "https://via.example.com/s/abc", acceptedPropertyExternalIds: ["via-101"], unavailablePropertyExternalIds: [] });
     return Response.json({ error: "unexpected" }, { status: 404 });
   };
@@ -138,6 +143,16 @@ test("CRM creates a Via selection from a scoped deal and records it without copy
     assert.equal(created.json().selection.shareUrl, "https://via.example.com/s/abc");
     assert.equal(selections.length, 1);
     assert.equal(activity.length, 1);
-    assert.deepEqual(remoteCalls, ["/api/integrations/estate/v1/properties", "/api/integrations/estate/v1/selections"]);
+    assert.equal(importedProperty, null, "creating a selection must not silently copy Via properties");
+    const imported = await app.inject({ method: "POST", url: "/integrations/via/properties/via-101/import", headers });
+    assert.equal(imported.statusCode, 201, imported.body);
+    assert.equal(imported.json().imported, true);
+    assert.equal(importedProperty?.sourceHash, "via:via-101");
+    assert.equal(importedProperty?.data.currency, "EUR");
+    assert.equal(importedProperty?.data.market, "SECONDARY");
+    const repeatedImport = await app.inject({ method: "POST", url: "/integrations/via/properties/via-101/import", headers });
+    assert.equal(repeatedImport.statusCode, 200, repeatedImport.body);
+    assert.equal(repeatedImport.json().imported, false);
+    assert.deepEqual(remoteCalls, ["/api/integrations/estate/v1/properties", "/api/integrations/estate/v1/selections", "/api/integrations/estate/v1/properties"]);
   } finally { globalThis.fetch = originalFetch; await app.close(); }
 });

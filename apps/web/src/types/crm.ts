@@ -96,6 +96,8 @@ export interface PropertyListing {
   photosCount?: number;
   sourceSheet?: string | null;
   sourceRow?: number | null;
+  sourceProvider?: "CRM" | "EXCEL" | "VIA";
+  externalSourceId?: string | null;
 }
 
 export interface Contact {

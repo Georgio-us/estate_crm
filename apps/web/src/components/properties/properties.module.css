@@ -51,6 +51,7 @@
 .demoBanner p { margin: 0; color: #687383; font-size: var(--font-size-caption); }
 .demoBanner button, .restoreDemo { border: 0; background: transparent; color: #376bbf; cursor: pointer; font-size: var(--font-size-caption); }
 .restoreDemo { margin-top: 18px; padding: 0; }
+.viaNotice { margin: 18px 0 0; padding: 11px 13px; border: 1px solid #cfe3d5; border-radius: var(--radius-sm); background: #f2faf4; color: #356d46; font-size: var(--font-size-caption); }
 .catalogResults { display: grid; gap: 42px; }
 .catalogGroup { min-width: 0; padding-top: 32px; }
 .catalogGroup > header { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; }
@@ -61,11 +62,15 @@
 .gallery { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; padding-top: 24px; }
 .propertyCard { overflow: hidden; padding: 0; border: 1px solid var(--border); border-radius: var(--radius-lg); background: #fff; color: inherit; cursor: pointer; text-align: left; transition: border-color 130ms ease, box-shadow 130ms ease, transform 130ms ease; }
 .propertyCard:hover { transform: translateY(-1px); border-color: #d2d2cd; box-shadow: 0 8px 24px rgba(25,25,23,.07); }
+.viaPropertyCard { cursor: default; }
 .propertyImage { position: relative; height: 205px; background-color: #e9e8e3; background-position: center; background-size: cover; }
 .status, .code { display: inline-flex; align-items: center; border-radius: var(--radius-sm); font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); }
 .propertyImage .status { position: absolute; top: 12px; left: 12px; padding: 5px 8px; }
 .projectStatus { position: absolute; top: 12px; left: 12px; padding: 5px 8px; border-radius: var(--radius-sm); background: rgba(255,255,255,.92); color: #4f5955; backdrop-filter: blur(6px); font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); }
 .demoImagePill { position: absolute; top: 12px; right: 12px; min-height: 25px; padding: 0 8px; background: rgba(239,243,251,.94); backdrop-filter: blur(6px); }
+.viaImagePill { position: absolute; top: 12px; right: 12px; min-height: 25px; padding: 4px 9px; border-radius: 999px; background: rgba(232,240,254,.94); color: #376bbf; backdrop-filter: blur(6px); font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); }
+.viaImagePlaceholder { display: grid; place-items: center; background: linear-gradient(145deg,#f2f3f5,#e4e8ee); color: #8b919a; }
+.viaImagePlaceholder b { font-size: var(--font-size-caption); font-weight: var(--font-weight-medium); }
 .code { position: absolute; right: 12px; bottom: 11px; padding: 4px 7px; background: rgba(255,255,255,.9); color: #62625e; backdrop-filter: blur(6px); }
 .status_Доступен { background: #e6f0e8; color: #447052; }
 .status_Резерв { background: #f6ecd2; color: #886821; }
@@ -82,6 +87,10 @@
 .cardFacts { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-top: 18px; padding-top: 13px; border-top: 1px solid #eeeeeb; }
 .cardFacts strong { font-size: var(--font-size-body-lg); font-weight: var(--font-weight-semibold); }
 .cardFacts span { overflow: hidden; color: var(--text-muted); font-size: var(--font-size-caption); text-overflow: ellipsis; white-space: nowrap; }
+.viaCardActions { display: flex; margin-top: 14px; }
+.viaCardActions button { width: 100%; min-height: 38px; padding: 0 12px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: #fff; color: #376bbf; cursor: pointer; font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); }
+.viaCardActions .viaImportButton { border-color: var(--primary); background: var(--primary); color: #fff; }
+.viaCardActions button:disabled { opacity: .55; cursor: default; }
 
 .tableWrap { overflow-x: auto; padding-top: 24px; }
 .tableWrap table { width: 100%; min-width: 930px; border-collapse: collapse; font-size: var(--font-size-caption); }
@@ -89,12 +98,15 @@
 .tableWrap td { height: 64px; padding: 8px 12px; border-bottom: 1px solid var(--border); color: #575753; }
 .tableWrap tbody tr { cursor: pointer; }
 .tableWrap tbody tr:hover { background: #fafafa; }
+.tableWrap tbody .viaTableRow { cursor: default; }
 .tableWrap td:first-child { display: flex; align-items: center; gap: 10px; }
 .tableWrap td:first-child > span:last-child { display: grid; gap: 4px; }
 .tableWrap td strong { color: var(--text); font-weight: var(--font-weight-semibold); }
 .tableWrap td small { color: var(--text-subtle); font-size: var(--font-size-caption); }
 .tableThumb { width: 45px; height: 42px; flex: 0 0 auto; border-radius: var(--radius-sm); background-position: center; background-size: cover; }
 .tableWrap td .status { padding: 5px 7px; }
+.viaTableRow td:last-child button { min-height: 32px; padding: 0 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: #fff; color: #376bbf; cursor: pointer; font-size: var(--font-size-caption); }
+.viaTableRow td:last-child button:disabled { opacity: .55; cursor: default; }
 
 .emptyState { display: grid; min-height: 360px; place-items: center; align-content: center; text-align: center; }
 .emptyState > span { color: var(--text-subtle); font-size: var(--font-size-heading-md); }

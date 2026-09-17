@@ -20,6 +20,30 @@ type ViaCatalog = { items: ViaCatalogItem[]; nextCursor: string | null };
 type ViaSelectionReply = { selectionId: string; shareUrl: string; acceptedPropertyExternalIds: string[]; unavailablePropertyExternalIds: string[] };
 type ViaEvent = { eventId: string; connectionId: string; type: ViaEventType; occurredAt: string; viaTenant: string; selectionId?: string; externalSelectionId?: string; crmContextId?: string; telegram?: { userId: string | number; username?: string; firstName?: string; lastName?: string }; propertyExternalId?: string; lead?: { viaLeadId: string; source?: string; name?: string; phone?: string; email?: string; comment?: string }; session?: { sessionId: string; summary?: string; durationSec?: number } };
 
+function viaCategory(value: string | undefined): "APARTMENT" | "HOUSE" | "LAND" | "COMMERCIAL" {
+  const normalized = value?.toLowerCase() ?? "";
+  if (normalized.includes("house") || normalized.includes("дом")) return "HOUSE";
+  if (normalized.includes("land") || normalized.includes("участ")) return "LAND";
+  if (normalized.includes("commercial") || normalized.includes("коммер")) return "COMMERCIAL";
+  return "APARTMENT";
+}
+function viaOperation(value: string | undefined): "SALE" | "RENT" {
+  const normalized = value?.toLowerCase() ?? "";
+  return normalized.includes("rent") || normalized.includes("аренд") ? "RENT" : "SALE";
+}
+function viaCurrency(value: string | null | undefined): "USD" | "EUR" | "UAH" {
+  const normalized = value?.toUpperCase();
+  return normalized === "EUR" || normalized === "UAH" ? normalized : "USD";
+}
+function finiteNonNegative(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+}
+function safeImageUrl(value: string | null | undefined): string | null {
+  if (!value) return null;
+  try { const url = new URL(value); return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : null; }
+  catch { return null; }
+}
+
 function codeHash(code: string): string { return createHash("sha256").update(code).digest("hex"); }
 function errorMessage(error: unknown): string { return error instanceof ViaRemoteError ? error.message : "Via временно недоступен. Повторите позже."; }
 function eventDescription(event: ViaEvent): string | null {
@@ -64,20 +88,23 @@ function safeCatalog(value: unknown): ViaCatalog | null {
   const catalog = value as { items?: unknown; nextCursor?: unknown };
   if (!Array.isArray(catalog.items) || catalog.items.length > 100 || (catalog.nextCursor != null && typeof catalog.nextCursor !== "string")) return null;
   const items: ViaCatalogItem[] = [];
+  const text = (input: unknown, max: number) => typeof input === "string" ? input.slice(0, max) : undefined;
+  const number = (input: unknown) => typeof input === "number" && Number.isFinite(input) ? input : input === null ? null : undefined;
   for (const item of catalog.items) {
     if (!item || typeof item !== "object") return null;
     const candidate = item as Partial<ViaCatalogItem>;
     if (typeof candidate.externalId !== "string" || !candidate.externalId || typeof candidate.title !== "string" || typeof candidate.active !== "boolean") return null;
     items.push({ externalId: candidate.externalId.slice(0, 120), title: candidate.title.slice(0, 300), active: candidate.active,
-      updatedAt: candidate.updatedAt, operation: candidate.operation, propertyType: candidate.propertyType,
-      price: candidate.price, currency: candidate.currency, rooms: candidate.rooms, areaM2: candidate.areaM2,
-      district: candidate.district, previewImageUrl: candidate.previewImageUrl });
+      updatedAt: text(candidate.updatedAt, 100), operation: text(candidate.operation, 80), propertyType: text(candidate.propertyType, 120),
+      price: number(candidate.price), currency: text(candidate.currency, 20), rooms: text(candidate.rooms, 40), areaM2: number(candidate.areaM2),
+      district: text(candidate.district, 160), previewImageUrl: text(candidate.previewImageUrl, 2_000) });
   }
   return { items, nextCursor: catalog.nextCursor as string | null || null };
 }
 
 const dealParams = { type: "object", required: ["dealId"], properties: { dealId: { type: "string", format: "uuid" } } } as const;
 const shareParams = { type: "object", required: ["dealId", "selectionId"], properties: { dealId: { type: "string", format: "uuid" }, selectionId: { type: "string", format: "uuid" } } } as const;
+const viaPropertyParams = { type: "object", required: ["externalId"], properties: { externalId: { type: "string", minLength: 1, maxLength: 120 } } } as const;
 
 export async function registerViaIntegrationRoutes(app: FastifyInstance, config: ApiConfig, database: DatabaseConnection): Promise<void> {
   const key = readViaEncryptionKey(config.viaEncryptionKey);
@@ -162,6 +189,50 @@ export async function registerViaIntegrationRoutes(app: FastifyInstance, config:
       if (!result) return reply.status(502).send({ error: "invalid_via_catalog", message: "Via вернул некорректный каталог." });
       return result;
     } catch (error) { return reply.status(502).send({ error: "via_unavailable", message: errorMessage(error) }); }
+  });
+
+  app.post<{ Params: { externalId: string } }>("/integrations/via/properties/:externalId/import", {
+    schema: { params: viaPropertyParams },
+  }, async (request, reply) => {
+    const user = await requireUser(request, reply, database);
+    if (!user) return reply;
+    const sourceHash = `via:${request.params.externalId}`;
+    const existing = await database.client.property.findFirst({ where: { organizationId: user.organization.id, sourceHash }, select: { id: true } });
+    if (existing) return { propertyId: existing.id, imported: false };
+    const client = await clientFor(user.organization.id);
+    if (!client) return reply.status(409).send({ error: "via_disabled", message: "Интеграция Via не подключена или выключена." });
+    try {
+      let cursor: string | null = null;
+      let found: ViaCatalogItem | undefined;
+      for (let page = 0; page < 20 && !found; page += 1) {
+        const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+        const catalog = safeCatalog(await client.request<unknown>("GET", `/api/integrations/estate/v1/properties${query}`));
+        if (!catalog) return reply.status(502).send({ error: "invalid_via_catalog", message: "Via вернул некорректный каталог." });
+        found = catalog.items.find((item) => item.externalId === request.params.externalId);
+        cursor = catalog.nextCursor;
+        if (!cursor) break;
+      }
+      if (!found || !found.active) return reply.status(404).send({ error: "via_property_not_found", message: "Объект Via не найден или больше недоступен." });
+      const property = await database.client.property.create({
+        data: {
+          organizationId: user.organization.id, title: found.title.trim(), address: null, district: found.district?.trim() || null,
+          category: viaCategory(found.propertyType), market: "SECONDARY", operation: viaOperation(found.operation), status: "AVAILABLE",
+          price: finiteNonNegative(found.price), currency: viaCurrency(found.currency), rooms: found.rooms?.trim() || null,
+          area: finiteNonNegative(found.areaM2), imageUrl: safeImageUrl(found.previewImageUrl), sourceHash,
+          sourceRaw: { provider: "VIA", externalId: found.externalId, snapshot: {
+            title: found.title, active: found.active, updatedAt: found.updatedAt ?? null, operation: found.operation ?? null,
+            propertyType: found.propertyType ?? null, price: found.price ?? null, currency: found.currency ?? null,
+            rooms: found.rooms ?? null, areaM2: found.areaM2 ?? null, district: found.district ?? null,
+            previewImageUrl: found.previewImageUrl ?? null,
+          } }, importedAt: new Date(),
+        },
+      });
+      return reply.status(201).send({ propertyId: property.id, imported: true });
+    } catch (error) {
+      const concurrent = await database.client.property.findFirst({ where: { organizationId: user.organization.id, sourceHash }, select: { id: true } });
+      if (concurrent) return { propertyId: concurrent.id, imported: false };
+      return reply.status(502).send({ error: "via_import_failed", message: errorMessage(error) });
+    }
   });
 
   app.get<{ Params: { dealId: string } }>("/deals/:dealId/via-selections", { schema: { params: dealParams } }, async (request, reply) => {
