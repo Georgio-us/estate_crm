@@ -358,8 +358,8 @@
 .shareComposer .sharePrimary { border-color: var(--primary); background: var(--primary); color: #fff; }
 .shareReady { display: flex !important; width: 100%; align-items: center; justify-content: space-between; gap: 14px; }
 .shareReady > div { display: grid; min-width: 0; gap: 4px; }
-.shareReady > div:last-child { display: flex; flex: 0 0 auto; gap: 7px; }
-.shareReady a { display: block; overflow: hidden; max-width: 300px; min-height: 0; padding: 0; border: 0; background: transparent; text-overflow: ellipsis; white-space: nowrap; }
+.shareReady > div:last-child { display: grid; min-width: 350px; flex: 0 0 auto; grid-template-columns: 1fr 1fr; gap: 8px; }
+.shareReady a { display: flex; align-items: center; justify-content: center; white-space: nowrap; }
 .shareHistory { display: grid; min-height: 0; flex: 1; align-content: start; gap: 10px; overflow-y: auto; padding: 18px 27px 38px; }
 .shareHistoryItem { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 15px; border: 1px solid var(--border); border-radius: var(--radius-md); }
 .shareHistoryItem > div:first-child { display: grid; gap: 5px; }
@@ -969,8 +969,9 @@
   .shareComposer { padding: 12px 18px; }
   .shareReady,
   .shareHistoryItem { align-items: stretch; flex-direction: column; }
-  .shareReady > div:last-child { display: grid; grid-template-columns: 1fr; }
-  .shareReady > div:last-child button { min-height: 42px; }
+  .shareReady > div:last-child { min-width: 0; grid-template-columns: 1fr; }
+  .shareReady > div:last-child button,
+  .shareReady > div:last-child a { min-height: 42px; }
   .shareHistory { padding: 14px 18px 40px; }
   .shareHistoryItem > div:last-child { justify-content: flex-start; }
   .relatedPicker { grid-template-columns: 1fr 1fr; }
