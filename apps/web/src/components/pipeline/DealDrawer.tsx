@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { useCurrentUser } from "@/components/auth/AuthContext";
 import { UiIcon } from "@/components/ui/UiIcon";
 import { localDateKey } from "@/lib/tasks";
 import type { ActivityCategory, ActivityEvent, CrmTask, Deal, DealStatus } from "@/types/crm";
@@ -69,7 +68,6 @@ export function DealDrawer({
   initialComposerMode = "note",
   onClose,
 }: DealDrawerProps) {
-  const user = useCurrentUser();
   const [composerMode, setComposerMode] = useState<ComposerMode>(initialComposerMode);
   const [composerText, setComposerText] = useState("");
   const [taskDueDate, setTaskDueDate] = useState("");
@@ -98,7 +96,7 @@ export function DealDrawer({
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const contactMenuRef = useRef<HTMLDivElement>(null);
   const contactMenuButtonRef = useRef<HTMLButtonElement>(null);
-  const phoneRestricted = user.organization.role === "MANAGER" && !deal.assigneeId;
+  const phoneRestricted = !deal.assigneeId;
 
   const comparable = (value: Deal) => ({ title: value.title, assigneeId: value.assigneeId, budget: value.budget, operation: value.operation, propertyType: value.propertyType, district: value.district, rooms: value.rooms, marketPreference: value.marketPreference, paymentMethod: value.paymentMethod, neighborhood: value.neighborhood, preferredProject: value.preferredProject, request: value.request, comment: value.comment, source: value.source });
   const isDirty = draftStageId !== stageId || JSON.stringify(comparable(draft)) !== JSON.stringify(comparable(deal));

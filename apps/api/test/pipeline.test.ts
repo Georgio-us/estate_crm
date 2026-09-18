@@ -425,6 +425,46 @@ test("manager can inspect an unassigned deal but does not receive its phone", as
   await app.close();
 });
 
+test("organization-wide roles also claim an unassigned lead before receiving its phone", async () => {
+  const dealId = "14a292bd-d84e-447c-b71a-aa185b809b88";
+  const now = new Date("2026-09-18T09:02:00.000Z");
+
+  for (const role of ["ADMIN", "LEAD"] as const) {
+    const database = {
+      client: {
+        session: {
+          async findUnique() {
+            const current = session();
+            return { ...current, user: { ...current.user, memberships: [{ role, organization: user.memberships[0].organization }] } };
+          },
+        },
+        deal: {
+          async findFirst() {
+            return {
+              id: dealId, number: 1041, stageId, contactId, title: "Продажа цоколя", request: "Продажа цоколя",
+              budget: null, comment: null, operation: "SALE" as const, propertyType: "Коммерция",
+              district: null, rooms: null, marketPreference: null, paymentMethod: null,
+              neighborhood: null, preferredProject: null, source: "META" as const,
+              status: "ACTIVE" as const, position: 0, closedAt: null, createdAt: now, updatedAt: now,
+              contact: { id: contactId, name: "Alexander Varbanets", phone: "+380 67 353 88 69" },
+              relatedContacts: [], tasks: [], assignee: null,
+            };
+          },
+        },
+      },
+      async ping() {},
+      async disconnect() {},
+    } as unknown as DatabaseConnection;
+
+    const app = await buildApp(config, database);
+    const response = await app.inject({ method: "GET", url: `/deals/${dealId}`, headers: { cookie: "estate_crm_session=test-token" } });
+
+    assert.equal(response.statusCode, 200, role);
+    assert.equal(response.json().deal.contact.phone, null, role);
+    await app.close();
+  }
+});
+
 test("claiming an unassigned lead atomically assigns both deal and contact", async () => {
   const dealId = "14a292bd-d84e-447c-b71a-aa185b809b88";
   const now = new Date("2026-09-18T09:05:00.000Z");
