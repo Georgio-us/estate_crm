@@ -537,6 +537,13 @@
   user-select: text;
 }
 
+.phoneHidden {
+  display: inline-block;
+  margin-top: 5px;
+  color: var(--text-subtle);
+  font-size: var(--font-size-caption);
+}
+
 .request {
   display: -webkit-box;
   overflow: hidden;

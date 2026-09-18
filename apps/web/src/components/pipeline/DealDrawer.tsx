@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCurrentUser } from "@/components/auth/AuthContext";
 import { UiIcon } from "@/components/ui/UiIcon";
 import { localDateKey } from "@/lib/tasks";
 import type { ActivityCategory, ActivityEvent, CrmTask, Deal, DealStatus } from "@/types/crm";
-import { isValidPhone } from "@/lib/phone";
 import { demoProjects } from "@/components/properties/demoCatalog";
 import { DealPropertySelectionPanel } from "./DealPropertySelectionPanel";
 import styles from "./deal-drawer.module.css";
@@ -17,7 +17,7 @@ interface DealDrawerProps {
   highlightedTaskId?: string;
   contacts: Array<{ id: string; name: string; phone: string | null }>;
   onSave: (deal: Deal, stageId: string) => Promise<{ deal: Deal; stageId: string }>;
-  onUpdateContactPhone: (phone: string) => Promise<string>;
+  onOpenAssignment: () => void;
   onAddNote: (text: string) => Promise<void>;
   onLinkContact: (contactId: string) => Promise<void>;
   onUnlinkContact: (contactId: string) => Promise<void>;
@@ -57,7 +57,7 @@ export function DealDrawer({
   highlightedTaskId,
   contacts,
   onSave,
-  onUpdateContactPhone,
+  onOpenAssignment,
   onAddNote,
   onLinkContact,
   onUnlinkContact,
@@ -69,6 +69,7 @@ export function DealDrawer({
   initialComposerMode = "note",
   onClose,
 }: DealDrawerProps) {
+  const user = useCurrentUser();
   const [composerMode, setComposerMode] = useState<ComposerMode>(initialComposerMode);
   const [composerText, setComposerText] = useState("");
   const [taskDueDate, setTaskDueDate] = useState("");
@@ -95,8 +96,11 @@ export function DealDrawer({
   const [selectionCount, setSelectionCount] = useState(0);
   const [projectOptions, setProjectOptions] = useState(() => demoProjects.map((project) => project.title));
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const contactMenuRef = useRef<HTMLDivElement>(null);
+  const contactMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const phoneRestricted = user.organization.role === "MANAGER" && !deal.assigneeId;
 
-  const comparable = (value: Deal) => ({ title: value.title, phone: value.phone, assigneeId: value.assigneeId, budget: value.budget, operation: value.operation, propertyType: value.propertyType, district: value.district, rooms: value.rooms, marketPreference: value.marketPreference, paymentMethod: value.paymentMethod, neighborhood: value.neighborhood, preferredProject: value.preferredProject, request: value.request, comment: value.comment, source: value.source });
+  const comparable = (value: Deal) => ({ title: value.title, assigneeId: value.assigneeId, budget: value.budget, operation: value.operation, propertyType: value.propertyType, district: value.district, rooms: value.rooms, marketPreference: value.marketPreference, paymentMethod: value.paymentMethod, neighborhood: value.neighborhood, preferredProject: value.preferredProject, request: value.request, comment: value.comment, source: value.source });
   const isDirty = draftStageId !== stageId || JSON.stringify(comparable(draft)) !== JSON.stringify(comparable(deal));
 
   function updateDraft(patch: Partial<Deal>) {
@@ -111,25 +115,11 @@ export function DealDrawer({
 
   async function saveChanges() {
     if (!isDirty || isSaving) return;
-    if (draft.phone !== deal.phone && !isValidPhone(draft.phone)) {
-      setSaveError("Введите корректный номер телефона.");
-      return;
-    }
     setIsSaving(true);
     setSaveError("");
     try {
       const saved = await onSave(draft, draftStageId);
-      let phone = saved.deal.phone;
-      if (draft.phone !== deal.phone) {
-        try {
-          phone = await onUpdateContactPhone(draft.phone);
-        } catch (cause) {
-          setDraft({ ...saved.deal, phone: draft.phone });
-          setDraftStageId(saved.stageId);
-          throw cause;
-        }
-      }
-      setDraft({ ...saved.deal, phone });
+      setDraft(saved.deal);
       setDraftStageId(saved.stageId);
     } catch (cause) {
       setSaveError(cause instanceof Error ? cause.message : "Не удалось сохранить сделку.");
@@ -183,12 +173,28 @@ export function DealDrawer({
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
+      if (event.key !== "Escape") return;
+      if (contactMenuOpen || dealMenuOpen) {
+        setContactMenuOpen(false);
+        setDealMenuOpen(false);
+        return;
+      }
+      onClose();
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+  }, [contactMenuOpen, dealMenuOpen, onClose]);
+
+  useEffect(() => {
+    if (!contactMenuOpen) return;
+    function closeContactMenu(event: PointerEvent) {
+      const target = event.target as Node;
+      if (!contactMenuRef.current?.contains(target) && !contactMenuButtonRef.current?.contains(target)) setContactMenuOpen(false);
+    }
+    document.addEventListener("pointerdown", closeContactMenu);
+    return () => document.removeEventListener("pointerdown", closeContactMenu);
+  }, [contactMenuOpen]);
 
   useEffect(() => {
     if (composerMode === "task") composerRef.current?.focus();
@@ -308,7 +314,7 @@ export function DealDrawer({
 
             <section className={styles.propertySection}>
               <h3>Основное</h3>
-              <AssigneeSelect value={draft.assigneeId || ""} options={assignees} onChange={(id) => updateDraft({ assigneeId: id || undefined, assignee: assignees.find((item) => item.id === id)?.name || "Не назначен" })} />
+              <AssigneeSelect value={draft.assigneeId || ""} options={assignees} disabled={phoneRestricted} onChange={(id) => updateDraft({ assigneeId: id || undefined, assignee: assignees.find((item) => item.id === id)?.name || "Не назначен" })} />
               <PropertyInput label="Бюджет" icon="$" value={draft.budget || ""} placeholder="Не указан" onChange={(value) => updateDraft({ budget: value })} />
               <PropertySelect label="Операция" icon="↔" value={draft.operation || "Покупка"} options={["Покупка", "Аренда", "Продажа"]} onChange={(value) => updateDraft({ operation: value as Deal["operation"] })} />
               <PropertySelect label="Тип объекта" icon="⌂" value={draft.propertyType || ""} placeholder="Выбрать" options={propertyTypes} onChange={(value) => updateDraft({ propertyType: value })} />
@@ -331,14 +337,14 @@ export function DealDrawer({
                   <strong className={styles.contactName}>{deal.contactName}</strong>
                   <span>Основной контакт сделки</span>
                 </div>
-                <button type="button" aria-label="Меню контакта" aria-expanded={contactMenuOpen} onClick={() => setContactMenuOpen((value) => !value)}>•••</button>
-                {contactMenuOpen && <div className={`${styles.entityMenu} ${styles.contactMenu}`}>
+                {!phoneRestricted && <button ref={contactMenuButtonRef} type="button" aria-label="Меню контакта" aria-expanded={contactMenuOpen} onClick={() => setContactMenuOpen((value) => !value)}>•••</button>}
+                {contactMenuOpen && !phoneRestricted && <div ref={contactMenuRef} className={`${styles.entityMenu} ${styles.contactMenu}`}>
                   <button type="button" onClick={() => onOpenContact(deal.contactId!)}>Открыть карточку контакта</button>
                   <button type="button" onClick={() => { void navigator.clipboard.writeText(draft.phone || ""); setContactMenuOpen(false); }}>Скопировать телефон</button>
                   <a href={`tel:${(draft.phone || "").replaceAll(" ", "")}`}>Позвонить</a>
                 </div>}
               </div>
-              <PropertyInput label="Телефон" icon={<UiIcon name="phone" />} value={draft.phone || ""} onChange={(value) => updateDraft({ phone: value })} />
+              {phoneRestricted ? <div className={styles.propertyRow}><span className={styles.propertyLabel}><i><UiIcon name="phone" /></i>Телефон</span><button className={styles.takeLeadButton} type="button" onClick={onOpenAssignment}>Взять в работу</button></div> : <a className={`${styles.propertyRow} ${styles.phoneRow}`} href={draft.phone ? `tel:${draft.phone.replaceAll(" ", "")}` : undefined}><span className={styles.propertyLabel}><i><UiIcon name="phone" /></i>Телефон</span><strong>{draft.phone || "Не указан"}</strong></a>}
               <SourceSelect value={draft.source} onChange={(value) => updateDraft({ source: value })} />
             </section>
 
@@ -454,8 +460,8 @@ function SourceSelect({ value, onChange }: { value: Deal["source"]; onChange: (v
   return <label className={styles.propertyRow}><span className={styles.propertyLabel}><i>↗</i>Источник</span><select value={value} onChange={(event) => onChange(event.target.value as Deal["source"])}><option value="Manual">Не указан</option><option value="Meta">Meta</option><option value="Website">Сайт</option><option value="Call">Звонок</option><option value="Referral">Рекомендация</option></select></label>;
 }
 
-function AssigneeSelect({ value, options, onChange }: { value: string; options: Array<{ id: string; name: string }>; onChange: (value: string) => void }) {
-  return <label className={styles.propertyRow}><span className={styles.propertyLabel}><i>У</i>Ответственный</span><select value={value} onChange={(event) => onChange(event.target.value)}><option value="">Не назначен</option>{options.map((option) => <option value={option.id} key={option.id}>{option.name}</option>)}</select></label>;
+function AssigneeSelect({ value, options, disabled = false, onChange }: { value: string; options: Array<{ id: string; name: string }>; disabled?: boolean; onChange: (value: string) => void }) {
+  return <label className={styles.propertyRow}><span className={styles.propertyLabel}><i>У</i>Ответственный</span><select value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)}><option value="">Не назначен</option>{options.map((option) => <option value={option.id} key={option.id}>{option.name}</option>)}</select></label>;
 }
 
 function InlineTitleEditor({ value, onSave }: { value: string; onSave: (value: string) => void }) {

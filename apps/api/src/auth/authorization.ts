@@ -34,21 +34,16 @@ export function contactScope(user: AuthenticatedUser): {
       OR: [
         { assigneeId: user.id },
         { deals: { some: { status: "ACTIVE" as const, assigneeId: user.id } } },
-        { deals: { some: { status: "ACTIVE" as const, assigneeId: null } } },
       ],
     }),
   };
-}
-
-export function canAssignTo(user: AuthenticatedUser, assigneeId: string | null | undefined): boolean {
-  return hasOrganizationWideDataAccess(user) || assigneeId == null || assigneeId === user.id;
 }
 
 export function effectiveAssigneeId(
   user: AuthenticatedUser,
   requestedAssigneeId: string | null | undefined,
 ): string | null {
-  if (!hasOrganizationWideDataAccess(user)) return user.id;
+  if (!hasOrganizationWideDataAccess(user)) return requestedAssigneeId ?? user.id;
   return requestedAssigneeId ?? null;
 }
 

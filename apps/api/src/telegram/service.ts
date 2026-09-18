@@ -150,6 +150,7 @@ function recipientAccepts(notification: TelegramNotification, recipient: Recipie
   const eventType = notification.eventType || "";
   if (eventType === "deal.assigned") return Boolean(assigneeId) && recipient.userId === assigneeId;
   if (eventType.startsWith("lead.") && recipient.leadNotifications === false) return false;
+  if (eventType === "lead.created" && !assigneeId) return recipient.audience !== "NONE";
   if (["task.assigned", "task.reminder"].includes(eventType) && recipient.taskReminderNotifications === false) return false;
   if (eventType === "task.overdue" && recipient.taskOverdueNotifications === false) return false;
   const audience = recipient.scope === "OWN" ? (recipient.audience === "NONE" ? "NONE" : "OWN") : recipient.audience ?? "ALL";

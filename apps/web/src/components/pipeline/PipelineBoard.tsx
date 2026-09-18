@@ -207,7 +207,6 @@ export function PipelineBoard() {
   const router = useRouter();
   const pipelineMenuRef = useRef<HTMLDivElement>(null);
   const deepLinkHandledRef = useRef(false);
-  const closingDealRef = useRef(false);
   const user = useCurrentUser();
   const { tasks, assignees: teamAssignees, createTask, completeTask: persistCompleteTask } = useTasks();
   const [pipelineName, setPipelineName] = useState("Продажа недвижимости");
@@ -530,110 +529,43 @@ export function PipelineBoard() {
     if (window.location.search) router.replace("/");
   }
 
-  async function requestDealClose() {
-    if (!selectedDeal || pipelineView !== "active") {
-      closeDealDrawer();
-      return;
-    }
-    if (closingDealRef.current) return;
-    closingDealRef.current = true;
-    try {
-      const latest = await refreshDeal(selectedDeal.id);
-      if (latest.deal.assigneeId || latest.deal.status !== "ACTIVE") {
-        closeDealDrawer();
-        return;
-      }
-      setAssignmentChoiceId("");
-      setAssignmentPromptOpen(true);
-    } catch (cause) {
-      if (cause instanceof DealRequestError && cause.status === 404) {
-        closeDealDrawer();
-        setNotice("Сделка больше не доступна в этой воронке.");
-        return;
-      }
-      setNotice(cause instanceof Error ? cause.message : "Не удалось проверить ответственного. Попробуйте ещё раз.");
-    } finally {
-      closingDealRef.current = false;
-    }
-  }
-
-  async function assignBeforeClose(assigneeId: string) {
+  async function assignLead(assigneeId: string) {
     if (!selectedDeal) return;
     const assignee = teamAssignees.find((item) => item.id === assigneeId);
     if (!assignee) return;
     setAssignmentActionPending(true);
     try {
-      const latest = await refreshDeal(selectedDeal.id);
-      if (latest.deal.assigneeId) {
-        setNotice(`Сделка уже назначена: ${latest.deal.assignee}`);
+      const response = await fetch(`/api/crm/deals/${selectedDeal.id}/assign`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ assigneeId }),
+      });
+      const payload = await response.json() as { deal?: ApiDeal; stageId?: string; message?: string };
+      if (!response.ok || !payload.deal || !payload.stageId) throw new DealRequestError(payload.message || "Не удалось назначить ответственного.", response.status);
+      const savedDeal = mapApiDeal(payload.deal);
+      setAssignmentPromptOpen(false);
+      setAssignmentChoiceId("");
+      setNotice(assignee.id === user.id ? "Лид назначен вам — телефон открыт" : `Лид передан: ${assignee.name}`);
+      if (user.organization.role === "MANAGER" && assignee.id !== user.id) {
         closeDealDrawer();
-        return;
+        await reloadPipeline();
+      } else {
+        applyDealSnapshot({ deal: savedDeal, stageId: payload.stageId });
+        const [contactOptions, refreshedActivities] = await Promise.all([requestContactOptions(), requestDealActivities(savedDeal.id)]);
+        setContacts(contactOptions);
+        setActivities((current) => ({ ...current, [savedDeal.id]: refreshedActivities }));
       }
-      await saveDeal({ ...latest.deal, assigneeId: assignee.id, assignee: assignee.name }, latest.stageId);
-      setNotice(assignee.id === user.id ? "Сделка назначена вам" : `Ответственный: ${assignee.name}`);
-      closeDealDrawer();
     } catch (cause) {
-      if (cause instanceof DealRequestError && cause.status === 404) {
+      if (cause instanceof DealRequestError && (cause.status === 404 || cause.status === 409)) {
         closeDealDrawer();
-        setNotice("Сделка больше не доступна в этой воронке.");
+        await reloadPipeline();
+        setNotice(cause.message);
         return;
       }
       setNotice(cause instanceof Error ? cause.message : "Не удалось назначить ответственного");
     } finally {
       setAssignmentActionPending(false);
     }
-  }
-
-  async function deferAssignment() {
-    if (!selectedDeal) return;
-    const title = `Назначить ответственного по сделке #${selectedDeal.number}`;
-    setAssignmentActionPending(true);
-    try {
-      const latest = await refreshDeal(selectedDeal.id);
-      if (latest.deal.assigneeId) {
-        setNotice(`Сделка уже назначена: ${latest.deal.assignee}`);
-        closeDealDrawer();
-        return;
-      }
-      const alreadyExists = selectedTasks.some((task) => task.title === title);
-      if (!alreadyExists) {
-        await createTask({
-          title,
-          kind: "Другое",
-          dueDate: localDateKey(),
-          dealId: selectedDeal.id,
-          contactId: selectedDeal.contactId,
-          assigneeId: user.id,
-        });
-      }
-      setNotice(alreadyExists ? "Задача о назначении уже активна" : "Задача о назначении поставлена на сегодня");
-      closeDealDrawer();
-    } catch (cause) {
-      if (cause instanceof DealRequestError && cause.status === 404) {
-        closeDealDrawer();
-        setNotice("Сделка больше не доступна в этой воронке.");
-        return;
-      }
-      setNotice(cause instanceof Error ? cause.message : "Не удалось поставить задачу");
-    } finally {
-      setAssignmentActionPending(false);
-    }
-  }
-
-  async function updateContactPhone(phone: string) {
-    if (!selectedDeal?.contactId) throw new Error("У сделки нет основного контакта.");
-    const contactId = selectedDeal.contactId;
-    const response = await fetch(`/api/crm/contacts/${contactId}`, {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ phone }),
-    });
-    const payload = await response.json() as { contact?: { phone: string | null }; message?: string };
-    if (!response.ok || !payload.contact) throw new Error(payload.message || "Не удалось обновить телефон контакта.");
-    const savedPhone = payload.contact.phone || "";
-    setContacts((current) => current.map((contact) => contact.id === contactId ? { ...contact, phone: savedPhone } : contact));
-    setStages((current) => current.map((stage) => ({ ...stage, deals: stage.deals.map((deal) => deal.contactId === contactId ? { ...deal, phone: savedPhone } : deal) })));
-    return savedPhone;
   }
 
   async function addNote(text: string) {
@@ -1027,7 +959,7 @@ export function PipelineBoard() {
 
       {selectedDeal && selectedStage && (
         <DealDrawer
-          key={selectedDeal.id}
+          key={`${selectedDeal.id}:${selectedDeal.updatedAt}`}
           deal={selectedDeal}
           stageId={selectedStage.id}
           stages={stageOptions}
@@ -1038,7 +970,7 @@ export function PipelineBoard() {
           contacts={contacts.map(({ id, name, phone }) => ({ id, name, phone }))}
           initialComposerMode={selected?.composer}
           onSave={saveDeal}
-          onUpdateContactPhone={updateContactPhone}
+          onOpenAssignment={() => { setAssignmentChoiceId(""); setAssignmentPromptOpen(true); }}
           onAddNote={addNote}
           onLinkContact={linkContact}
           onUnlinkContact={unlinkContact}
@@ -1047,7 +979,7 @@ export function PipelineBoard() {
           onLifecycle={(status) => runDealLifecycle(selectedDeal.id, status)}
           onOpenContact={(contactId) => router.push(`/contacts?contact=${contactId}`)}
           onRefreshActivities={refreshSelectedActivities}
-          onClose={requestDealClose}
+          onClose={closeDealDrawer}
         />
       )}
 
@@ -1056,21 +988,18 @@ export function PipelineBoard() {
           <div className={styles.assignmentBackdrop} />
           <section className={styles.assignmentModal}>
             <span className={styles.assignmentEyebrow}>Сделка #{selectedDeal.number}</span>
-            <h3 id="assignment-title">Кто будет вести эту сделку?</h3>
-            <p>Вы открыли лид без ответственного. Зафиксируйте решение, чтобы он не потерялся после первого касания.</p>
+            <h3 id="assignment-title">Взять лид в работу</h3>
+            <p>После назначения ответственного откроется номер телефона клиента.</p>
             <div className={styles.assignmentActions}>
-              <button className={styles.assignmentPrimary} type="button" disabled={assignmentActionPending} onClick={() => { void assignBeforeClose(user.id); }}>Я буду ответственным</button>
-              {user.organization.role !== "MANAGER" && (
-                <div className={styles.assignmentDelegate}>
-                  <select aria-label="Выберите ответственного" value={assignmentChoiceId} disabled={assignmentActionPending} onChange={(event) => setAssignmentChoiceId(event.target.value)}>
-                    <option value="">Назначить коллегу…</option>
-                    {teamAssignees.filter((item) => item.id !== user.id).map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}
-                  </select>
-                  <button type="button" disabled={!assignmentChoiceId || assignmentActionPending} onClick={() => { void assignBeforeClose(assignmentChoiceId); }}>Назначить</button>
-                </div>
-              )}
-              <button className={styles.assignmentLater} type="button" disabled={assignmentActionPending} onClick={() => { void deferAssignment(); }}>Решить позже — поставить задачу на сегодня</button>
-              <button className={styles.assignmentReturn} type="button" disabled={assignmentActionPending} onClick={() => setAssignmentPromptOpen(false)}>Вернуться в карточку</button>
+              <button className={styles.assignmentPrimary} type="button" disabled={assignmentActionPending} onClick={() => { void assignLead(user.id); }}>Я буду ответственным</button>
+              <div className={styles.assignmentDelegate}>
+                <select aria-label="Выберите ответственного" value={assignmentChoiceId} disabled={assignmentActionPending} onChange={(event) => setAssignmentChoiceId(event.target.value)}>
+                  <option value="">Назначить коллегу…</option>
+                  {teamAssignees.filter((item) => item.id !== user.id).map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}
+                </select>
+                <button type="button" disabled={!assignmentChoiceId || assignmentActionPending} onClick={() => { void assignLead(assignmentChoiceId); }}>Назначить</button>
+              </div>
+              <button className={styles.assignmentReturn} type="button" disabled={assignmentActionPending} onClick={() => setAssignmentPromptOpen(false)}>Отмена</button>
             </div>
           </section>
         </div>

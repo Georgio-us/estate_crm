@@ -58,7 +58,6 @@ test("manager list queries include own records and the shared active unassigned 
     OR: [
       { assigneeId: managerId },
       { deals: { some: { status: "ACTIVE", assigneeId: managerId } } },
-      { deals: { some: { status: "ACTIVE", assigneeId: null } } },
     ],
   });
   assert.deepEqual(captured.tasks, { organizationId, assigneeId: managerId });
@@ -96,7 +95,6 @@ test("manager direct-id queries keep organization and ownership or unassigned sc
     OR: [
       { assigneeId: managerId },
       { deals: { some: { status: "ACTIVE", assigneeId: managerId } } },
-      { deals: { some: { status: "ACTIVE", assigneeId: null } } },
     ],
   });
   assert.deepEqual(scopes[2], { id: "3a93e90c-769d-4716-9b4c-9ab6fa153244", organizationId, assigneeId: managerId });
@@ -148,7 +146,7 @@ test("lead can see organization data but cannot change administrator settings", 
   await app.close();
 });
 
-test("assignee choices expose the active organization team to leaders and only self to managers", async () => {
+test("assignee choices expose the active organization team to leaders and managers", async () => {
   const captured: Array<Record<string, unknown>> = [];
   let role: "LEAD" | "MANAGER" = "LEAD";
   const database = {
@@ -173,6 +171,6 @@ test("assignee choices expose the active organization team to leaders and only s
   assert.equal(leadResponse.statusCode, 200);
   assert.deepEqual(captured[0], { organizationId, status: "ACTIVE" });
   assert.equal(managerResponse.statusCode, 200);
-  assert.deepEqual(captured[1], { organizationId, status: "ACTIVE", userId: managerId });
+  assert.deepEqual(captured[1], { organizationId, status: "ACTIVE" });
   await app.close();
 });

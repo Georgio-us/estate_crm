@@ -131,7 +131,6 @@ export async function registerTeamRoutes(app: FastifyInstance, config: ApiConfig
       where: {
         organizationId: currentUser.organization.id,
         status: "ACTIVE",
-        ...(currentUser.organization.role === "MANAGER" ? { userId: currentUser.id } : {}),
       },
       select: {
         role: true,

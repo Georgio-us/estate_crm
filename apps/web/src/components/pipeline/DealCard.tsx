@@ -96,13 +96,13 @@ function DealCardContent({ deal, menuOpen = false, busy = false, onMenuToggle, o
         <button type="button" disabled={busy} onClick={() => { void onLifecycle?.("LOST"); }}>Закрыть неуспешно</button>
         <button className={styles.menuMuted} type="button" disabled={busy} onClick={() => { void onLifecycle?.("ARCHIVED"); }}>В архив</button>
       </div>}
-      <a
-        className={styles.phone}
-        href={`tel:${deal.phone.replaceAll(" ", "")}`}
-        onClick={(event) => event.stopPropagation()}
-      >
-        {deal.phone}
-      </a>
+      {deal.phone ? <a
+          className={styles.phone}
+          href={`tel:${deal.phone.replaceAll(" ", "")}`}
+          onClick={(event) => event.stopPropagation()}
+        >
+          {deal.phone}
+        </a> : <span className={styles.phoneHidden}>Телефон после назначения</span>}
       <p className={styles.request}>{deal.contactName}{deal.request ? ` · ${deal.request}` : ""}</p>
       {deal.budget && <p className={styles.budget}>{deal.budget}</p>}
 

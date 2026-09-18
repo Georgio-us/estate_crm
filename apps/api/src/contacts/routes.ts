@@ -10,7 +10,7 @@ import type {
 } from "@estate-crm/contracts";
 import type { DatabaseConnection } from "@estate-crm/database";
 
-import { canAssignTo, contactScope, effectiveAssigneeId, hasOrganizationWideDataAccess } from "../auth/authorization.js";
+import { contactScope, effectiveAssigneeId, hasOrganizationWideDataAccess } from "../auth/authorization.js";
 import { requireUser } from "../auth/require-user.js";
 import { parsePhone } from "../lib/phone.js";
 
@@ -28,7 +28,7 @@ function describeChange(label: string, previous: string | null, next: string | n
 }
 
 function contactInclude(assigneeId?: string) {
-  const visibleDealScope = assigneeId ? { OR: [{ assigneeId }, { assigneeId: null }] } : {};
+  const visibleDealScope = assigneeId ? { assigneeId } : {};
   return {
     assignee: { select: { id: true, name: true } },
     deals: { where: { status: "ACTIVE" as const, ...visibleDealScope }, select: { id: true, number: true, title: true, request: true, budget: true, stage: { select: { id: true, title: true, color: true } } } },
@@ -140,10 +140,6 @@ export async function registerContactRoutes(
     const user = await requireUser(request, reply, database);
     if (!user) return reply;
 
-    if (!canAssignTo(user, request.body.assigneeId)) {
-      return reply.status(403).send({ error: "forbidden", message: "Менеджер может назначать контакты только себе." });
-    }
-
     if (request.body.assigneeId) {
       const membership = await database.client.membership.findUnique({
         where: {
@@ -225,10 +221,6 @@ export async function registerContactRoutes(
       where: { id: request.params.contactId, ...contactScope(user) },
     });
     if (!existing) return reply.status(404).send({ error: "contact_not_found", message: "Контакт не найден." });
-
-    if (!canAssignTo(user, request.body.assigneeId)) {
-      return reply.status(403).send({ error: "forbidden", message: "Менеджер не может передать контакт другому сотруднику или снять ответственность." });
-    }
 
     if (request.body.assigneeId) {
       const membership = await database.client.membership.findUnique({

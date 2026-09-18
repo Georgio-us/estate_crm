@@ -14,7 +14,7 @@ import type {
 } from "@estate-crm/contracts";
 import type { DatabaseConnection } from "@estate-crm/database";
 
-import { canAssignTo, canConfigureOrganization, contactScope, dealScope, effectiveAssigneeId, hasOrganizationWideDataAccess } from "../auth/authorization.js";
+import { canConfigureOrganization, contactScope, dealScope, effectiveAssigneeId, hasOrganizationWideDataAccess } from "../auth/authorization.js";
 import { requireUser } from "../auth/require-user.js";
 import { parsePhone } from "../lib/phone.js";
 
@@ -66,10 +66,11 @@ function mapDeal(deal: {
   assignee: { id: string; name: string } | null;
   title: string;
   comment: string | null;
-}): PipelineDealRecord {
+}, hideContactPhones = false): PipelineDealRecord {
   return {
     ...deal,
-    relatedContacts: deal.relatedContacts?.map((link) => link.contact) ?? [],
+    contact: hideContactPhones ? { ...deal.contact, phone: null } : deal.contact,
+    relatedContacts: deal.relatedContacts?.map((link) => hideContactPhones ? { ...link.contact, phone: null } : link.contact) ?? [],
     nextTask: deal.tasks?.[0] ? { ...deal.tasks[0], dueDate: deal.tasks[0].dueDate?.toISOString().slice(0, 10) ?? null } : null,
     closedAt: deal.closedAt?.toISOString() ?? null,
     createdAt: deal.createdAt.toISOString(),
@@ -144,7 +145,7 @@ export async function registerPipelineRoutes(
           title: stage.title,
           color: stage.color,
           position: stage.position,
-          deals: stage.deals.map(mapDeal),
+          deals: stage.deals.map((deal) => mapDeal(deal, user.organization.role === "MANAGER" && !deal.assignee)),
         })),
       },
     };
@@ -329,10 +330,6 @@ export async function registerPipelineRoutes(
     const user = await requireUser(request, reply, database);
     if (!user) return reply;
 
-    if (!canAssignTo(user, request.body.assigneeId)) {
-      return reply.status(403).send({ error: "forbidden", message: "Менеджер может назначать сделки только себе." });
-    }
-
     if (request.body.assigneeId) {
       const membership = await database.client.membership.findUnique({
         where: { organizationId_userId: { organizationId: user.organization.id, userId: request.body.assigneeId } },
@@ -440,7 +437,7 @@ export async function registerPipelineRoutes(
       },
     });
 
-    return reply.status(201).send({ deal: mapDeal(deal), stageId: stage.id });
+    return reply.status(201).send({ deal: mapDeal(deal, user.organization.role === "MANAGER" && !deal.assignee), stageId: stage.id });
   });
 
   app.get<{
@@ -464,7 +461,86 @@ export async function registerPipelineRoutes(
       },
     });
     if (!deal) return reply.status(404).send({ error: "deal_not_found", message: "Сделка не найдена." });
-    return { deal: mapDeal(deal), stageId: deal.stageId };
+    return { deal: mapDeal(deal, user.organization.role === "MANAGER" && !deal.assignee), stageId: deal.stageId };
+  });
+
+  app.post<{
+    Params: { dealId: string };
+    Body: { assigneeId: string };
+    Reply: { deal: PipelineDealRecord; stageId: string } | ApiErrorResponse;
+  }>("/deals/:dealId/assign", {
+    schema: {
+      params: { type: "object", required: ["dealId"], properties: { dealId: { type: "string", format: "uuid" } } },
+      body: { type: "object", additionalProperties: false, required: ["assigneeId"], properties: { assigneeId: { type: "string", format: "uuid" } } },
+    },
+  }, async (request, reply) => {
+    const user = await requireUser(request, reply, database);
+    if (!user) return reply;
+    const existing = await database.client.deal.findFirst({
+      where: { id: request.params.dealId, organizationId: user.organization.id, status: "ACTIVE" },
+      select: { id: true, contactId: true, organizationId: true, assigneeId: true, assignee: { select: { name: true } } },
+    });
+    if (!existing) return reply.status(404).send({ error: "deal_not_found", message: "Сделка не найдена." });
+    if (existing.assigneeId) {
+      return reply.status(409).send({
+        error: "deal_already_assigned",
+        message: existing.assignee ? `Лид уже распределён. Ответственный — ${existing.assignee.name}.` : "Лид уже распределён другим сотрудником.",
+      });
+    }
+    const membership = await database.client.membership.findUnique({
+      where: { organizationId_userId: { organizationId: user.organization.id, userId: request.body.assigneeId } },
+      include: { user: { select: { name: true } } },
+    });
+    if (!membership || membership.status !== "ACTIVE") return reply.status(400).send({ error: "invalid_assignee", message: "Ответственный не входит в активную команду." });
+
+    const assigned = await database.client.$transaction(async (transaction) => {
+      const claimed = await transaction.deal.updateMany({
+        where: { id: existing.id, organizationId: user.organization.id, status: "ACTIVE", assigneeId: null },
+        data: { assigneeId: request.body.assigneeId },
+      });
+      if (claimed.count !== 1) return null;
+      await transaction.contact.update({ where: { id: existing.contactId }, data: { assigneeId: request.body.assigneeId } });
+      await transaction.activityEvent.create({
+        data: {
+          organizationId: user.organization.id,
+          contactId: existing.contactId,
+          dealId: existing.id,
+          authorId: user.id,
+          category: "CHANGE",
+          title: "Назначен ответственный",
+          description: membership.user.name,
+        },
+      });
+      const deal = await transaction.deal.findUniqueOrThrow({
+        where: { id: existing.id },
+        include: {
+          contact: { select: { id: true, name: true, phone: true } },
+          relatedContacts: { include: { contact: { select: { id: true, name: true, phone: true } } } },
+          assignee: { select: { id: true, name: true } },
+          tasks: { where: { status: "ACTIVE" }, orderBy: [{ dueDate: "asc" }, { dueTime: "asc" }], take: 1, select: { id: true, title: true, dueDate: true, dueTime: true } },
+        },
+      });
+      await transaction.notificationOutbox.create({
+        data: {
+          organizationId: user.organization.id,
+          channel: "TELEGRAM",
+          eventType: "deal.assigned",
+          title: request.body.assigneeId === user.id ? "Вы взяли лид в работу" : "Вам передали лида",
+          body: deal.title || deal.request || deal.contact.name,
+          actionUrl: `/?deal=${deal.id}`,
+          dedupeKey: `deal:${deal.id}:${deal.updatedAt.toISOString()}:deal.assigned`,
+          payload: { dealId: deal.id, dealNumber: deal.number, assigneeId: request.body.assigneeId },
+        },
+      });
+      return deal;
+    });
+
+    if (!assigned) {
+      const current = await database.client.deal.findUnique({ where: { id: existing.id }, include: { assignee: { select: { name: true } } } });
+      return reply.status(409).send({ error: "deal_already_assigned", message: current?.assignee ? `Лид уже распределён. Ответственный — ${current.assignee.name}.` : "Лид уже распределён другим сотрудником." });
+    }
+    const hidePhone = user.organization.role === "MANAGER" && assigned.assignee?.id !== user.id;
+    return { deal: mapDeal(assigned, hidePhone), stageId: assigned.stageId };
   });
 
   app.patch<{
@@ -507,10 +583,6 @@ export async function registerPipelineRoutes(
       include: { stage: { select: { id: true, title: true } } },
     });
     if (!existing) return reply.status(404).send({ error: "deal_not_found", message: "Сделка не найдена." });
-
-    if (!canAssignTo(user, request.body.assigneeId)) {
-      return reply.status(403).send({ error: "forbidden", message: "Менеджер не может передать сделку другому сотруднику или снять ответственность." });
-    }
 
     let nextStage: { id: string; title: string } | null = null;
     if (request.body.stageId) {
@@ -568,6 +640,13 @@ export async function registerPipelineRoutes(
         return reply.status(409).send({ error: "deal_changed", message: "Сделка изменена другим сотрудником. Обновите карточку перед сохранением." });
       }
       throw cause;
+    }
+
+    if (request.body.assigneeId !== undefined && updated.assignee?.id !== existing.assigneeId) {
+      await database.client.contact.update({
+        where: { id: existing.contactId },
+        data: { assigneeId: updated.assignee?.id ?? null },
+      });
     }
 
     if (request.body.source !== undefined && request.body.source !== existing.source && hasOrganizationWideDataAccess(user)) {
@@ -635,7 +714,7 @@ export async function registerPipelineRoutes(
       });
     }
 
-    return { deal: mapDeal(updated), stageId: updated.stageId };
+    return { deal: mapDeal(updated, user.organization.role === "MANAGER" && updated.assignee?.id !== user.id), stageId: updated.stageId };
   });
 
   app.post<{
@@ -732,7 +811,7 @@ export async function registerPipelineRoutes(
         tasks: { where: { status: "ACTIVE" }, orderBy: [{ dueDate: "asc" }, { dueTime: "asc" }], take: 1, select: { id: true, title: true, dueDate: true, dueTime: true } },
       },
     });
-    return { deal: mapDeal(updated), stageId: updated.stageId };
+    return { deal: mapDeal(updated, user.organization.role === "MANAGER" && updated.assignee?.id !== user.id), stageId: updated.stageId };
   });
 
   app.delete<{
@@ -778,7 +857,7 @@ export async function registerPipelineRoutes(
         tasks: { where: { status: "ACTIVE" }, orderBy: [{ dueDate: "asc" }, { dueTime: "asc" }], take: 1, select: { id: true, title: true, dueDate: true, dueTime: true } },
       },
     });
-    return { deal: mapDeal(updated), stageId: updated.stageId };
+    return { deal: mapDeal(updated, user.organization.role === "MANAGER" && updated.assignee?.id !== user.id), stageId: updated.stageId };
   });
 
   app.patch<{
@@ -827,7 +906,7 @@ export async function registerPipelineRoutes(
       });
     }
 
-    return { deal: mapDeal(updated), stageId: updated.stageId };
+    return { deal: mapDeal(updated, user.organization.role === "MANAGER" && updated.assignee?.id !== user.id), stageId: updated.stageId };
   });
 
   app.patch<{
@@ -870,6 +949,6 @@ export async function registerPipelineRoutes(
         description: `Сделка перенесена в «${stage.title}»`,
       },
     });
-    return { deal: mapDeal(updated), stageId: stage.id };
+    return { deal: mapDeal(updated, user.organization.role === "MANAGER" && updated.assignee?.id !== user.id), stageId: stage.id };
   });
 }

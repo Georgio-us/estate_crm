@@ -216,3 +216,37 @@ test("outbox delivery sends once and marks both recipient delivery and notificat
   assert.deepEqual(writes, ["delivery-created", "delivery-SENT", "outbox-SENT"]);
   mock.restoreAll();
 });
+
+test("a new unassigned lead is broadcast to every enabled Telegram recipient", async () => {
+  let recipientIds: string[] = [];
+  const database = { client: {
+    notificationOutbox: {
+      async findMany() {
+        return [{
+          id: "notification-lead", organizationId, channel: "TELEGRAM", status: "PENDING",
+          eventType: "lead.created", title: "Новый лид", actionUrl: "/?deal=deal-42",
+          payload: { assigneeId: null, dealNumber: 1041 }, createdAt: new Date(),
+        }];
+      },
+      async update() {},
+    },
+    telegramRecipient: {
+      async findMany() {
+        return [
+          { id: "recipient-own", organizationId, userId: "user-own", chatId: "111", scope: "OWN", audience: "OWN", leadNotifications: true, active: true, selectedUsers: [] },
+          { id: "recipient-selected", organizationId, userId: "user-selected", chatId: "222", scope: "ORGANIZATION", audience: "SELECTED", leadNotifications: true, active: true, selectedUsers: [{ userId: "someone-else" }] },
+          { id: "recipient-disabled", organizationId, userId: "user-disabled", chatId: "333", scope: "ORGANIZATION", audience: "ALL", leadNotifications: false, active: true, selectedUsers: [] },
+        ];
+      },
+    },
+    notificationDelivery: {
+      async createMany({ data }: { data: Array<{ recipientId: string }> }) { recipientIds = data.map((item) => item.recipientId); },
+      async findMany() { return []; },
+    },
+  }, async ping() {}, async disconnect() {} } as unknown as DatabaseConnection;
+  const logger = { info() {}, warn() {}, error() {} };
+
+  await deliverPendingTelegramNotifications(database, config.telegramBotToken, config.webAppUrl, logger);
+
+  assert.deepEqual(recipientIds, ["recipient-own", "recipient-selected"]);
+});

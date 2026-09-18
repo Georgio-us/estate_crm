@@ -11,7 +11,7 @@ import type {
 } from "@estate-crm/contracts";
 import type { DatabaseConnection } from "@estate-crm/database";
 
-import { canAssignTo, contactScope, dataScope, dealScope, effectiveAssigneeId } from "../auth/authorization.js";
+import { contactScope, dataScope, dealScope, effectiveAssigneeId } from "../auth/authorization.js";
 import { requireUser } from "../auth/require-user.js";
 
 const taskInclude = {
@@ -162,9 +162,6 @@ export async function registerTaskRoutes(app: FastifyInstance, database: Databas
   }, async (request, reply) => {
     const user = await requireUser(request, reply, database);
     if (!user) return reply;
-    if (!canAssignTo(user, request.body.assigneeId)) {
-      return reply.status(403).send({ error: "forbidden", message: "Менеджер может ставить задачи только себе." });
-    }
     const relations = await resolveRelations(database, user, request.body);
     if ("error" in relations) return reply.status(404).send({ error: relations.error ?? "relation_not_found", message: "Не удалось найти связанную сущность задачи." });
     const taskType = await resolveTaskType(database, user.organization.id, request.body.taskTypeId);
@@ -195,9 +192,6 @@ export async function registerTaskRoutes(app: FastifyInstance, database: Databas
     if (!user) return reply;
     const existing = await database.client.task.findFirst({ where: { id: request.params.taskId, ...dataScope(user) } });
     if (!existing) return reply.status(404).send({ error: "task_not_found", message: "Задача не найдена." });
-    if (!canAssignTo(user, request.body.assigneeId)) {
-      return reply.status(403).send({ error: "forbidden", message: "Менеджер не может передать задачу другому сотруднику или снять ответственность." });
-    }
     const relations = await resolveRelations(database, user, { ...request.body, contactId: request.body.contactId === undefined ? existing.contactId : request.body.contactId, dealId: request.body.dealId === undefined ? existing.dealId : request.body.dealId, assigneeId: request.body.assigneeId === undefined ? existing.assigneeId : request.body.assigneeId } as CreateTaskRequest);
     if ("error" in relations) return reply.status(404).send({ error: relations.error ?? "relation_not_found", message: "Не удалось найти связанную сущность задачи." });
     const taskType = request.body.taskTypeId === undefined ? undefined : await resolveTaskType(database, user.organization.id, request.body.taskTypeId);

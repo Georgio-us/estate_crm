@@ -27,9 +27,23 @@ const user = {
 const pipelineId = "f37ec840-3aec-4a86-9899-49256404382c";
 const stageId = "0241b821-d062-4669-a919-b744901568e9";
 const contactId = "201f180c-d032-49a0-8aa7-04db19095eb2";
+const managerId = "6f398049-0273-4c80-9d36-56dc65069437";
 
 function session() {
   return { id: "session-1", expiresAt: new Date(Date.now() + 60_000), user };
+}
+
+function managerSession() {
+  return {
+    id: "session-manager",
+    expiresAt: new Date(Date.now() + 60_000),
+    user: {
+      id: managerId,
+      email: "manager@example.com",
+      name: "Менеджер",
+      memberships: [{ role: "MANAGER" as const, organization: user.memberships[0].organization }],
+    },
+  };
 }
 
 test("pipeline is loaded for the authenticated organization", async () => {
@@ -374,6 +388,99 @@ test("deal snapshot returns the current assignee and version", async () => {
   assert.equal(response.json().deal.assignee.id, assignee.id);
   assert.equal(response.json().deal.updatedAt, now.toISOString());
   assert.equal(response.json().stageId, stageId);
+  await app.close();
+});
+
+test("manager can inspect an unassigned deal but does not receive its phone", async () => {
+  const dealId = "14a292bd-d84e-447c-b71a-aa185b809b88";
+  const now = new Date("2026-09-18T09:00:00.000Z");
+  const database = {
+    client: {
+      session: { async findUnique() { return managerSession(); } },
+      deal: {
+        async findFirst() {
+          return {
+            id: dealId, number: 1041, stageId, contactId, title: "Продажа цоколя", request: "Продажа цоколя",
+            budget: null, comment: null, operation: "SALE" as const, propertyType: "Коммерция",
+            district: null, rooms: null, marketPreference: null, paymentMethod: null,
+            neighborhood: null, preferredProject: null, source: "META" as const,
+            status: "ACTIVE" as const, position: 0, closedAt: null, createdAt: now, updatedAt: now,
+            contact: { id: contactId, name: "Alexander Varbanets", phone: "+380 67 353 88 69" },
+            relatedContacts: [{ contact: { id: "301f180c-d032-49a0-8aa7-04db19095eb2", name: "Другой контакт", phone: "+380 50 000 00 00" } }],
+            tasks: [], assignee: null,
+          };
+        },
+      },
+    },
+    async ping() {},
+    async disconnect() {},
+  } as unknown as DatabaseConnection;
+
+  const app = await buildApp(config, database);
+  const response = await app.inject({ method: "GET", url: `/deals/${dealId}`, headers: { cookie: "estate_crm_session=test-token" } });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().deal.contact.phone, null);
+  assert.equal(response.json().deal.relatedContacts[0].phone, null);
+  await app.close();
+});
+
+test("claiming an unassigned lead atomically assigns both deal and contact", async () => {
+  const dealId = "14a292bd-d84e-447c-b71a-aa185b809b88";
+  const now = new Date("2026-09-18T09:05:00.000Z");
+  let claimed = false;
+  let contactAssignee = "";
+  let notificationAssignee = "";
+  const assignedDeal = {
+    id: dealId, number: 1041, stageId, contactId, title: "Продажа цоколя", request: "Продажа цоколя",
+    budget: null, comment: null, operation: "SALE" as const, propertyType: "Коммерция",
+    district: null, rooms: null, marketPreference: null, paymentMethod: null,
+    neighborhood: null, preferredProject: null, source: "META" as const,
+    status: "ACTIVE" as const, position: 0, closedAt: null, createdAt: now, updatedAt: now,
+    contact: { id: contactId, name: "Alexander Varbanets", phone: "+380 67 353 88 69" },
+    relatedContacts: [], tasks: [], assignee: { id: managerId, name: "Менеджер" },
+  };
+  const transaction = {
+    deal: {
+      async updateMany({ where }: { where: { assigneeId: null } }) {
+        assert.equal(where.assigneeId, null);
+        if (claimed) return { count: 0 };
+        claimed = true;
+        return { count: 1 };
+      },
+      async findUniqueOrThrow() { return assignedDeal; },
+    },
+    contact: { async update({ data }: { data: { assigneeId: string } }) { contactAssignee = data.assigneeId; } },
+    activityEvent: { async create() {} },
+    notificationOutbox: {
+      async create({ data }: { data: { payload: { assigneeId: string } } }) { notificationAssignee = data.payload.assigneeId; },
+    },
+  };
+  const database = {
+    client: {
+      session: { async findUnique() { return managerSession(); } },
+      deal: {
+        async findFirst() {
+          return { id: dealId, contactId, organizationId: user.memberships[0].organization.id, assigneeId: claimed ? managerId : null, assignee: claimed ? { name: "Менеджер" } : null };
+        },
+      },
+      membership: { async findUnique() { return { status: "ACTIVE" as const, user: { name: "Менеджер" } }; } },
+      async $transaction(callback: (client: typeof transaction) => Promise<unknown>) { return callback(transaction); },
+    },
+    async ping() {},
+    async disconnect() {},
+  } as unknown as DatabaseConnection;
+
+  const app = await buildApp(config, database);
+  const first = await app.inject({ method: "POST", url: `/deals/${dealId}/assign`, headers: { cookie: "estate_crm_session=test-token" }, payload: { assigneeId: managerId } });
+  const second = await app.inject({ method: "POST", url: `/deals/${dealId}/assign`, headers: { cookie: "estate_crm_session=test-token" }, payload: { assigneeId: managerId } });
+
+  assert.equal(first.statusCode, 200);
+  assert.equal(first.json().deal.contact.phone, "+380 67 353 88 69");
+  assert.equal(contactAssignee, managerId);
+  assert.equal(notificationAssignee, managerId);
+  assert.equal(second.statusCode, 409);
+  assert.equal(second.json().error, "deal_already_assigned");
   await app.close();
 });
 
