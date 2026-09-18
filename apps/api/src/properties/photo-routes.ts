@@ -7,6 +7,7 @@ import type { ApiConfig } from "../config.js";
 import { requireUser } from "../auth/require-user.js";
 
 const softLimit = 15 * 1024 * 1024;
+const maxPhotosPerProperty = 10;
 
 function storage(config: ApiConfig) {
   if (!config.r2AccountId || !config.r2Bucket || !config.r2AccessKeyId || !config.r2SecretAccessKey) return null;
@@ -33,6 +34,8 @@ export async function registerPropertyPhotoRoutes(app: FastifyInstance, database
     if (!await propertyForUser(request.params.propertyId, user.organization.id)) return reply.status(404).send({ error: "property_not_found" });
     if (request.body.sizeBytes > softLimit && !request.body.confirmOversize) return reply.status(409).send({ error: "oversize_confirmation_required", message: "Подтвердите загрузку фото больше 15 МБ.", sizeBytes: request.body.sizeBytes });
     if (!r2) return reply.status(503).send({ error: "storage_not_configured", message: "Хранилище фотографий пока не подключено. Настройте Cloudflare R2 на сервере." });
+    const photoCount = await database.client.propertyPhoto.count({ where: { organizationId: user.organization.id, propertyId: request.params.propertyId } });
+    if (photoCount >= maxPhotosPerProperty) return reply.status(409).send({ error: "photo_limit_reached", message: `Для объекта можно добавить не больше ${maxPhotosPerProperty} фотографий.` });
     const key = `crm/${user.organization.id}/properties/${request.params.propertyId}/${randomUUID()}`;
     const photo = await database.client.propertyPhoto.create({ data: { organizationId: user.organization.id, propertyId: request.params.propertyId, uploadedById: user.id, storageKey: key, filename: request.body.filename, mimeType: request.body.mimeType, sizeBytes: request.body.sizeBytes } });
     const uploadUrl = await getSignedUrl(r2.client, new PutObjectCommand({ Bucket: r2.bucket, Key: key, ContentType: request.body.mimeType }), { expiresIn: 300 });

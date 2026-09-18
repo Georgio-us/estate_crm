@@ -4,22 +4,39 @@ type PropertyEventRecord = { id: string; title: string; description: string | nu
 type PropertyPhotoRecord = { id: string; filename: string; mimeType: string; sizeBytes: number; isCover: boolean; sortOrder: number; url: string; createdAt: string };
 import styles from "./properties.module.css";
 
+const maxPhotos = 10;
+
+function editableSnapshot(property: PropertyListing) {
+  return JSON.stringify(Object.fromEntries(Object.entries(property).filter(([key]) => !["updatedAt", "photosCount", "imageUrl"].includes(key))));
+}
+
 export function PropertyDrawer({ property, onSave, onClose, onRefresh, readOnly = false }: { property: PropertyListing; onSave: (property: PropertyListing) => Promise<void>; onClose: () => void; onRefresh?: () => Promise<void>; readOnly?: boolean }) {
   const [draft, setDraft] = useState(property);
   const [assignees, setAssignees] = useState<Array<{ id: string; name: string }>>([]);
   const [photos, setPhotos] = useState<PropertyPhotoRecord[]>([]);
   const [events, setEvents] = useState<PropertyEventRecord[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number } | null>(null);
+  const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const photoInput = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
+  const [savedSnapshot, setSavedSnapshot] = useState(() => editableSnapshot(property));
+  const [saveConfirmed, setSaveConfirmed] = useState(false);
   const [error, setError] = useState("");
-  const update = (patch: Partial<PropertyListing>) => setDraft((current) => ({ ...current, ...patch }));
+  const update = (patch: Partial<PropertyListing>) => { setSaveConfirmed(false); setDraft((current) => ({ ...current, ...patch })); };
+  const isDirty = editableSnapshot(draft) !== savedSnapshot;
+  const selectedPhotoIndex = Math.max(0, photos.findIndex((photo) => photo.id === selectedPhotoId));
+  const selectedPhoto = photos[selectedPhotoIndex] ?? photos[0] ?? null;
   useEffect(() => { if (readOnly) return; void fetch("/api/crm/team/assignees").then((response) => response.json()).then((payload: { assignees?: Array<{ id: string; name: string }> }) => setAssignees(payload.assignees ?? [])).catch(() => {}); }, [readOnly]);
   async function loadMedia() {
     const response = await fetch(`/api/crm/properties/${property.id}/photos`, { cache: "no-store" });
     if (!response.ok) return;
     const payload = await response.json() as { photos?: PropertyPhotoRecord[]; events?: PropertyEventRecord[] };
-    setPhotos(payload.photos ?? []); setEvents(payload.events ?? []);
+    const nextPhotos = payload.photos ?? [];
+    setPhotos(nextPhotos);
+    setSelectedPhotoId((current) => current && nextPhotos.some((photo) => photo.id === current) ? current : nextPhotos[0]?.id ?? null);
+    setEvents(payload.events ?? []);
   }
   useEffect(() => {
     if (readOnly) return;
@@ -27,16 +44,20 @@ export function PropertyDrawer({ property, onSave, onClose, onRefresh, readOnly 
     void fetch(`/api/crm/properties/${property.id}/photos`, { cache: "no-store" }).then(async (response) => {
       if (!response.ok) return;
       const payload = await response.json() as { photos?: PropertyPhotoRecord[]; events?: PropertyEventRecord[] };
-      if (active) { setPhotos(payload.photos ?? []); setEvents(payload.events ?? []); }
+      if (active) {
+        const nextPhotos = payload.photos ?? [];
+        setPhotos(nextPhotos);
+        setSelectedPhotoId(nextPhotos[0]?.id ?? null);
+        setEvents(payload.events ?? []);
+      }
     }).catch(() => {});
     return () => { active = false; };
   }, [property.id, readOnly]);
-  async function addPhoto(file: File) {
-    if (!file.type.startsWith("image/")) { setError("Выберите изображение."); return; }
+  async function uploadPhoto(file: File) {
+    if (!file.type.startsWith("image/")) throw new Error(`«${file.name}» не является изображением.`);
     const sizeMb = (file.size / 1024 / 1024).toFixed(2);
     const confirmOversize = file.size > 15 * 1024 * 1024;
-    if (confirmOversize && !window.confirm(`Фотография «${file.name}» весит ${sizeMb} МБ (${file.size} байт), больше 15 МБ. Добавить?`)) return;
-    setUploading(true); setError("");
+    if (confirmOversize && !window.confirm(`Фотография «${file.name}» весит ${sizeMb} МБ (${file.size} байт), больше 15 МБ. Добавить?`)) return false;
     let preparedPhotoId: string | null = null;
     try {
       const prepared = await fetch(`/api/crm/properties/${property.id}/photos/prepare`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ filename: file.name, mimeType: file.type, sizeBytes: file.size, confirmOversize }) });
@@ -47,9 +68,27 @@ export function PropertyDrawer({ property, onSave, onClose, onRefresh, readOnly 
       if (!upload.ok) throw new Error("Загрузка в Cloudflare R2 не удалась. Проверьте CORS бакета.");
       const finalized = await fetch(`/api/crm/properties/${property.id}/photos/${data.photoId}/finalize`, { method: "POST" });
       if (!finalized.ok) throw new Error("Не удалось завершить загрузку фото.");
-      await loadMedia(); await onRefresh?.();
-    } catch (cause) { if (preparedPhotoId) void fetch(`/api/crm/properties/${property.id}/photos/${preparedPhotoId}`, { method: "DELETE" }).catch(() => {}); setError(cause instanceof Error ? cause.message : "Фото не загружено."); }
-    finally { setUploading(false); }
+      return true;
+    } catch (cause) {
+      if (preparedPhotoId) await fetch(`/api/crm/properties/${property.id}/photos/${preparedPhotoId}`, { method: "DELETE" }).catch(() => {});
+      throw cause;
+    }
+  }
+  async function addPhotos(files: File[]) {
+    if (!files.length) return;
+    const availableSlots = maxPhotos - photos.length;
+    if (availableSlots <= 0) { setError(`Для объекта можно добавить не больше ${maxPhotos} фотографий.`); return; }
+    if (files.length > availableSlots) { setError(`Можно выбрать ещё ${availableSlots} ${availableSlots === 1 ? "фотографию" : "фотографии"}. Максимум — ${maxPhotos}.`); return; }
+    setUploading(true); setError(""); setUploadProgress({ current: 0, total: files.length });
+    const failures: string[] = [];
+    for (const [index, file] of files.entries()) {
+      setUploadProgress({ current: index + 1, total: files.length });
+      try { await uploadPhoto(file); }
+      catch (cause) { failures.push(cause instanceof Error ? cause.message : `Не удалось загрузить «${file.name}».`); }
+    }
+    await loadMedia(); await onRefresh?.();
+    if (failures.length) setError(failures.join(" "));
+    setUploadProgress(null); setUploading(false);
   }
   async function removePhoto(photoId: string) {
     if (!window.confirm("Удалить фотографию объекта?")) return;
@@ -61,9 +100,32 @@ export function PropertyDrawer({ property, onSave, onClose, onRefresh, readOnly 
   async function save() {
     setSaving(true);
     setError("");
-    try { await onSave(draft); onClose(); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : "Не удалось сохранить объект."); setSaving(false); }
+    try {
+      await onSave(draft);
+      setSavedSnapshot(editableSnapshot(draft));
+      setSaveConfirmed(true);
+      await loadMedia();
+    }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Не удалось сохранить объект."); }
+    finally { setSaving(false); }
   }
+
+  function selectRelativePhoto(offset: number) {
+    if (!photos.length) return;
+    const index = (selectedPhotoIndex + offset + photos.length) % photos.length;
+    setSelectedPhotoId(photos[index]!.id);
+  }
+
+  useEffect(() => {
+    if (!lightboxOpen) return;
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setLightboxOpen(false);
+      if (event.key === "ArrowLeft") selectRelativePhoto(-1);
+      if (event.key === "ArrowRight") selectRelativePhoto(1);
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  });
 
   return (
     <div className={styles.drawerLayer}>
@@ -75,8 +137,11 @@ export function PropertyDrawer({ property, onSave, onClose, onRefresh, readOnly 
         </header>
         <div className={styles.drawerBody}>
           <div className={styles.visualPane}>
-            <div className={styles.heroImage} role="img" aria-label={`Фото: ${property.title}`} style={{ backgroundImage: `url("${photos[0]?.url ?? property.imageUrl}")` }} />
-            <div className={styles.thumbnailRow}>{photos.length ? photos.map((photo) => <span key={photo.id} title={`${photo.filename} · ${(photo.sizeBytes / 1024 / 1024).toFixed(2)} МБ`} style={{ backgroundImage: `url("${photo.url}")` }} />) : <span style={{ backgroundImage: `url("${property.imageUrl}")` }} />}{!readOnly && <><input ref={photoInput} hidden type="file" accept="image/jpeg,image/png,image/webp,image/avif,image/heic,image/heif" onChange={(event) => { const file = event.target.files?.[0]; if (file) void addPhoto(file); event.target.value = ""; }} /><button type="button" disabled={uploading} onClick={() => photoInput.current?.click()}>{uploading ? "Загружаем…" : "＋ Добавить фото"}</button></>}</div>
+            <div className={styles.galleryStage}>
+              <button className={styles.heroImage} type="button" aria-label={selectedPhoto ? `Открыть фотографию ${selectedPhoto.filename}` : `Фото: ${property.title}`} disabled={!selectedPhoto} onClick={() => setLightboxOpen(true)} style={{ backgroundImage: `url("${selectedPhoto?.url ?? property.imageUrl}")` }} />
+              {photos.length > 1 && <><button className={`${styles.galleryArrow} ${styles.galleryArrowPrevious}`} type="button" aria-label="Предыдущая фотография" onClick={() => selectRelativePhoto(-1)}>‹</button><button className={`${styles.galleryArrow} ${styles.galleryArrowNext}`} type="button" aria-label="Следующая фотография" onClick={() => selectRelativePhoto(1)}>›</button><span className={styles.galleryCounter}>{selectedPhotoIndex + 1} / {photos.length}</span></>}
+            </div>
+            <div className={styles.thumbnailRow}>{photos.length ? photos.map((photo) => <button className={photo.id === selectedPhoto?.id ? styles.thumbnailActive : ""} type="button" key={photo.id} aria-label={`Показать ${photo.filename}`} title={`${photo.filename} · ${(photo.sizeBytes / 1024 / 1024).toFixed(2)} МБ`} style={{ backgroundImage: `url("${photo.url}")` }} onClick={() => setSelectedPhotoId(photo.id)} />) : <span style={{ backgroundImage: `url("${property.imageUrl}")` }} />}{!readOnly && <><input ref={photoInput} hidden multiple type="file" accept="image/jpeg,image/png,image/webp,image/avif,image/heic,image/heif" onChange={(event) => { const files = Array.from(event.target.files ?? []); if (files.length) void addPhotos(files); event.target.value = ""; }} /><button className={styles.addPhotoButton} type="button" disabled={uploading || photos.length >= maxPhotos} onClick={() => photoInput.current?.click()}>{uploadProgress ? `Загружаем ${uploadProgress.current} из ${uploadProgress.total}` : photos.length >= maxPhotos ? `Лимит ${maxPhotos} фото` : "＋ Добавить фото"}</button></>}</div>
             {photos.length > 0 && <section className={styles.description}><h3>Фотографии</h3>{photos.map((photo) => <p key={photo.id}>{photo.filename} · {(photo.sizeBytes / 1024 / 1024).toFixed(2)} МБ {!readOnly && <button type="button" onClick={() => { void removePhoto(photo.id); }}>Удалить</button>}</p>)}</section>}
             <section className={styles.description}><h3>Описание</h3>{readOnly ? <p>{draft.description}</p> : <textarea className={styles.drawerTextarea} value={draft.description} onChange={(event) => update({ description: event.target.value })} placeholder="Описание объекта" />}</section>
           </div>
@@ -118,11 +183,12 @@ export function PropertyDrawer({ property, onSave, onClose, onRefresh, readOnly 
             </section></>}
             {events.length > 0 && <section className={styles.factSection}><h3>История объекта</h3>{events.map((event) => <p key={event.id}><strong>{event.title}</strong> · {event.description} · {new Date(event.createdAt).toLocaleString("ru-RU")}</p>)}</section>}
             {error && <p className={styles.saveError}>{error}</p>}
-            <div className={styles.saveActions}><button type="button" onClick={onClose}>Отмена</button><button className={styles.offerButton} type="button" disabled={!draft.title.trim() || saving} onClick={() => { void save(); }}>{saving ? "Сохраняем…" : "Сохранить"}</button></div>
             </>}
           </div>
         </div>
+        {!readOnly && <footer className={styles.drawerSaveBar}><span className={isDirty ? styles.unsavedLabel : saveConfirmed ? styles.savedLabel : ""}>{isDirty ? "Есть несохранённые изменения" : saveConfirmed ? "✓ Изменения сохранены" : "Изменений нет"}</span><div><button type="button" disabled={saving} onClick={onClose}>Отмена</button><button className={styles.offerButton} type="button" disabled={!draft.title.trim() || saving || !isDirty} onClick={() => { void save(); }}>{saving ? "Сохраняем…" : "Сохранить"}</button></div></footer>}
       </aside>
+      {lightboxOpen && selectedPhoto && <div className={styles.photoLightbox} role="dialog" aria-modal="true" aria-label={`Фотография ${selectedPhoto.filename}`}><button className={styles.lightboxBackdrop} type="button" aria-label="Закрыть просмотр" onClick={() => setLightboxOpen(false)} /><div className={styles.lightboxContent}><div className={styles.lightboxImage} role="img" aria-label={selectedPhoto.filename} style={{ backgroundImage: `url("${selectedPhoto.url}")` }} /><div className={styles.lightboxCaption}><span>{selectedPhoto.filename}</span><span>{selectedPhotoIndex + 1} / {photos.length}</span></div><button className={styles.lightboxClose} type="button" aria-label="Закрыть" onClick={() => setLightboxOpen(false)}>×</button>{photos.length > 1 && <><button className={`${styles.lightboxArrow} ${styles.lightboxPrevious}`} type="button" aria-label="Предыдущая фотография" onClick={() => selectRelativePhoto(-1)}>‹</button><button className={`${styles.lightboxArrow} ${styles.lightboxNext}`} type="button" aria-label="Следующая фотография" onClick={() => selectRelativePhoto(1)}>›</button></>}</div></div>}
     </div>
   );
 }

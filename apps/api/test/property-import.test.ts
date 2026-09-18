@@ -126,3 +126,58 @@ test("photos above 15 MB require explicit confirmation before R2 configuration",
   assert.equal(confirmed.json().error, "storage_not_configured");
   await app.close();
 });
+
+test("property photo preparation enforces the ten-photo limit", async () => {
+  const propertyId = "f48ab88b-b1cb-4adf-b930-3537767cfb92";
+  let creates = 0;
+  const client: Record<string, any> = {
+    session: { async findUnique() { return { id: "session-1", expiresAt: new Date(Date.now() + 60_000), user: { id: "user-1", name: "Admin", email: "admin@example.com", memberships: [{ role: "ADMIN", organization: { id: "org-1", name: "CRM", slug: "crm" } }] } }; } },
+    property: { async findFirst() { return { id: propertyId }; } },
+    propertyPhoto: {
+      async count() { return 10; },
+      async create() { creates += 1; },
+    },
+  };
+  const r2Config = { ...config, r2AccountId: "account", r2Bucket: "estate-crm-property-media", r2AccessKeyId: "access", r2SecretAccessKey: "secret" };
+  const app = await buildApp(r2Config, { client, async ping() {}, async disconnect() {} } as unknown as DatabaseConnection);
+  const response = await app.inject({ method: "POST", url: `/properties/${propertyId}/photos/prepare`, headers: cookie, payload: { filename: "eleven.jpg", mimeType: "image/jpeg", sizeBytes: 1_024 } });
+
+  assert.equal(response.statusCode, 409);
+  assert.equal(response.json().error, "photo_limit_reached");
+  assert.equal(creates, 0);
+  await app.close();
+});
+
+test("changing a property description writes history without repeating the assignee event", async () => {
+  const propertyId = "f48ab88b-b1cb-4adf-b930-3537767cfb92";
+  const assigneeId = "3b9ae340-7445-4a14-8b1d-d030c882c775";
+  const events: Array<{ title: string; description: string | null }> = [];
+  const now = new Date("2026-09-18T14:00:00.000Z");
+  const existing = { id: propertyId, sourceSheet: "коммерция", assigneeId, description: "СПС" };
+  const client: Record<string, any> = {
+    session: { async findUnique() { return { id: "session-1", expiresAt: new Date(Date.now() + 60_000), user: { id: "user-1", name: "Admin", email: "admin@example.com", memberships: [{ role: "ADMIN", organization: { id: "org-1", name: "CRM", slug: "crm" } }] } }; } },
+    property: {
+      async findFirst() { return existing; },
+      async update({ data }: { data: Record<string, unknown> }) {
+        return {
+          ...existing, ...data, number: 21, title: "Коммерция · Литературная", address: "Литературная", district: null,
+          category: "COMMERCIAL", market: "SECONDARY", operation: "SALE", status: "AVAILABLE", price: 35_000,
+          pricePerSquareMeter: 0, priceRaw: "35000", currency: "USD", rooms: null, area: 21, areaRaw: null,
+          floor: null, totalFloors: null, landArea: null, project: null, developer: null, imageUrl: null,
+          buildingLabel: null, unitDetail: null, subtype: null, condition: null, documentNotes: null,
+          ownerName: null, ownerContacts: null, assignmentNote: null, sourceRow: 2, sourceHash: "source",
+          createdAt: now, updatedAt: now, assignee: { name: "Менеджер" }, photos: [],
+        };
+      },
+    },
+    membership: { async findFirst() { return { userId: assigneeId }; } },
+    propertyEvent: { async create({ data }: { data: { title: string; description: string | null } }) { events.push({ title: data.title, description: data.description }); } },
+  };
+  const app = await buildApp(config, { client, async ping() {}, async disconnect() {} } as unknown as DatabaseConnection);
+  const response = await app.inject({ method: "PATCH", url: `/properties/${propertyId}`, headers: cookie, payload: { description: "Свидетельство права собственности", assigneeId } });
+
+  assert.equal(response.statusCode, 200);
+  assert.deepEqual(events.map((event) => event.title), ["Описание изменено"]);
+  assert.equal(events[0]?.description, "«СПС» → «Свидетельство права собственности»");
+  await app.close();
+});

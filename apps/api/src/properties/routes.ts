@@ -9,6 +9,12 @@ function optionalText(value: string | null | undefined) {
   return value?.trim() || null;
 }
 
+function eventText(value: string | null | undefined): string {
+  const normalized = optionalText(value);
+  if (!normalized) return "не указано";
+  return normalized.length > 180 ? `${normalized.slice(0, 177)}…` : normalized;
+}
+
 function mapProperty(property: {
   id: string; number: number; title: string; address: string | null; district: string | null;
   category: "APARTMENT" | "HOUSE" | "LAND" | "COMMERCIAL"; market: "PRIMARY" | "SECONDARY";
@@ -135,12 +141,26 @@ export async function registerPropertyRoutes(app: FastifyInstance, database: Dat
   }, async (request, reply) => {
     const user = await requireUser(request, reply, database);
     if (!user) return reply;
-    const existing = await database.client.property.findFirst({ where: { id: request.params.propertyId, organizationId: user.organization.id }, select: { id: true, sourceSheet: true } });
+    const existing = await database.client.property.findFirst({ where: { id: request.params.propertyId, organizationId: user.organization.id }, select: { id: true, sourceSheet: true, assigneeId: true, description: true } });
     if (!existing) return reply.status(404).send({ error: "property_not_found", message: "Объект не найден." });
     if (existing.sourceSheet && request.body.market === "PRIMARY") return reply.status(400).send({ error: "imported_property_market", message: "Объект из базы собственников остаётся во вторичной недвижимости." });
     if (request.body.assigneeId && !await activeAssignee(database, user.organization.id, request.body.assigneeId)) return reply.status(400).send({ error: "invalid_assignee", message: "Ответственный должен быть активным сотрудником CRM." });
     const property = await database.client.property.update({ where: { id: existing.id }, data: propertyData(request.body), include: { assignee: { select: { name: true } }, photos: { where: { status: "READY" }, select: { id: true, isCover: true, sortOrder: true } } } });
-    if (request.body.assigneeId !== undefined) await database.client.propertyEvent.create({ data: { organizationId: user.organization.id, propertyId: existing.id, actorId: user.id, title: request.body.assigneeId ? "Назначен ответственный за объект" : "Ответственный за объект снят", description: property.assignee?.name ?? property.assignmentNote } });
+    if (request.body.assigneeId !== undefined && request.body.assigneeId !== existing.assigneeId) {
+      await database.client.propertyEvent.create({ data: { organizationId: user.organization.id, propertyId: existing.id, actorId: user.id, title: request.body.assigneeId ? "Назначен ответственный за объект" : "Ответственный за объект снят", description: property.assignee?.name ?? property.assignmentNote } });
+    }
+    if (request.body.description !== undefined && optionalText(request.body.description) !== existing.description) {
+      const nextDescription = optionalText(request.body.description);
+      await database.client.propertyEvent.create({
+        data: {
+          organizationId: user.organization.id,
+          propertyId: existing.id,
+          actorId: user.id,
+          title: existing.description ? nextDescription ? "Описание изменено" : "Описание удалено" : "Описание добавлено",
+          description: existing.description && nextDescription ? `«${eventText(existing.description)}» → «${eventText(nextDescription)}»` : eventText(nextDescription ?? existing.description),
+        },
+      });
+    }
     return { property: mapProperty(property) };
   });
 }
