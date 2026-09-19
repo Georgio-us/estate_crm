@@ -21,10 +21,9 @@ export function PropertyDrawer({ property, onSave, onClose, onRefresh, readOnly 
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const photoInput = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
-  const [savedSnapshot, setSavedSnapshot] = useState(() => editableSnapshot(property));
-  const [saveConfirmed, setSaveConfirmed] = useState(false);
+  const [savedSnapshot] = useState(() => editableSnapshot(property));
   const [error, setError] = useState("");
-  const update = (patch: Partial<PropertyListing>) => { setSaveConfirmed(false); setDraft((current) => ({ ...current, ...patch })); };
+  const update = (patch: Partial<PropertyListing>) => setDraft((current) => ({ ...current, ...patch }));
   const isDirty = editableSnapshot(draft) !== savedSnapshot;
   const selectedPhotoIndex = Math.max(0, photos.findIndex((photo) => photo.id === selectedPhotoId));
   const selectedPhoto = photos[selectedPhotoIndex] ?? photos[0] ?? null;
@@ -102,9 +101,7 @@ export function PropertyDrawer({ property, onSave, onClose, onRefresh, readOnly 
     setError("");
     try {
       await onSave(draft);
-      setSavedSnapshot(editableSnapshot(draft));
-      setSaveConfirmed(true);
-      await loadMedia();
+      onClose();
     }
     catch (cause) { setError(cause instanceof Error ? cause.message : "Не удалось сохранить объект."); }
     finally { setSaving(false); }
@@ -186,7 +183,7 @@ export function PropertyDrawer({ property, onSave, onClose, onRefresh, readOnly 
             </>}
           </div>
         </div>
-        {!readOnly && <footer className={styles.drawerSaveBar}><span className={isDirty ? styles.unsavedLabel : saveConfirmed ? styles.savedLabel : ""}>{isDirty ? "Есть несохранённые изменения" : saveConfirmed ? "✓ Изменения сохранены" : "Изменений нет"}</span><div><button type="button" disabled={saving} onClick={onClose}>Отмена</button><button className={styles.offerButton} type="button" disabled={!draft.title.trim() || saving || !isDirty} onClick={() => { void save(); }}>{saving ? "Сохраняем…" : "Сохранить"}</button></div></footer>}
+        {!readOnly && <footer className={styles.drawerSaveBar}><span className={isDirty ? styles.unsavedLabel : ""}>{isDirty ? "Есть несохранённые изменения" : "Изменений нет"}</span><div><button type="button" disabled={saving} onClick={onClose}>Отмена</button><button className={styles.offerButton} type="button" disabled={!draft.title.trim() || saving || !isDirty} onClick={() => { void save(); }}>{saving ? "Сохраняем…" : "Сохранить"}</button></div></footer>}
       </aside>
       {lightboxOpen && selectedPhoto && <div className={styles.photoLightbox} role="dialog" aria-modal="true" aria-label={`Фотография ${selectedPhoto.filename}`}><button className={styles.lightboxBackdrop} type="button" aria-label="Закрыть просмотр" onClick={() => setLightboxOpen(false)} /><div className={styles.lightboxContent}><div className={styles.lightboxImage} role="img" aria-label={selectedPhoto.filename} style={{ backgroundImage: `url("${selectedPhoto.url}")` }} /><div className={styles.lightboxCaption}><span>{selectedPhoto.filename}</span><span>{selectedPhotoIndex + 1} / {photos.length}</span></div><button className={styles.lightboxClose} type="button" aria-label="Закрыть" onClick={() => setLightboxOpen(false)}>×</button>{photos.length > 1 && <><button className={`${styles.lightboxArrow} ${styles.lightboxPrevious}`} type="button" aria-label="Предыдущая фотография" onClick={() => selectRelativePhoto(-1)}>‹</button><button className={`${styles.lightboxArrow} ${styles.lightboxNext}`} type="button" aria-label="Следующая фотография" onClick={() => selectRelativePhoto(1)}>›</button></>}</div></div>}
     </div>
