@@ -11,11 +11,18 @@ import type {
 import type { DatabaseConnection } from "@estate-crm/database";
 
 import { dealScope } from "../auth/authorization.js";
+import type { ApiConfig } from "../config.js";
 import { requireUser } from "../auth/require-user.js";
+import { propertyPhotoDownloadUrl } from "../properties/photo-routes.js";
 
 const dealIdParams = { type: "object", required: ["dealId"], properties: { dealId: { type: "string", format: "uuid" } } } as const;
 const shareParams = { type: "object", required: ["dealId", "shareId"], properties: { dealId: { type: "string", format: "uuid" }, shareId: { type: "string", format: "uuid" } } } as const;
 const tokenParams = { type: "object", required: ["token"], properties: { token: { type: "string", pattern: "^[A-Za-z0-9_-]{40,64}$" } } } as const;
+const publicPhotoParams = { type: "object", required: ["token", "itemId", "photoId"], properties: {
+  token: { type: "string", pattern: "^[A-Za-z0-9_-]{40,64}$" },
+  itemId: { type: "string", format: "uuid" },
+  photoId: { type: "string", format: "uuid" },
+} } as const;
 
 type ShareWithItems = {
   id: string;
@@ -65,7 +72,7 @@ function sourceFromCatalogKey(catalogKey: string, propertyId: string | null): "C
   return "DEMO";
 }
 
-export async function registerPropertySelectionShareRoutes(app: FastifyInstance, database: DatabaseConnection): Promise<void> {
+export async function registerPropertySelectionShareRoutes(app: FastifyInstance, database: DatabaseConnection, config: ApiConfig): Promise<void> {
   app.get<{ Params: { dealId: string }; Reply: { shares: PropertySelectionShareRecord[] } | ApiErrorResponse }>("/deals/:dealId/property-shares", {
     schema: { params: dealIdParams },
   }, async (request, reply) => {
@@ -170,19 +177,63 @@ export async function registerPropertySelectionShareRoutes(app: FastifyInstance,
   }, async (request, reply) => {
     const share = await database.client.propertySelectionShare.findUnique({
       where: { publicToken: request.params.token },
-      include: { organization: { select: { name: true, companyName: true } }, contact: { select: { name: true } }, createdBy: { select: { name: true } }, items: { orderBy: { sortOrder: "asc" } } },
+      include: {
+        organization: { select: { name: true, companyName: true } },
+        contact: { select: { name: true } },
+        deal: { select: { assignee: { select: { name: true, email: true, phone: true } } } },
+        items: {
+          orderBy: { sortOrder: "asc" },
+          include: { property: { select: {
+            address: true, district: true, category: true, operation: true, area: true, rooms: true,
+            floor: true, totalFloors: true, landArea: true, description: true,
+            photos: { where: { status: "READY" }, orderBy: [{ isCover: "desc" }, { sortOrder: "asc" }, { createdAt: "asc" }], select: { id: true } },
+          } } },
+        },
+      },
     });
     if (!share) return reply.status(404).send({ error: "share_not_found", message: "Подборка не найдена." });
     if (share.status === "REVOKED") return reply.status(410).send({ error: "share_revoked", message: "Эта подборка больше недоступна." });
     if (share.expiresAt.getTime() <= Date.now()) return reply.status(410).send({ error: "share_expired", message: "Срок действия этой подборки истёк." });
+    const manager = share.deal.assignee;
     return {
       status: "AVAILABLE",
       organizationName: share.organization.companyName || share.organization.name,
       clientName: share.contact?.name || null,
-      managerName: share.createdBy?.name || null,
+      manager: manager ? { name: manager.name, email: manager.email, phone: manager.phone } : null,
       expiresAt: share.expiresAt.toISOString(),
-      items: share.items.map((item) => ({ id: item.id, title: item.title, subtitle: item.subtitle, priceLabel: item.priceLabel, imageUrl: item.imageUrl })),
+      items: share.items.map((item) => ({
+        id: item.id, title: item.title, subtitle: item.subtitle, priceLabel: item.priceLabel, imageUrl: item.imageUrl,
+        address: item.property?.address ?? null, district: item.property?.district ?? null,
+        category: item.property?.category ?? null, operation: item.property?.operation ?? null,
+        area: item.property?.area ?? null, rooms: item.property?.rooms ?? null,
+        floor: item.property?.floor ?? null, totalFloors: item.property?.totalFloors ?? null,
+        landArea: item.property?.landArea ?? null, description: item.property?.description ?? null,
+        photos: item.property?.photos.map((photo) => ({ id: photo.id, url: `/api/public/property-shares/${share.publicToken}/items/${item.id}/photos/${photo.id}` })) ?? [],
+      })),
     };
+  });
+
+  app.get<{ Params: { token: string; itemId: string; photoId: string } }>("/public/property-shares/:token/items/:itemId/photos/:photoId", {
+    schema: { params: publicPhotoParams },
+  }, async (request, reply) => {
+    const share = await database.client.propertySelectionShare.findUnique({
+      where: { publicToken: request.params.token },
+      select: { id: true, organizationId: true, status: true, expiresAt: true },
+    });
+    if (!share || share.status === "REVOKED" || share.expiresAt.getTime() <= Date.now()) return reply.status(404).send({ error: "photo_not_found" });
+    const item = await database.client.propertySelectionShareItem.findFirst({
+      where: { id: request.params.itemId, shareId: share.id, propertyId: { not: null } },
+      select: { propertyId: true },
+    });
+    if (!item?.propertyId) return reply.status(404).send({ error: "photo_not_found" });
+    const photo = await database.client.propertyPhoto.findFirst({
+      where: { id: request.params.photoId, organizationId: share.organizationId, propertyId: item.propertyId, status: "READY" },
+      select: { storageKey: true },
+    });
+    if (!photo) return reply.status(404).send({ error: "photo_not_found" });
+    const url = await propertyPhotoDownloadUrl(config, photo.storageKey);
+    if (!url) return reply.status(503).send({ error: "storage_not_configured" });
+    return reply.redirect(url);
   });
 
   app.post<{ Params: { token: string }; Reply: { ok: true } | ApiErrorResponse }>("/public/property-shares/:token/open", {

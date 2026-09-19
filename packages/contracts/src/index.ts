@@ -472,7 +472,7 @@ export interface PublicPropertySelectionShareRecord {
   status: Exclude<PropertySelectionShareStatus, "CREATED" | "SENT"> | "AVAILABLE";
   organizationName: string;
   clientName: string | null;
-  managerName: string | null;
+  manager: { name: string; email: string; phone: string | null } | null;
   expiresAt: string;
   items: Array<{
     id: string;
@@ -480,6 +480,17 @@ export interface PublicPropertySelectionShareRecord {
     subtitle: string | null;
     priceLabel: string | null;
     imageUrl: string | null;
+    address: string | null;
+    district: string | null;
+    category: PropertyCategory | null;
+    operation: PropertyOperation | null;
+    area: number | null;
+    rooms: string | null;
+    floor: number | null;
+    totalFloors: number | null;
+    landArea: number | null;
+    description: string | null;
+    photos: Array<{ id: string; url: string }>;
   }>;
 }
 

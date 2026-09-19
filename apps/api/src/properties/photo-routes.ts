@@ -9,13 +9,19 @@ import { requireUser } from "../auth/require-user.js";
 const softLimit = 15 * 1024 * 1024;
 const maxPhotosPerProperty = 10;
 
-function storage(config: ApiConfig) {
+export function propertyStorage(config: ApiConfig) {
   if (!config.r2AccountId || !config.r2Bucket || !config.r2AccessKeyId || !config.r2SecretAccessKey) return null;
   return { bucket: config.r2Bucket, client: new S3Client({ region: "auto", endpoint: `https://${config.r2AccountId}.r2.cloudflarestorage.com`, credentials: { accessKeyId: config.r2AccessKeyId, secretAccessKey: config.r2SecretAccessKey } }) };
 }
 
+export async function propertyPhotoDownloadUrl(config: ApiConfig, storageKey: string) {
+  const r2 = propertyStorage(config);
+  if (!r2) return null;
+  return getSignedUrl(r2.client, new GetObjectCommand({ Bucket: r2.bucket, Key: storageKey }), { expiresIn: 60 });
+}
+
 export async function registerPropertyPhotoRoutes(app: FastifyInstance, database: DatabaseConnection, config: ApiConfig) {
-  const r2 = storage(config);
+  const r2 = propertyStorage(config);
   const paramsSchema = { type: "object", required: ["propertyId"], properties: { propertyId: { type: "string", format: "uuid" }, photoId: { type: "string", format: "uuid" } } } as const;
   async function propertyForUser(propertyId: string, organizationId: string) {
     return database.client.property.findFirst({ where: { id: propertyId, organizationId }, select: { id: true } });

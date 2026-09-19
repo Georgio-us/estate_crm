@@ -13,7 +13,8 @@ interface ApiProperty {
   id: string; title: string; address: string | null; district: string | null;
   category: "APARTMENT" | "HOUSE" | "LAND" | "COMMERCIAL"; market: "PRIMARY" | "SECONDARY";
   operation: "SALE" | "RENT"; status: "AVAILABLE" | "RESERVED" | "SOLD"; price: number | null;
-  currency: "USD" | "EUR" | "UAH"; rooms: string | null; area: number | null; imageUrl: string | null;
+  currency: "USD" | "EUR" | "UAH"; rooms: string | null; area: number | null; floor: number | null;
+  totalFloors: number | null; landArea: number | null; imageUrl: string | null;
 }
 interface ViaProperty {
   externalId: string; title: string; active: boolean; price?: number | null; currency?: string | null;
@@ -99,12 +100,16 @@ export function DealPropertySelectionPanel({ deal, onClose, onCountChange, onAct
       market: "Вторичный" as const, category: item.category, district: item.district, rooms: item.rooms, operation: "Продажа", source: "Демо" as const,
     }));
     const realProperties = properties.filter((item) => item.status === "AVAILABLE").map((item) => ({
-      key: `property:${item.id}`, propertyId: item.id, title: item.title, subtitle: [item.address || "Адрес не указан", item.area ? `${item.area} м²` : null].filter(Boolean).join(" · "),
+      key: `property:${item.id}`, propertyId: item.id, title: item.title, subtitle: [
+        item.address || "Адрес не указан", item.rooms ? `${item.rooms} комн.` : null, item.area ? `${item.area} м²` : null,
+        item.category === "HOUSE" && item.totalFloors ? `${item.totalFloors} эт.` : item.floor ? `${item.floor}${item.totalFloors ? `/${item.totalFloors}` : ""} эт.` : null,
+        item.landArea ? `${item.landArea} сот.` : null,
+      ].filter(Boolean).join(" · "),
       priceLabel: formatPrice(item.price, item.currency), imageUrl: item.imageUrl, market: item.market === "PRIMARY" ? "Первичный" as const : "Вторичный" as const,
       category: categoryLabels[item.category], district: item.district || "", rooms: item.rooms || undefined, operation: item.operation === "SALE" ? "Продажа" : "Аренда", source: "CRM" as const,
     }));
     const via = viaProperties.filter((item) => item.active).map((item) => ({
-      key: `via:${item.externalId}`, title: item.title, subtitle: [item.district, item.areaM2 ? `${item.areaM2} м²` : null].filter(Boolean).join(" · ") || "Объект из каталога Via",
+      key: `via:${item.externalId}`, title: item.title, subtitle: [item.district, item.rooms ? `${item.rooms} комн.` : null, item.areaM2 ? `${item.areaM2} м²` : null].filter(Boolean).join(" · ") || "Объект из каталога Via",
       priceLabel: item.price == null ? "Цена не указана" : formatPrice(item.price, normalizeCurrency(item.currency)), imageUrl: item.previewImageUrl || null,
       market: "Вторичный" as const, category: viaCategory(item.propertyType), district: item.district || "", rooms: item.rooms || undefined, operation: "Продажа", source: "Via" as const,
     }));

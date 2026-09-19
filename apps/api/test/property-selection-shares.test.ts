@@ -56,8 +56,12 @@ test("the public endpoint returns only the presentation snapshot", async () => {
         async findUnique() {
           return {
             id: shareId, publicToken: token, status: "SENT", expiresAt: new Date(Date.now() + 60_000),
-            organization: { name: "CRM Del Mar", companyName: "Del Mar" }, contact: { name: "Юлия" }, createdBy: { name: "Менеджер" },
-            items: [{ id: "item-1", title: "Квартира у моря", subtitle: "Приморский · 70 м²", priceLabel: "$120 000", imageUrl: null }],
+            organization: { name: "CRM Del Mar", companyName: "Del Mar" }, contact: { name: "Юлия" },
+            deal: { assignee: { name: "Менеджер", email: "manager@example.com", phone: "+380 67 000 00 00" } },
+            items: [{
+              id: "item-1", title: "Квартира у моря", subtitle: "Приморский · 2 комн. · 70 м²", priceLabel: "$120 000", imageUrl: null,
+              property: { address: "Французский бульвар, 1", district: "Приморский", category: "APARTMENT", operation: "SALE", area: 70, rooms: "2", floor: 8, totalFloors: 16, landArea: null, description: "Вид на море", photos: [{ id: "photo-1" }] },
+            }],
           };
         },
       },
@@ -69,10 +73,42 @@ test("the public endpoint returns only the presentation snapshot", async () => {
   const response = await app.inject({ method: "GET", url: `/public/property-shares/${token}` });
   assert.equal(response.statusCode, 200);
   assert.deepEqual(response.json(), {
-    status: "AVAILABLE", organizationName: "Del Mar", clientName: "Юлия", managerName: "Менеджер",
+    status: "AVAILABLE", organizationName: "Del Mar", clientName: "Юлия", manager: { name: "Менеджер", email: "manager@example.com", phone: "+380 67 000 00 00" },
     expiresAt: response.json().expiresAt,
-    items: [{ id: "item-1", title: "Квартира у моря", subtitle: "Приморский · 70 м²", priceLabel: "$120 000", imageUrl: null }],
+    items: [{
+      id: "item-1", title: "Квартира у моря", subtitle: "Приморский · 2 комн. · 70 м²", priceLabel: "$120 000", imageUrl: null,
+      address: "Французский бульвар, 1", district: "Приморский", category: "APARTMENT", operation: "SALE", area: 70, rooms: "2", floor: 8, totalFloors: 16, landArea: null, description: "Вид на море",
+      photos: [{ id: "photo-1", url: `/api/public/property-shares/${token}/items/item-1/photos/photo-1` }],
+    }],
   });
   assert.equal("dealId" in response.json(), false);
+  await app.close();
+});
+
+test("a public photo is resolved only through an active share item", async () => {
+  const token = "B".repeat(43);
+  const itemId = "76da6d35-d0c7-46ad-a4e9-2e2f0120d4c1";
+  const propertyId = "2463b813-0110-42a7-8ab9-4dfa7b7335b7";
+  const photoId = "73783a79-c9f7-47e3-88cc-9720b9f31553";
+  let photoWhere: Record<string, unknown> | undefined;
+  const database = {
+    client: {
+      propertySelectionShare: {
+        async findUnique() { return { id: shareId, organizationId, status: "SENT", expiresAt: new Date(Date.now() + 60_000) }; },
+      },
+      propertySelectionShareItem: {
+        async findFirst() { return { propertyId }; },
+      },
+      propertyPhoto: {
+        async findFirst({ where }: { where: Record<string, unknown> }) { photoWhere = where; return { storageKey: "crm/org/property/photo" }; },
+      },
+    },
+    async ping() {}, async disconnect() {},
+  } as unknown as DatabaseConnection;
+
+  const app = await buildApp(config, database);
+  const response = await app.inject({ method: "GET", url: `/public/property-shares/${token}/items/${itemId}/photos/${photoId}` });
+  assert.equal(response.statusCode, 503);
+  assert.deepEqual(photoWhere, { id: photoId, organizationId, propertyId, status: "READY" });
   await app.close();
 });
