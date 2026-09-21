@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { mapPipelineImportRows } from "./import-mapper";
 import styles from "./pipeline.module.css";
 
 export type ImportedDealRow = Record<string, string>;
@@ -82,10 +83,15 @@ export function PipelineDataTransfer({ rows, viewLabel, onImport, onClose }: Pip
       if (!parsed.length) throw new Error("В файле нет строк для импорта.");
       if (parsed.length > 2_000) throw new Error("За один раз можно импортировать не более 2000 строк.");
       const normalized = parsed.map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key.trim(), String(value ?? "").trim()])));
-      setResult(`Импортируем ${normalized.length} строк…`);
-      const summary = await onImport(normalized);
+      const mapping = mapPipelineImportRows(normalized);
+      if (!mapping.rows.length) throw new Error("В файле нет строк, подходящих для импорта.");
+      setResult(mapping.format === "historical-meta"
+        ? `Распознана таблица Meta. Импортируем ${mapping.rows.length} исторических лидов…`
+        : `Импортируем ${mapping.rows.length} строк…`);
+      const summary = await onImport(mapping.rows);
       setErrors(summary.errors.slice(0, 8));
-      setResult(`Готово: создано ${summary.created}, обновлено ${summary.updated}, пропущено ${summary.skipped}.`);
+      const excluded = mapping.excluded ? ` За пределами правил импорта: ${mapping.excluded}.` : "";
+      setResult(`Готово: создано ${summary.created}, обновлено ${summary.updated}, пропущено ${summary.skipped}.${excluded}`);
     } catch (error) {
       setResult(error instanceof Error ? error.message : "Не удалось импортировать файл.");
     } finally {
