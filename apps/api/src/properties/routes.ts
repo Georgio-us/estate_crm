@@ -1,9 +1,12 @@
 import type { FastifyInstance } from "fastify";
+import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 
 import type { ApiErrorResponse, CreatePropertyRequest, PropertyListResponse, PropertyRecord, UpdatePropertyRequest } from "@estate-crm/contracts";
 import type { DatabaseConnection } from "@estate-crm/database";
 
+import type { ApiConfig } from "../config.js";
 import { requireUser } from "../auth/require-user.js";
+import { propertyStorage } from "./photo-routes.js";
 
 function optionalText(value: string | null | undefined) {
   return value?.trim() || null;
@@ -26,6 +29,7 @@ function mapProperty(property: {
   buildingLabel?: string | null; unitDetail?: string | null; subtype?: string | null; condition?: string | null;
   documentNotes?: string | null; ownerName?: string | null; ownerContacts?: string | null;
   assigneeId?: string | null; assignmentNote?: string | null; sourceSheet?: string | null; sourceRow?: number | null; sourceHash?: string | null;
+  archivedAt?: Date | null;
   assignee?: { name: string } | null; photos?: Array<{ id: string; isCover: boolean; sortOrder: number }>;
 }): PropertyRecord {
   return {
@@ -44,6 +48,7 @@ function mapProperty(property: {
     sourceProvider: property.sourceHash?.startsWith("via:") ? "VIA" : property.sourceSheet ? "EXCEL" : "CRM",
     externalSourceId: property.sourceHash?.startsWith("via:") ? property.sourceHash.slice(4) : null,
     photosCount: property.photos?.length ?? 0,
+    archivedAt: property.archivedAt?.toISOString() ?? null,
     code: `OD-${property.number}`,
     createdAt: property.createdAt.toISOString(),
     updatedAt: property.updatedAt.toISOString(),
@@ -118,11 +123,14 @@ async function activeAssignee(database: DatabaseConnection, organizationId: stri
   return database.client.membership.findFirst({ where: { organizationId, userId: assigneeId, status: "ACTIVE" }, select: { userId: true } });
 }
 
-export async function registerPropertyRoutes(app: FastifyInstance, database: DatabaseConnection): Promise<void> {
-  app.get<{ Reply: PropertyListResponse | ApiErrorResponse }>("/properties", async (request, reply) => {
+export async function registerPropertyRoutes(app: FastifyInstance, database: DatabaseConnection, config: ApiConfig): Promise<void> {
+  app.get<{ Querystring: { archived?: "exclude" | "only" | "all" }; Reply: PropertyListResponse | ApiErrorResponse }>("/properties", {
+    schema: { querystring: { type: "object", additionalProperties: false, properties: { archived: { type: "string", enum: ["exclude", "only", "all"] } } } },
+  }, async (request, reply) => {
     const user = await requireUser(request, reply, database);
     if (!user) return reply;
-    const properties = await database.client.property.findMany({ where: { organizationId: user.organization.id }, include: { assignee: { select: { name: true } }, photos: { where: { status: "READY" }, select: { id: true, isCover: true, sortOrder: true }, orderBy: [{ isCover: "desc" }, { sortOrder: "asc" }] } }, orderBy: { updatedAt: "desc" }, take: 500 });
+    const archived = request.query.archived ?? "exclude";
+    const properties = await database.client.property.findMany({ where: { organizationId: user.organization.id, ...(archived === "all" ? {} : { archivedAt: archived === "only" ? { not: null } : null }) }, include: { assignee: { select: { name: true } }, photos: { where: { status: "READY" }, select: { id: true, isCover: true, sortOrder: true }, orderBy: [{ isCover: "desc" }, { sortOrder: "asc" }] } }, orderBy: { updatedAt: "desc" }, take: 500 });
     return { properties: properties.map(mapProperty), total: properties.length };
   });
 
@@ -162,5 +170,53 @@ export async function registerPropertyRoutes(app: FastifyInstance, database: Dat
       });
     }
     return { property: mapProperty(property) };
+  });
+
+  const propertyIdSchema = { type: "object", required: ["propertyId"], properties: { propertyId: { type: "string", format: "uuid" } } } as const;
+
+  app.post<{ Params: { propertyId: string }; Reply: { property: PropertyRecord } | ApiErrorResponse }>("/properties/:propertyId/archive", { schema: { params: propertyIdSchema } }, async (request, reply) => {
+    const user = await requireUser(request, reply, database);
+    if (!user) return reply;
+    const existing = await database.client.property.findFirst({ where: { id: request.params.propertyId, organizationId: user.organization.id }, select: { id: true, archivedAt: true } });
+    if (!existing) return reply.status(404).send({ error: "property_not_found", message: "Объект не найден." });
+    if (!existing.archivedAt) {
+      await database.client.$transaction([
+        database.client.property.update({ where: { id: existing.id }, data: { archivedAt: new Date() } }),
+        database.client.propertyEvent.create({ data: { organizationId: user.organization.id, propertyId: existing.id, actorId: user.id, title: "Объект перенесён в архив" } }),
+      ]);
+    }
+    const property = await database.client.property.findUniqueOrThrow({ where: { id: existing.id }, include: { assignee: { select: { name: true } }, photos: { where: { status: "READY" }, select: { id: true, isCover: true, sortOrder: true }, orderBy: [{ isCover: "desc" }, { sortOrder: "asc" }] } } });
+    return { property: mapProperty(property) };
+  });
+
+  app.post<{ Params: { propertyId: string }; Reply: { property: PropertyRecord } | ApiErrorResponse }>("/properties/:propertyId/restore", { schema: { params: propertyIdSchema } }, async (request, reply) => {
+    const user = await requireUser(request, reply, database);
+    if (!user) return reply;
+    const existing = await database.client.property.findFirst({ where: { id: request.params.propertyId, organizationId: user.organization.id }, select: { id: true, archivedAt: true } });
+    if (!existing) return reply.status(404).send({ error: "property_not_found", message: "Объект не найден." });
+    if (existing.archivedAt) {
+      await database.client.$transaction([
+        database.client.property.update({ where: { id: existing.id }, data: { archivedAt: null } }),
+        database.client.propertyEvent.create({ data: { organizationId: user.organization.id, propertyId: existing.id, actorId: user.id, title: "Объект восстановлен из архива" } }),
+      ]);
+    }
+    const property = await database.client.property.findUniqueOrThrow({ where: { id: existing.id }, include: { assignee: { select: { name: true } }, photos: { where: { status: "READY" }, select: { id: true, isCover: true, sortOrder: true }, orderBy: [{ isCover: "desc" }, { sortOrder: "asc" }] } } });
+    return { property: mapProperty(property) };
+  });
+
+  app.delete<{ Params: { propertyId: string }; Reply: { deleted: true } | ApiErrorResponse }>("/properties/:propertyId", { schema: { params: propertyIdSchema } }, async (request, reply) => {
+    const user = await requireUser(request, reply, database);
+    if (!user) return reply;
+    if (user.organization.role === "MANAGER") return reply.status(403).send({ error: "forbidden", message: "Удалять объекты может руководитель или администратор." });
+    const existing = await database.client.property.findFirst({ where: { id: request.params.propertyId, organizationId: user.organization.id }, include: { photos: { select: { storageKey: true } } } });
+    if (!existing) return reply.status(404).send({ error: "property_not_found", message: "Объект не найден." });
+    if (!existing.archivedAt) return reply.status(409).send({ error: "property_not_archived", message: "Сначала перенесите объект в архив." });
+    if (existing.photos.length) {
+      const storage = propertyStorage(config);
+      if (!storage) return reply.status(503).send({ error: "storage_not_configured", message: "Нельзя удалить объект с фотографиями: хранилище R2 не подключено." });
+      await Promise.all(existing.photos.map((photo) => storage.client.send(new DeleteObjectCommand({ Bucket: storage.bucket, Key: photo.storageKey }))));
+    }
+    await database.client.property.delete({ where: { id: existing.id } });
+    return { deleted: true };
   });
 }

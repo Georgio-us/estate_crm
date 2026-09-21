@@ -10,7 +10,7 @@ function editableSnapshot(property: PropertyListing) {
   return JSON.stringify(Object.fromEntries(Object.entries(property).filter(([key]) => !["updatedAt", "photosCount", "imageUrl"].includes(key))));
 }
 
-export function PropertyDrawer({ property, onSave, onClose, onRefresh, readOnly = false }: { property: PropertyListing; onSave: (property: PropertyListing) => Promise<void>; onClose: () => void; onRefresh?: () => Promise<void>; readOnly?: boolean }) {
+export function PropertyDrawer({ property, onSave, onClose, onRefresh, onArchive, onRestore, onDelete, canDelete, readOnly = false }: { property: PropertyListing; onSave: (property: PropertyListing) => Promise<void>; onClose: () => void; onRefresh?: () => Promise<void>; onArchive: () => Promise<void>; onRestore: () => Promise<void>; onDelete: () => Promise<void>; canDelete: boolean; readOnly?: boolean }) {
   const [draft, setDraft] = useState(property);
   const [assignees, setAssignees] = useState<Array<{ id: string; name: string }>>([]);
   const [photos, setPhotos] = useState<PropertyPhotoRecord[]>([]);
@@ -23,6 +23,8 @@ export function PropertyDrawer({ property, onSave, onClose, onRefresh, readOnly 
   const [saving, setSaving] = useState(false);
   const [savedSnapshot] = useState(() => editableSnapshot(property));
   const [error, setError] = useState("");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [lifecycleBusy, setLifecycleBusy] = useState(false);
   const update = (patch: Partial<PropertyListing>) => setDraft((current) => ({ ...current, ...patch }));
   const isDirty = editableSnapshot(draft) !== savedSnapshot;
   const selectedPhotoIndex = Math.max(0, photos.findIndex((photo) => photo.id === selectedPhotoId));
@@ -107,6 +109,17 @@ export function PropertyDrawer({ property, onSave, onClose, onRefresh, readOnly 
     finally { setSaving(false); }
   }
 
+  async function runLifecycle(action: "archive" | "restore" | "delete") {
+    if (action === "delete" && !window.confirm("Удалить объект навсегда? Фотографии будут удалены из хранилища, восстановить объект будет невозможно.")) return;
+    setLifecycleBusy(true); setMenuOpen(false); setError("");
+    try {
+      if (action === "archive") await onArchive();
+      else if (action === "restore") await onRestore();
+      else await onDelete();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Не удалось выполнить действие с объектом."); }
+    finally { setLifecycleBusy(false); }
+  }
+
   function selectRelativePhoto(offset: number) {
     if (!photos.length) return;
     const index = (selectedPhotoIndex + offset + photos.length) % photos.length;
@@ -130,7 +143,7 @@ export function PropertyDrawer({ property, onSave, onClose, onRefresh, readOnly 
       <aside className={styles.drawer} role="dialog" aria-modal="true" aria-label={`Объект ${property.title}`}>
         <header className={styles.drawerHeader}>
           <div><span>Объекты / {draft.category}</span><h2>{draft.title}</h2><p>{draft.code} · обновлён {draft.updatedAt}</p></div>
-          <div>{readOnly && <span className={styles.demoPill}>Демо</span>}{!readOnly && property.sourceProvider === "VIA" && <span className={styles.demoPill}>Via → CRM</span>}{!readOnly && <button type="button" aria-label="Меню объекта">•••</button>}<button type="button" onClick={onClose} aria-label="Закрыть">×</button></div>
+          <div>{!readOnly && property.sourceProvider === "VIA" && <span className={styles.sourcePill}>Via → CRM</span>}{!readOnly && <div className={styles.propertyMenuWrap}><button type="button" aria-label="Меню объекта" aria-expanded={menuOpen} disabled={lifecycleBusy} onClick={() => setMenuOpen((current) => !current)}>•••</button>{menuOpen && <div className={styles.propertyMenu}>{property.archivedAt ? <><button type="button" onClick={() => { void runLifecycle("restore"); }}>Восстановить из архива</button>{canDelete && <button className={styles.propertyMenuDanger} type="button" onClick={() => { void runLifecycle("delete"); }}>Удалить навсегда</button>}</> : <button type="button" onClick={() => { void runLifecycle("archive"); }}>Перенести в архив</button>}</div>}</div>}<button type="button" onClick={onClose} aria-label="Закрыть">×</button></div>
         </header>
         <div className={styles.drawerBody}>
           <div className={styles.visualPane}>
@@ -194,7 +207,6 @@ function ReadOnlyFacts({ property }: { property: PropertyListing }) {
   return <>
     <section className={styles.factSection}><h3>Основное</h3><Fact label="Тип" value={property.category} /><Fact label="Рынок" value={property.market} /><Fact label="Комнаты" value={property.rooms || "—"} /><Fact label="Площадь" value={property.area === null ? "—" : `${property.area} м²`} />{property.floor && <Fact label="Этаж" value={`${property.floor} из ${property.totalFloors || "—"}`} />}{property.landArea && <Fact label="Участок" value={`${property.landArea} сот.`} />}</section>
     <section className={styles.factSection}><h3>Расположение</h3><Fact label="Адрес" value={property.address} /><Fact label="Район" value={property.district} /></section>
-    <p className={styles.demoNotice}>Это демонстрационная карточка. После импорта здесь появятся данные объекта из базы агентства.</p>
   </>;
 }
 

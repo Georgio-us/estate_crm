@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { demoProjects, demoSecondaryProperties } from "@/components/properties/demoCatalog";
 import type { Deal } from "@/types/crm";
 import styles from "./deal-drawer.module.css";
 
@@ -22,7 +21,7 @@ interface ViaProperty {
 }
 interface CatalogCandidate {
   key: string; propertyId?: string; title: string; subtitle: string; priceLabel: string; imageUrl: string | null;
-  market: "Первичный" | "Вторичный"; category: string; district: string; rooms?: string; operation: string; source: "CRM" | "Via" | "Демо";
+  market: "Первичный" | "Вторичный"; category: string; district: string; rooms?: string; operation: string; source: "CRM" | "Via";
 }
 interface PropertySelectionShareRecord {
   id: string; status: "CREATED" | "SENT" | "OPENED" | "REVOKED" | "EXPIRED"; publicPath: string;
@@ -91,14 +90,6 @@ export function DealPropertySelectionPanel({ deal, onClose, onCountChange, onAct
   useEffect(() => { if (!notice) return; const timer = window.setTimeout(() => setNotice(""), 2200); return () => window.clearTimeout(timer); }, [notice]);
 
   const catalog = useMemo<CatalogCandidate[]>(() => {
-    const demoUnits = demoProjects.flatMap((project) => project.units.filter((unit) => unit.status === "Доступен").map((unit) => ({
-      key: `unit:${unit.id}`, title: `${project.title} · ${unit.name}`, subtitle: `${project.developer} · ${project.district} · ${unit.area} м²`, priceLabel: formatPrice(unit.price, unit.currency), imageUrl: project.imageUrl,
-      market: "Первичный" as const, category: "Квартира", district: project.district, rooms: String(unit.rooms), operation: "Продажа", source: "Демо" as const,
-    })));
-    const demoSecondary = demoSecondaryProperties.filter((item) => item.status === "Доступен").map((item) => ({
-      key: `demo-property:${item.id}`, title: item.title, subtitle: `${item.address} · ${item.area} м²`, priceLabel: formatPrice(item.price, item.currency), imageUrl: item.imageUrl,
-      market: "Вторичный" as const, category: item.category, district: item.district, rooms: item.rooms, operation: "Продажа", source: "Демо" as const,
-    }));
     const realProperties = properties.filter((item) => item.status === "AVAILABLE").map((item) => ({
       key: `property:${item.id}`, propertyId: item.id, title: item.title, subtitle: [
         item.address || "Адрес не указан", item.rooms ? `${item.rooms} комн.` : null, item.area ? `${item.area} м²` : null,
@@ -113,7 +104,7 @@ export function DealPropertySelectionPanel({ deal, onClose, onCountChange, onAct
       priceLabel: item.price == null ? "Цена не указана" : formatPrice(item.price, normalizeCurrency(item.currency)), imageUrl: item.previewImageUrl || null,
       market: "Вторичный" as const, category: viaCategory(item.propertyType), district: item.district || "", rooms: item.rooms || undefined, operation: "Продажа", source: "Via" as const,
     }));
-    return realProperties.length || via.length ? [...realProperties, ...via] : [...demoUnits, ...demoSecondary];
+    return [...realProperties, ...via];
   }, [properties, viaProperties]);
 
   const visibleCatalog = useMemo(() => {

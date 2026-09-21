@@ -100,12 +100,16 @@ export async function registerPropertySelectionShareRoutes(app: FastifyInstance,
 
     const selections = await database.client.dealPropertySelection.findMany({
       where: { id: { in: request.body.selectionIds }, dealId: deal.id, organizationId: user.organization.id },
+      include: { property: { select: { archivedAt: true, status: true } } },
     });
     if (selections.length !== request.body.selectionIds.length) {
       return reply.status(400).send({ error: "invalid_selection", message: "Часть объектов больше не доступна в этой подборке." });
     }
     const byId = new Map(selections.map((selection) => [selection.id, selection]));
     const orderedSelections = request.body.selectionIds.map((id) => byId.get(id)!);
+    if (orderedSelections.some((selection) => selection.property && (selection.property.archivedAt || selection.property.status !== "AVAILABLE"))) {
+      return reply.status(409).send({ error: "property_unavailable", message: "В подборке есть архивный или недоступный объект. Удалите его перед созданием ссылки." });
+    }
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1_000);
     await database.client.propertySelectionShare.updateMany({
       where: { dealId: deal.id, organizationId: user.organization.id, status: "CREATED" },

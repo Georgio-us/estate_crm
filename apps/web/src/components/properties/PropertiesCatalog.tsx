@@ -4,15 +4,13 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { UiIcon } from "@/components/ui/UiIcon";
 import { useCurrentUser } from "@/components/auth/AuthContext";
 import type { PropertyCategory, PropertyListing } from "@/types/crm";
-import { demoProjects, demoSecondaryProperties, type PropertyProject } from "./demoCatalog";
 import { NewPropertyModal, type NewPropertyDraft } from "./NewPropertyModal";
-import { ProjectDrawer, formatProjectPrice } from "./ProjectDrawer";
 import { PropertyDrawer } from "./PropertyDrawer";
 import { PropertyExcelTransfer } from "./PropertyExcelTransfer";
 import styles from "./properties.module.css";
 
 type ViewMode = "gallery" | "table";
-type CatalogSection = "all" | "primary" | "secondary" | "rent" | "via";
+type CatalogSection = "all" | "primary" | "secondary" | "rent" | "via" | "archive";
 
 interface ApiProperty {
   id: string; code: string; title: string; address: string | null; district: string | null;
@@ -25,6 +23,7 @@ interface ApiProperty {
   documentNotes: string | null; ownerName: string | null; ownerContacts: string | null;
   assigneeId: string | null; assigneeName: string | null; assignmentNote: string | null; photosCount: number;
   sourceSheet: string | null; sourceRow: number | null; sourceProvider: "CRM" | "EXCEL" | "VIA"; externalSourceId: string | null;
+  archivedAt: string | null;
 }
 interface ViaProperty {
   externalId: string; title: string; active: boolean; updatedAt?: string; operation?: string; propertyType?: string;
@@ -70,6 +69,7 @@ function mapApiProperty(property: ApiProperty): PropertyListing {
     ownerName: property.ownerName, ownerContacts: property.ownerContacts, assigneeId: property.assigneeId,
     assigneeName: property.assigneeName, assignmentNote: property.assignmentNote, photosCount: property.photosCount,
     sourceSheet: property.sourceSheet, sourceRow: property.sourceRow, sourceProvider: property.sourceProvider, externalSourceId: property.externalSourceId,
+    archivedAt: property.archivedAt,
     updatedAt: new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }).format(new Date(property.updatedAt)),
   };
 }
@@ -91,6 +91,7 @@ function propertyPayload(property: PropertyListing | NewPropertyDraft) {
 export function PropertiesCatalog() {
   const currentUser = useCurrentUser();
   const [properties, setProperties] = useState<PropertyListing[]>([]);
+  const [archivedProperties, setArchivedProperties] = useState<PropertyListing[]>([]);
   const [viaProperties, setViaProperties] = useState<ViaProperty[]>([]);
   const [viaEnabled, setViaEnabled] = useState(false);
   const [viaState, setViaState] = useState<"loading" | "ready" | "error">("loading");
@@ -106,28 +107,30 @@ export function PropertiesCatalog() {
   const [construction, setConstruction] = useState("all");
   const [district, setDistrict] = useState("all");
   const [maxPrice, setMaxPrice] = useState("");
-  const [demoEnabled, setDemoEnabled] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
 
   async function loadProperties() {
     setLoadState("loading");
     try {
-      const response = await fetch("/api/crm/properties", { cache: "no-store" });
-      const payload = await response.json() as { properties?: ApiProperty[] };
-      if (!response.ok || !payload.properties) throw new Error("Invalid response");
+      const [response, archiveResponse] = await Promise.all([
+        fetch("/api/crm/properties", { cache: "no-store" }),
+        fetch("/api/crm/properties?archived=only", { cache: "no-store" }),
+      ]);
+      const [payload, archivePayload] = await Promise.all([response.json(), archiveResponse.json()]) as Array<{ properties?: ApiProperty[] }>;
+      if (!response.ok || !archiveResponse.ok || !payload.properties || !archivePayload.properties) throw new Error("Invalid response");
       setProperties(payload.properties.map(mapApiProperty));
+      setArchivedProperties(archivePayload.properties.map(mapApiProperty));
       setLoadState("ready");
     } catch { setLoadState("error"); }
   }
 
   useEffect(() => {
     let active = true;
-    void fetch("/api/crm/properties", { cache: "no-store" }).then(async (response) => {
-      const payload = await response.json() as { properties?: ApiProperty[] };
-      if (!response.ok || !payload.properties) throw new Error();
-      if (active) { setProperties(payload.properties.map(mapApiProperty)); setLoadState("ready"); }
+    void Promise.all([fetch("/api/crm/properties", { cache: "no-store" }), fetch("/api/crm/properties?archived=only", { cache: "no-store" })]).then(async ([response, archiveResponse]) => {
+      const [payload, archivePayload] = await Promise.all([response.json(), archiveResponse.json()]) as Array<{ properties?: ApiProperty[] }>;
+      if (!response.ok || !archiveResponse.ok || !payload.properties || !archivePayload.properties) throw new Error();
+      if (active) { setProperties(payload.properties.map(mapApiProperty)); setArchivedProperties(archivePayload.properties.map(mapApiProperty)); setLoadState("ready"); }
     }).catch(() => { if (active) setLoadState("error"); });
     return () => { active = false; };
   }, []);
@@ -157,49 +160,27 @@ export function PropertiesCatalog() {
     return () => { active = false; };
   }, []);
 
-  const realPrimaryExists = properties.some((property) => property.market === "Первичный");
-  const realSecondaryExists = properties.some((property) => property.market === "Вторичный");
-  const shownProjects = useMemo(() => demoEnabled ? demoProjects : [], [demoEnabled]);
-  const shownDemoSecondary = useMemo(() => demoEnabled && !realSecondaryExists ? demoSecondaryProperties : [], [demoEnabled, realSecondaryExists]);
-  const catalogProperties = useMemo(() => [...properties, ...shownDemoSecondary], [properties, shownDemoSecondary]);
-  const selectedProperty = catalogProperties.find((property) => property.id === selectedId);
-  const selectedProject = shownProjects.find((project) => project.id === selectedProjectId);
-  const isSelectedDemo = Boolean(selectedProperty?.id.startsWith("demo-"));
-  const demoVisible = shownProjects.length > 0 || shownDemoSecondary.length > 0;
+  const selectedProperty = [...properties, ...archivedProperties].find((property) => property.id === selectedId);
   const importedVia = useMemo(() => new Map(properties.filter((property) => property.sourceProvider === "VIA" && property.externalSourceId).map((property) => [property.externalSourceId!, property.id])), [properties]);
 
   const developers = useMemo(() => Array.from(new Set([
-    ...shownProjects.map((project) => project.developer),
-    ...catalogProperties.map((property) => property.developer).filter((value): value is string => Boolean(value)),
-  ])).sort((a, b) => a.localeCompare(b, "ru")), [catalogProperties, shownProjects]);
+    ...properties.map((property) => property.developer).filter((value): value is string => Boolean(value)),
+  ])).sort((a, b) => a.localeCompare(b, "ru")), [properties]);
 
   const visibleProperties = useMemo(() => {
     const query = search.trim().toLocaleLowerCase("ru");
-    return catalogProperties.filter((property) => {
+    const sourceProperties = section === "archive" ? archivedProperties : properties;
+    return sourceProperties.filter((property) => {
       const matchesSearch = !query || [property.title, property.address, property.code, property.project, property.developer].some((value) => value?.toLocaleLowerCase("ru").includes(query));
-      return section !== "via" && property.status === "Доступен"
+      return section !== "via" && (section === "archive" || property.status === "Доступен")
         && matchesSearch
-        && (section === "all" || (section === "primary" ? property.market === "Первичный" : section === "rent" ? property.operation === "Аренда" : property.market === "Вторичный" && property.operation === "Продажа"))
+        && (section === "all" || section === "archive" || (section === "primary" ? property.market === "Первичный" : section === "rent" ? property.operation === "Аренда" : property.market === "Вторичный" && property.operation === "Продажа"))
         && (!myOnly || property.assigneeId === currentUser.id)
         && (category === "all" || property.category === category)
         && (district === "all" || property.district === district)
         && (!maxPrice || (property.price !== null && property.price <= Number(maxPrice)));
     });
-  }, [catalogProperties, category, currentUser.id, district, maxPrice, myOnly, search, section]);
-
-  const visibleProjects = useMemo(() => {
-    if (section === "secondary" || section === "rent" || section === "via" || (category !== "all" && category !== "Квартира")) return [];
-    const query = search.trim().toLocaleLowerCase("ru");
-    return shownProjects.filter((project) => {
-      const matchesSearch = !query || [project.title, project.address, project.city, project.district, project.developer].some((value) => value.toLocaleLowerCase("ru").includes(query));
-      return project.units.some((unit) => unit.status === "Доступен")
-        && matchesSearch
-        && (developer === "all" || project.developer === developer)
-        && (construction === "all" || project.status === construction)
-        && (district === "all" || project.district === district)
-        && (!maxPrice || project.priceFrom <= Number(maxPrice));
-    });
-  }, [category, construction, developer, district, maxPrice, search, section, shownProjects]);
+  }, [archivedProperties, properties, category, currentUser.id, district, maxPrice, myOnly, search, section]);
 
   const visibleViaProperties = useMemo(() => {
     if (!viaEnabled || (section !== "all" && section !== "via")) return [];
@@ -214,9 +195,8 @@ export function PropertiesCatalog() {
   }, [category, district, maxPrice, search, section, viaEnabled, viaProperties]);
 
   const hasFilters = Boolean(search || section !== "all" || myOnly || category !== "all" || developer !== "all" || construction !== "all" || district !== "all" || maxPrice);
-  const resultTotal = visibleProjects.length + visibleProperties.length + visibleViaProperties.length;
-  const catalogTotal = shownProjects.filter((project) => project.units.some((unit) => unit.status === "Доступен")).length
-    + catalogProperties.filter((property) => property.status === "Доступен").length + (viaEnabled ? viaProperties.length : 0);
+  const resultTotal = visibleProperties.length + visibleViaProperties.length;
+  const catalogTotal = section === "archive" ? archivedProperties.length : properties.filter((property) => property.status === "Доступен").length + (viaEnabled ? viaProperties.length : 0);
 
   async function createProperty(draft: NewPropertyDraft) {
     const response = await fetch("/api/crm/properties", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(propertyPayload(draft)) });
@@ -229,12 +209,28 @@ export function PropertiesCatalog() {
   }
 
   async function saveProperty(next: PropertyListing) {
-    if (next.id.startsWith("demo-")) return;
     const response = await fetch(`/api/crm/properties/${next.id}`, { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(propertyPayload(next)) });
     const payload = await response.json() as { property?: ApiProperty; message?: string };
     if (!response.ok || !payload.property) throw new Error(payload.message || "Не удалось сохранить объект.");
     const property = mapApiProperty(payload.property);
     setProperties((current) => current.map((item) => item.id === property.id ? property : item));
+  }
+
+  async function runPropertyLifecycle(propertyId: string, action: "archive" | "restore") {
+    const response = await fetch(`/api/crm/properties/${propertyId}/${action}`, { method: "POST" });
+    const payload = await response.json() as { property?: ApiProperty; message?: string };
+    if (!response.ok || !payload.property) throw new Error(payload.message || "Не удалось обновить объект.");
+    setSelectedId(null);
+    await loadProperties();
+    if (action === "archive") setSection("archive");
+  }
+
+  async function deleteProperty(propertyId: string) {
+    const response = await fetch(`/api/crm/properties/${propertyId}`, { method: "DELETE" });
+    const payload = await response.json() as { deleted?: boolean; message?: string };
+    if (!response.ok || !payload.deleted) throw new Error(payload.message || "Не удалось удалить объект.");
+    setSelectedId(null);
+    await loadProperties();
   }
 
   async function importViaProperty(property: ViaProperty) {
@@ -281,6 +277,7 @@ export function PropertiesCatalog() {
           <button className={section === "secondary" ? styles.catalogTabActive : ""} type="button" onClick={() => changeSection("secondary")}>Вторичная недвижимость</button>
           <button className={section === "rent" ? styles.catalogTabActive : ""} type="button" onClick={() => changeSection("rent")}>Аренда</button>
           {viaEnabled && <button className={section === "via" ? styles.catalogTabActive : ""} type="button" onClick={() => changeSection("via")}>Via</button>}
+          <button className={section === "archive" ? styles.catalogTabActive : ""} type="button" onClick={() => changeSection("archive")}>Архив{archivedProperties.length ? ` · ${archivedProperties.length}` : ""}</button>
         </div>
         {(section === "secondary" || section === "rent") && <div className={styles.propertyCatalogActions}><button type="button" aria-pressed={myOnly} onClick={() => setMyOnly((value) => !value)}>{myOnly ? "Все объекты" : "Мои объекты"}</button><PropertyExcelTransfer onImported={loadProperties} /></div>}
 
@@ -295,26 +292,19 @@ export function PropertiesCatalog() {
         </div>
         {viaNotice && <p className={styles.viaNotice} role="status">{viaNotice}</p>}
 
-        {section !== "via" && demoVisible && <div className={styles.demoBanner}><span>Демо-каталог</span><p>Показываем примеры, пока соответствующий раздел не наполнен данными агентства.</p><button type="button" onClick={() => setDemoEnabled(false)}>Скрыть демо</button></div>}
-        {section !== "via" && !demoEnabled && (!realPrimaryExists || !realSecondaryExists) && <button className={styles.restoreDemo} type="button" onClick={() => setDemoEnabled(true)}>Показать демонстрационный каталог</button>}
-
         {loadState === "loading" || (section === "via" && viaState === "loading") ? <LoadingState /> : loadState === "error" ? <ErrorState onRetry={loadProperties} /> : section === "via" && viaState === "error" ? <ErrorState onRetry={loadViaProperties} /> : resultTotal ? (
           <div className={styles.catalogResults}>
-            {visibleProjects.length > 0 && <CatalogGroup title="Новостройки" description="Жилые комплексы и доступные предложения" count={visibleProjects.length}>
-              {view === "gallery" ? <div className={styles.gallery}>{visibleProjects.map((project) => <ProjectCard project={project} onOpen={() => setSelectedProjectId(project.id)} key={project.id} />)}</div> : <ProjectTable projects={visibleProjects} onOpen={setSelectedProjectId} />}
-            </CatalogGroup>}
-            {visibleProperties.length > 0 && <CatalogGroup title={section === "primary" ? "Отдельные юниты" : section === "secondary" ? "Вторичная недвижимость" : section === "rent" ? "Аренда" : "Отдельные объекты"} description={section === "primary" ? "Объекты первичного рынка вне проектного каталога" : "Квартиры, дома, участки и коммерческие помещения"} count={visibleProperties.length}>
-              {view === "gallery" ? <div className={styles.gallery}>{visibleProperties.map((property) => <PropertyCard property={property} isDemo={property.id.startsWith("demo-")} onOpen={() => setSelectedId(property.id)} key={property.id} />)}</div> : <PropertyTable properties={visibleProperties} onOpen={setSelectedId} />}
+            {visibleProperties.length > 0 && <CatalogGroup title={section === "archive" ? "Архив объектов" : section === "primary" ? "Новостройки" : section === "secondary" ? "Вторичная недвижимость" : section === "rent" ? "Аренда" : "Объекты"} description={section === "archive" ? "Объекты исключены из поиска и клиентских подборок" : "Квартиры, дома, участки и коммерческие помещения"} count={visibleProperties.length}>
+              {view === "gallery" ? <div className={styles.gallery}>{visibleProperties.map((property) => <PropertyCard property={property} onOpen={() => setSelectedId(property.id)} key={property.id} />)}</div> : <PropertyTable properties={visibleProperties} onOpen={setSelectedId} />}
             </CatalogGroup>}
             {visibleViaProperties.length > 0 && <CatalogGroup title="Каталог Via" description="Внешние объекты. Импортируйте выбранный объект, чтобы редактировать его в CRM." count={visibleViaProperties.length}>
               {view === "gallery" ? <div className={styles.gallery}>{visibleViaProperties.map((property) => <ViaPropertyCard property={property} importedId={importedVia.get(property.externalId)} importing={importingViaId === property.externalId} onImport={() => { void importViaProperty(property); }} onOpenImported={(id) => setSelectedId(id)} key={property.externalId} />)}</div> : <ViaPropertyTable properties={visibleViaProperties} importedVia={importedVia} importingViaId={importingViaId} onImport={(property) => { void importViaProperty(property); }} onOpenImported={setSelectedId} />}
             </CatalogGroup>}
           </div>
-        ) : <EmptyState onReset={resetFilters} hasFilters={hasFilters} />}
+        ) : <EmptyState onReset={resetFilters} hasFilters={hasFilters} archive={section === "archive"} />}
       </div>
 
-      {selectedProject && <ProjectDrawer project={selectedProject} onClose={() => setSelectedProjectId(null)} />}
-      {selectedProperty && <PropertyDrawer property={selectedProperty} readOnly={isSelectedDemo} onSave={saveProperty} onClose={() => setSelectedId(null)} onRefresh={loadProperties} />}
+      {selectedProperty && <PropertyDrawer property={selectedProperty} onSave={saveProperty} onClose={() => setSelectedId(null)} onRefresh={loadProperties} onArchive={() => runPropertyLifecycle(selectedProperty.id, "archive")} onRestore={() => runPropertyLifecycle(selectedProperty.id, "restore")} onDelete={() => deleteProperty(selectedProperty.id)} canDelete={currentUser.organization.role !== "MANAGER"} />}
       {isCreating && <NewPropertyModal onCreate={createProperty} onClose={() => setIsCreating(false)} />}
     </section>
   );
@@ -328,17 +318,9 @@ function FilterSelect({ label, value, options, onChange }: { label: string; valu
   return <label className={styles.filter}><span>{label}</span><select value={value} onChange={(event) => onChange(event.target.value)}><option value="all">Все</option>{options.map((option) => <option value={option} key={option}>{option}</option>)}</select></label>;
 }
 
-function ProjectCard({ project, onOpen }: { project: PropertyProject; onOpen: () => void }) {
-  const available = project.units.filter((unit) => unit.status === "Доступен").length;
-  return <button className={`${styles.propertyCard} ${styles.projectCard}`} type="button" onClick={onOpen}>
-    <div className={styles.propertyImage} role="img" aria-label={`Проект ${project.title}`} style={{ backgroundImage: `linear-gradient(180deg, transparent 55%, rgba(20, 20, 18, .16)), url("${project.imageUrl}")` }}><span className={styles.projectStatus}>{project.status}</span><span className={styles.demoImagePill}>Демо</span></div>
-    <div className={styles.cardBody}><div className={styles.cardTitle}><h3>{project.title}</h3><span>›</span></div><p>{project.developer} · {project.city}, {project.district}</p><div className={styles.tags}><span>Новостройка</span><span>{project.completion}</span></div><div className={styles.cardFacts}><strong>от {formatProjectPrice(project.priceFrom, project.currency)}</strong><span>{available} доступно</span></div></div>
-  </button>;
-}
-
-function PropertyCard({ property, onOpen, isDemo }: { property: PropertyListing; onOpen: () => void; isDemo: boolean }) {
+function PropertyCard({ property, onOpen }: { property: PropertyListing; onOpen: () => void }) {
   return <button className={styles.propertyCard} type="button" onClick={onOpen}>
-    <div className={styles.propertyImage} role="img" aria-label={`Фото: ${property.title}`} style={{ backgroundImage: `linear-gradient(180deg, transparent 55%, rgba(20, 20, 18, .16)), url("${property.imageUrl}")` }}><span className={`${styles.status} ${styles[`status_${property.status}`]}`}>{property.status}</span>{isDemo ? <span className={styles.demoImagePill}>Демо</span> : property.sourceProvider === "VIA" ? <span className={styles.code}>Via → CRM</span> : <span className={styles.code}>{property.code}</span>}</div>
+    <div className={styles.propertyImage} role="img" aria-label={`Фото: ${property.title}`} style={{ backgroundImage: `linear-gradient(180deg, transparent 55%, rgba(20, 20, 18, .16)), url("${property.imageUrl}")` }}><span className={`${styles.status} ${property.archivedAt ? styles.statusArchived : styles[`status_${property.status}`]}`}>{property.archivedAt ? "В архиве" : property.status}</span>{property.sourceProvider === "VIA" ? <span className={styles.code}>Via → CRM</span> : <span className={styles.code}>{property.code}</span>}</div>
     <div className={styles.cardBody}><div className={styles.cardTitle}><h3>{property.title}</h3><span>›</span></div><p>{property.address}</p><div className={styles.tags}><span>{property.category}</span><span>{property.market}</span>{property.project && <span>{property.project}</span>}</div><div className={styles.cardFacts}><strong>{formatPrice(property)}</strong><span>{[property.rooms && `${property.rooms} комн.`, property.area !== null && `${property.area} м²`, property.floor && `${property.floor}/${property.totalFloors} эт.`].filter(Boolean).join(" · ")}</span></div></div>
   </button>;
 }
@@ -354,17 +336,13 @@ function ViaPropertyTable({ properties, importedVia, importingViaId, onImport, o
   return <div className={styles.tableWrap}><table><thead><tr><th>Объект Via</th><th>Тип</th><th>Район</th><th>Параметры</th><th>Цена</th><th>Действие</th></tr></thead><tbody>{properties.map((property) => { const importedId = importedVia.get(property.externalId); return <tr className={styles.viaTableRow} key={property.externalId}><td><span className={`${styles.tableThumb} ${!property.previewImageUrl ? styles.viaImagePlaceholder : ""}`} style={property.previewImageUrl ? { backgroundImage: `url("${property.previewImageUrl}")` } : undefined} /><span><strong>{property.title}</strong><small>Via · {property.externalId}</small></span></td><td>{viaCategoryLabel(property.propertyType)}</td><td>{property.district || "—"}</td><td>{[property.rooms && `${property.rooms} комн.`, property.areaM2 != null && `${property.areaM2} м²`].filter(Boolean).join(" · ") || "—"}</td><td><strong>{formatViaPrice(property)}</strong></td><td>{importedId ? <button type="button" onClick={() => onOpenImported(importedId)}>Открыть в CRM</button> : <button type="button" disabled={importingViaId === property.externalId} onClick={() => onImport(property)}>{importingViaId === property.externalId ? "Импортируем…" : "Импортировать"}</button>}</td></tr>; })}</tbody></table></div>;
 }
 
-function ProjectTable({ projects, onOpen }: { projects: PropertyProject[]; onOpen: (id: string) => void }) {
-  return <div className={styles.tableWrap}><table><thead><tr><th>Проект</th><th>Застройщик</th><th>Район</th><th>Срок сдачи</th><th>Доступно</th><th>Цена от</th><th>Статус</th></tr></thead><tbody>{projects.map((project) => <tr key={project.id} onClick={() => onOpen(project.id)}><td><span className={styles.tableThumb} style={{ backgroundImage: `url("${project.imageUrl}")` }} /><span><strong>{project.title}</strong><small>{project.address}</small></span></td><td>{project.developer}</td><td>{project.district}</td><td>{project.completion}</td><td>{project.units.filter((unit) => unit.status === "Доступен").length}</td><td><strong>{formatProjectPrice(project.priceFrom, project.currency)}</strong></td><td>{project.status}</td></tr>)}</tbody></table></div>;
-}
-
 function PropertyTable({ properties, onOpen }: { properties: PropertyListing[]; onOpen: (id: string) => void }) {
-  return <div className={styles.tableWrap}><table><thead><tr><th>Объект</th><th>Тип</th><th>Рынок</th><th>Район</th><th>Параметры</th><th>Цена</th><th>Статус</th></tr></thead><tbody>{properties.map((property) => <tr key={property.id} onClick={() => onOpen(property.id)}><td><span className={styles.tableThumb} style={{ backgroundImage: `url("${property.imageUrl}")` }} /><span><strong>{property.title}</strong><small>{property.sourceProvider === "VIA" ? "Via → CRM" : property.code} · {property.address}</small></span></td><td>{property.category}</td><td>{property.market}</td><td>{property.district}</td><td>{[property.rooms && `${property.rooms} комн.`, property.area !== null && `${property.area} м²`].filter(Boolean).join(" · ")}</td><td><strong>{formatPrice(property)}</strong></td><td><span className={`${styles.status} ${styles[`status_${property.status}`]}`}>{property.status}</span></td></tr>)}</tbody></table></div>;
+  return <div className={styles.tableWrap}><table><thead><tr><th>Объект</th><th>Тип</th><th>Рынок</th><th>Район</th><th>Параметры</th><th>Цена</th><th>Статус</th></tr></thead><tbody>{properties.map((property) => <tr key={property.id} onClick={() => onOpen(property.id)}><td><span className={styles.tableThumb} style={{ backgroundImage: `url("${property.imageUrl}")` }} /><span><strong>{property.title}</strong><small>{property.sourceProvider === "VIA" ? "Via → CRM" : property.code} · {property.address}</small></span></td><td>{property.category}</td><td>{property.market}</td><td>{property.district}</td><td>{[property.rooms && `${property.rooms} комн.`, property.area !== null && `${property.area} м²`].filter(Boolean).join(" · ")}</td><td><strong>{formatPrice(property)}</strong></td><td><span className={`${styles.status} ${property.archivedAt ? styles.statusArchived : styles[`status_${property.status}`]}`}>{property.archivedAt ? "В архиве" : property.status}</span></td></tr>)}</tbody></table></div>;
 }
 
 function LoadingState() { return <div className={styles.emptyState}><span>◌</span><h3>Загружаем объекты</h3></div>; }
 function ErrorState({ onRetry }: { onRetry: () => Promise<void> }) { return <div className={styles.emptyState}><span>!</span><h3>Не удалось загрузить объекты</h3><button type="button" onClick={() => { void onRetry(); }}>Повторить</button></div>; }
-function EmptyState({ onReset, hasFilters }: { onReset: () => void; hasFilters: boolean }) { return <div className={styles.emptyState}><span><UiIcon name="search" /></span><h3>{hasFilters ? "Объекты не найдены" : "Каталог пока пуст"}</h3><p>{hasFilters ? "Измените параметры поиска или сбросьте фильтры." : "Добавьте объект или включите демонстрационный каталог."}</p>{hasFilters && <button type="button" onClick={onReset}>Сбросить фильтры</button>}</div>; }
+function EmptyState({ onReset, hasFilters, archive }: { onReset: () => void; hasFilters: boolean; archive: boolean }) { return <div className={styles.emptyState}><span><UiIcon name="search" /></span><h3>{archive ? "Архив пуст" : hasFilters ? "Объекты не найдены" : "Каталог пока пуст"}</h3><p>{archive ? "Перенесённые в архив объекты появятся здесь." : hasFilters ? "Измените параметры поиска или сбросьте фильтры." : "Добавьте первый объект в каталог."}</p>{hasFilters && !archive && <button type="button" onClick={onReset}>Сбросить фильтры</button>}</div>; }
 
 export function formatPrice(property: Pick<PropertyListing, "price" | "currency" | "operation">) {
   const symbol = property.currency === "USD" ? "$" : property.currency === "EUR" ? "€" : "₴";

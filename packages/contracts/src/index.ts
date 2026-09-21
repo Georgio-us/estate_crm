@@ -608,6 +608,7 @@ export interface PropertyRecord {
   sourceProvider: PropertySourceProvider;
   externalSourceId: string | null;
   photosCount: number;
+  archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

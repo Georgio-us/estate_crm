@@ -34,3 +34,42 @@ test("updating a property is scoped to its organization and persists status", as
   assert.equal(response.json().property.price, 125000);
   await app.close();
 });
+
+test("archiving a property records the lifecycle event", async () => {
+  let archivedAt: Date | null = null;
+  let eventTitle = "";
+  const database = { client: {
+    session: session(),
+    property: {
+      async findFirst() { return { id: baseProperty.id, archivedAt: null }; },
+      async update({ data }: { data: { archivedAt: Date | null } }) { archivedAt = data.archivedAt; return { ...baseProperty, archivedAt }; },
+      async findUniqueOrThrow() { return { ...baseProperty, archivedAt, photos: [] }; },
+    },
+    propertyEvent: { async create({ data }: { data: { title: string } }) { eventTitle = data.title; return data; } },
+    async $transaction(values: unknown[]) { return values; },
+  }, async ping() {}, async disconnect() {} } as unknown as DatabaseConnection;
+  const app = await buildApp(config, database);
+  const response = await app.inject({ method: "POST", url: `/properties/${baseProperty.id}/archive`, headers: { cookie: "estate_crm_session=test-token" } });
+  assert.equal(response.statusCode, 200);
+  assert.ok(archivedAt instanceof Date);
+  assert.equal(eventTitle, "Объект перенесён в архив");
+  assert.ok(response.json().property.archivedAt);
+  await app.close();
+});
+
+test("a property can only be permanently deleted from the archive", async () => {
+  let deleted = false;
+  const database = { client: {
+    session: session(),
+    property: {
+      async findFirst() { return { ...baseProperty, archivedAt: new Date(), photos: [] }; },
+      async delete() { deleted = true; return baseProperty; },
+    },
+  }, async ping() {}, async disconnect() {} } as unknown as DatabaseConnection;
+  const app = await buildApp(config, database);
+  const response = await app.inject({ method: "DELETE", url: `/properties/${baseProperty.id}`, headers: { cookie: "estate_crm_session=test-token" } });
+  assert.equal(response.statusCode, 200);
+  assert.equal(deleted, true);
+  assert.equal(response.json().deleted, true);
+  await app.close();
+});

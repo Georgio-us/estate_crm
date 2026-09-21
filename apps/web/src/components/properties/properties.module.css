@@ -45,12 +45,7 @@
 .resultCount { margin-left: auto; color: var(--text-subtle); font-size: var(--font-size-caption); }
 .resetButton { padding: 7px; border: 0; background: transparent; color: #376bbf; cursor: pointer; font-size: var(--font-size-caption); }
 
-.demoBanner { display: grid; min-height: 54px; align-items: center; gap: 12px; grid-template-columns: auto 1fr auto; margin-top: 20px; padding: 10px 13px; border: 1px solid #dfe6f3; border-radius: var(--radius-md); background: #f7f9fd; }
-.demoBanner > span, .demoPill, .demoImagePill { display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; background: #e7edf9; color: #516987; font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); }
-.demoBanner > span { min-height: 26px; padding: 0 9px; }
-.demoBanner p { margin: 0; color: #687383; font-size: var(--font-size-caption); }
-.demoBanner button, .restoreDemo { border: 0; background: transparent; color: #376bbf; cursor: pointer; font-size: var(--font-size-caption); }
-.restoreDemo { margin-top: 18px; padding: 0; }
+.sourcePill { display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; background: #e7edf9; color: #516987; font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); }
 .viaNotice { margin: 18px 0 0; padding: 11px 13px; border: 1px solid #cfe3d5; border-radius: var(--radius-sm); background: #f2faf4; color: #356d46; font-size: var(--font-size-caption); }
 .catalogResults { display: grid; gap: 42px; }
 .catalogGroup { min-width: 0; padding-top: 32px; }
@@ -67,7 +62,6 @@
 .status, .code { display: inline-flex; align-items: center; border-radius: var(--radius-sm); font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); }
 .propertyImage .status { position: absolute; top: 12px; left: 12px; padding: 5px 8px; }
 .projectStatus { position: absolute; top: 12px; left: 12px; padding: 5px 8px; border-radius: var(--radius-sm); background: rgba(255,255,255,.92); color: #4f5955; backdrop-filter: blur(6px); font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); }
-.demoImagePill { position: absolute; top: 12px; right: 12px; min-height: 25px; padding: 0 8px; background: rgba(239,243,251,.94); backdrop-filter: blur(6px); }
 .viaImagePill { position: absolute; top: 12px; right: 12px; min-height: 25px; padding: 4px 9px; border-radius: 999px; background: rgba(232,240,254,.94); color: #376bbf; backdrop-filter: blur(6px); font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); }
 .viaImagePlaceholder { display: grid; place-items: center; background: linear-gradient(145deg,#f2f3f5,#e4e8ee); color: #8b919a; }
 .viaImagePlaceholder b { font-size: var(--font-size-caption); font-weight: var(--font-weight-medium); }
@@ -75,6 +69,7 @@
 .status_Доступен { background: #e6f0e8; color: #447052; }
 .status_Резерв { background: #f6ecd2; color: #886821; }
 .status_Продан { background: #ececeb; color: #777772; }
+.statusArchived { background: #eee9e4; color: #75695f; }
 .cardBody { padding: 16px 17px 17px; }
 .cardTitle { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .cardTitle h3 { overflow: hidden; margin: 0; font-size: var(--font-size-body); font-weight: var(--font-weight-semibold); line-height: var(--line-height-tight); text-overflow: ellipsis; white-space: nowrap; }
@@ -125,7 +120,11 @@
 .drawerHeader > div:last-child { display: flex; gap: 4px; }
 .drawerHeader button { display: grid; width: 34px; height: 34px; place-items: center; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text-muted); cursor: pointer; font-size: var(--font-size-heading-sm); }
 .drawerHeader button:hover { background: var(--surface-muted); }
-.drawerHeader .demoPill { width: auto; min-width: 52px; height: 28px; padding: 0 10px; }
+.drawerHeader .sourcePill { width: auto; min-width: 52px; height: 28px; padding: 0 10px; }
+.propertyMenuWrap { position: relative; }
+.propertyMenu { position: absolute; z-index: 8; top: 39px; right: 0; display: grid; width: 220px; overflow: hidden; padding: 5px; border: 1px solid var(--border); border-radius: var(--radius-md); background: #fff; box-shadow: 0 12px 30px rgba(25,25,23,.14); }
+.propertyMenu button { display: block; width: 100%; height: auto; min-height: 38px; padding: 8px 10px; border-radius: var(--radius-sm); color: var(--text); font-size: var(--font-size-caption); text-align: left; }
+.propertyMenu .propertyMenuDanger { color: #a04444; }
 .drawerBody { display: grid; min-height: 0; flex: 1; grid-template-columns: minmax(420px, 1.4fr) minmax(330px, .8fr); overflow: hidden; }
 .visualPane, .propertyPane { overflow-y: auto; }
 .visualPane { padding: 28px 30px 50px; border-right: 1px solid var(--border); }
@@ -161,7 +160,6 @@
 .offerButton { width: 100%; height: 39px; margin-top: 25px; border: 0; border-radius: var(--radius-sm); background: var(--primary); color: #fff; cursor: pointer; font-size: var(--font-size-caption); font-weight: var(--font-weight-semibold); }
 .offerButton:disabled { background: #d6d9df; cursor: default; }
 .saveError { margin: 16px 0 0; color: #a24d4d; font-size: var(--font-size-caption); }
-.demoNotice { margin: 22px 0 0; padding: 12px 13px; border-radius: var(--radius-sm); background: #f7f9fd; color: #69768a; font-size: var(--font-size-caption); line-height: var(--line-height-relaxed); }
 .drawerSaveBar { display: flex; min-height: 70px; align-items: center; justify-content: space-between; gap: 18px; padding: 11px 28px; border-top: 1px solid var(--border); background: rgba(255,255,255,.98); box-shadow: 0 -8px 24px rgba(25,25,23,.04); }
 .drawerSaveBar > span { color: var(--text-subtle); font-size: var(--font-size-caption); }
 .drawerSaveBar .unsavedLabel { color: #8a611b; }
@@ -248,9 +246,6 @@
   .filter { max-width: 100%; flex: 1 1 calc(50% - 5px); justify-content: space-between; }
   .filter select { min-width: 0; }
   .resultCount { width: 100%; margin-left: 0; }
-  .demoBanner { align-items: start; gap: 7px 10px; grid-template-columns: auto 1fr; }
-  .demoBanner p { grid-column: 1 / -1; grid-row: 2; }
-  .demoBanner button { justify-self: end; }
   .catalogResults { gap: 24px; }
   .catalogGroup { padding-top: 26px; }
   .gallery { grid-template-columns: 1fr; }

@@ -98,6 +98,7 @@ export interface PropertyListing {
   sourceRow?: number | null;
   sourceProvider?: "CRM" | "EXCEL" | "VIA";
   externalSourceId?: string | null;
+  archivedAt?: string | null;
 }
 
 export interface Contact {

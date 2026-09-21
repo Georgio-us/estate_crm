@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { UiIcon } from "@/components/ui/UiIcon";
 import { localDateKey } from "@/lib/tasks";
 import type { ActivityCategory, ActivityEvent, CrmTask, Deal, DealStatus } from "@/types/crm";
-import { demoProjects } from "@/components/properties/demoCatalog";
 import { DealPropertySelectionPanel } from "./DealPropertySelectionPanel";
 import styles from "./deal-drawer.module.css";
 
@@ -92,7 +91,7 @@ export function DealDrawer({
   const [additionalOpen, setAdditionalOpen] = useState(Boolean(deal.marketPreference || deal.paymentMethod || deal.neighborhood || deal.preferredProject));
   const [selectionOpen, setSelectionOpen] = useState(false);
   const [selectionCount, setSelectionCount] = useState(0);
-  const [projectOptions, setProjectOptions] = useState(() => demoProjects.map((project) => project.title));
+  const [projectOptions, setProjectOptions] = useState<string[]>([]);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const contactMenuRef = useRef<HTMLDivElement>(null);
   const contactMenuButtonRef = useRef<HTMLButtonElement>(null);
@@ -213,7 +212,6 @@ export function DealDrawer({
       const payload = await response.json() as { properties?: Array<{ project: string | null }> };
       if (!active || !response.ok || !payload.properties) return;
       setProjectOptions(Array.from(new Set([
-        ...demoProjects.map((project) => project.title),
         ...payload.properties.map((property) => property.project).filter((value): value is string => Boolean(value)),
       ])).sort((a, b) => a.localeCompare(b, "ru")));
     }).catch(() => undefined);
