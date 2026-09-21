@@ -753,7 +753,14 @@ export function PipelineBoard() {
     const stagesByTitle = new Map(allPipeline.stages.map((stage) => [stage.title.trim().toLocaleLowerCase("ru-RU"), stage]));
     const contactsById = new Map(contactOptions.map((contact) => [contact.id, contact]));
     const contactsByPhone = new Map(contactOptions.filter((contact) => contact.phone).map((contact) => [normalizePhone(contact.phone || ""), contact]));
-    const knownDealKeys = new Set(allDeals.map(({ deal, stageId }) => `${stageId}|${normalizePhone(deal.phone)}|${(deal.title || deal.request || deal.contactName).trim().toLocaleLowerCase("ru-RU")}`));
+    const knownDealKeys = new Set(allDeals.flatMap(({ deal, stageId }) => {
+      const normalizedTitle = (deal.title || deal.request || deal.contactName).trim().toLocaleLowerCase("ru-RU");
+      const normalizedPhone = normalizePhone(deal.phone);
+      return [
+        ...(deal.contactId ? [`contact:${stageId}|${deal.contactId}|${normalizedTitle}`] : []),
+        ...(normalizedPhone ? [`phone:${stageId}|${normalizedPhone}|${normalizedTitle}`] : []),
+      ];
+    }));
 
     for (const [index, row] of rows.entries()) {
       try {
@@ -809,8 +816,12 @@ export function PipelineBoard() {
         if (!normalizedPhone) throw new Error("не указан телефон");
         const contactIdValue = importedValue(row, "ID контакта", "Contact ID");
         const contact = (contactIdValue ? contactsById.get(contactIdValue) : undefined) || contactsByPhone.get(normalizedPhone);
-        const duplicateKey = `${stage.id}|${normalizedPhone}|${title.trim().toLocaleLowerCase("ru-RU")}`;
-        if (knownDealKeys.has(duplicateKey)) {
+        const normalizedTitle = title.trim().toLocaleLowerCase("ru-RU");
+        const duplicateKeys = [
+          ...(contact?.id ? [`contact:${stage.id}|${contact.id}|${normalizedTitle}`] : []),
+          `phone:${stage.id}|${normalizedPhone}|${normalizedTitle}`,
+        ];
+        if (duplicateKeys.some((key) => knownDealKeys.has(key))) {
           summary.skipped += 1;
           continue;
         }
@@ -838,7 +849,10 @@ export function PipelineBoard() {
         const payload = await response.json() as { deal?: ApiDeal; message?: string };
         if (!response.ok || !payload.deal) throw new Error(payload.message || "не удалось создать сделку");
         const createdDeal = mapApiDeal(payload.deal);
-        knownDealKeys.add(duplicateKey);
+        for (const key of duplicateKeys) knownDealKeys.add(key);
+        if (createdDeal.contactId) {
+          knownDealKeys.add(`contact:${stage.id}|${createdDeal.contactId}|${normalizedTitle}`);
+        }
         if (!contact) {
           const createdContact = { id: createdDeal.contactId!, name: createdDeal.contactName, phone: createdDeal.phone, source: createdDeal.source };
           contactsById.set(createdContact.id, createdContact);
