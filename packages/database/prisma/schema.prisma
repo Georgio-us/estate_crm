@@ -116,6 +116,20 @@ enum PropertyStatus {
   SOLD
 }
 
+enum DevelopmentConstructionStatus {
+  PLANNED
+  UNDER_CONSTRUCTION
+  COMPLETED
+  PAUSED
+}
+
+enum DevelopmentSalesStatus {
+  EXPECTED
+  LAUNCH
+  OPEN
+  CLOSED
+}
+
 enum Currency {
   USD
   EUR
@@ -201,6 +215,8 @@ model Organization {
   properties              Property[]
   propertyPhotos          PropertyPhoto[]
   propertyEvents          PropertyEvent[]
+  developmentDevelopers   DevelopmentDeveloper[]
+  developmentProjects     DevelopmentProject[]
   dealPropertySelections  DealPropertySelection[]
   propertySelectionShares PropertySelectionShare[]
   integrationConnections  IntegrationConnection[]
@@ -700,6 +716,58 @@ model Property {
   @@index([organizationId, market, category])
   @@index([organizationId, assigneeId])
   @@map("properties")
+}
+
+model DevelopmentDeveloper {
+  id             String               @id @default(uuid()) @db.Uuid
+  organizationId String               @map("organization_id") @db.Uuid
+  slug           String
+  name           String
+  description    String?
+  website        String?
+  phone          String?
+  email          String?
+  logoUrl        String?              @map("logo_url")
+  sourceUrl      String?              @map("source_url")
+  verifiedAt     DateTime?            @map("verified_at")
+  createdAt      DateTime             @default(now()) @map("created_at")
+  updatedAt      DateTime             @updatedAt @map("updated_at")
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  projects       DevelopmentProject[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId, name])
+  @@map("development_developers")
+}
+
+model DevelopmentProject {
+  id                 String                        @id @default(uuid()) @db.Uuid
+  organizationId     String                        @map("organization_id") @db.Uuid
+  developerId        String                        @map("developer_id") @db.Uuid
+  slug               String
+  name               String
+  address            String?
+  district           String?
+  description        String?
+  constructionStatus DevelopmentConstructionStatus @default(PLANNED) @map("construction_status")
+  salesStatus        DevelopmentSalesStatus        @default(EXPECTED) @map("sales_status")
+  plannedCompletion  String?                       @map("planned_completion")
+  className          String?                       @map("class_name")
+  buildingsCount     Int?                          @map("buildings_count")
+  sectionsCount      Int?                          @map("sections_count")
+  floors             String?
+  imageUrl           String?                       @map("image_url")
+  sourceUrl          String?                       @map("source_url")
+  verifiedAt         DateTime?                     @map("verified_at")
+  createdAt          DateTime                      @default(now()) @map("created_at")
+  updatedAt          DateTime                      @updatedAt @map("updated_at")
+  organization       Organization                  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  developer          DevelopmentDeveloper          @relation(fields: [developerId], references: [id], onDelete: Cascade)
+
+  @@unique([developerId, slug])
+  @@index([organizationId, constructionStatus, salesStatus])
+  @@index([developerId, name])
+  @@map("development_projects")
 }
 
 enum PropertyPhotoStatus {

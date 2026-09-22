@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { UiIcon } from "@/components/ui/UiIcon";
 import { useCurrentUser } from "@/components/auth/AuthContext";
+import { DevelopmentsCatalog } from "@/components/developments/DevelopmentsCatalog";
 import type { PropertyCategory, PropertyListing } from "@/types/crm";
 import { NewPropertyModal, type NewPropertyDraft } from "./NewPropertyModal";
 import { PropertyDrawer } from "./PropertyDrawer";
@@ -103,8 +104,6 @@ export function PropertiesCatalog() {
   const [myOnly, setMyOnly] = useState(false);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<"all" | PropertyCategory>("all");
-  const [developer, setDeveloper] = useState("all");
-  const [construction, setConstruction] = useState("all");
   const [district, setDistrict] = useState("all");
   const [maxPrice, setMaxPrice] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -163,10 +162,6 @@ export function PropertiesCatalog() {
   const selectedProperty = [...properties, ...archivedProperties].find((property) => property.id === selectedId);
   const importedVia = useMemo(() => new Map(properties.filter((property) => property.sourceProvider === "VIA" && property.externalSourceId).map((property) => [property.externalSourceId!, property.id])), [properties]);
 
-  const developers = useMemo(() => Array.from(new Set([
-    ...properties.map((property) => property.developer).filter((value): value is string => Boolean(value)),
-  ])).sort((a, b) => a.localeCompare(b, "ru")), [properties]);
-
   const visibleProperties = useMemo(() => {
     const query = search.trim().toLocaleLowerCase("ru");
     const sourceProperties = section === "archive" ? archivedProperties : properties;
@@ -194,7 +189,7 @@ export function PropertiesCatalog() {
     });
   }, [category, district, maxPrice, search, section, viaEnabled, viaProperties]);
 
-  const hasFilters = Boolean(search || section !== "all" || myOnly || category !== "all" || developer !== "all" || construction !== "all" || district !== "all" || maxPrice);
+  const hasFilters = Boolean(search || section !== "all" || myOnly || category !== "all" || district !== "all" || maxPrice);
   const resultTotal = visibleProperties.length + visibleViaProperties.length;
   const catalogTotal = section === "archive" ? archivedProperties.length : properties.filter((property) => property.status === "Доступен").length + (viaEnabled ? viaProperties.length : 0);
 
@@ -246,29 +241,27 @@ export function PropertiesCatalog() {
   }
 
   function resetFilters() {
-    setSearch(""); setSection("all"); setMyOnly(false); setCategory("all"); setDeveloper("all"); setConstruction("all"); setDistrict("all"); setMaxPrice("");
+    setSearch(""); setSection("all"); setMyOnly(false); setCategory("all"); setDistrict("all"); setMaxPrice("");
   }
 
   function changeSection(next: CatalogSection) {
     setSection(next);
     setMyOnly(false);
     setCategory("all");
-    setDeveloper("all");
-    setConstruction("all");
   }
 
   return (
     <section className={styles.page}>
       <header className={styles.topbar}>
         <h1>Объекты</h1>
-        <label className={styles.search}><UiIcon name="search" /><input value={search} onChange={(event) => setSearch(event.target.value)} type="search" placeholder="Объект, ЖК или застройщик" /></label>
-        <button className={styles.primaryButton} type="button" aria-label="Новый объект" onClick={() => setIsCreating(true)}><span aria-hidden="true">＋</span><span className={styles.actionLabel}>Новый объект</span></button>
+        {section !== "primary" && <><label className={styles.search}><UiIcon name="search" /><input value={search} onChange={(event) => setSearch(event.target.value)} type="search" placeholder="Объект, адрес или код" /></label>
+        <button className={styles.primaryButton} type="button" aria-label="Новый объект" onClick={() => setIsCreating(true)}><span aria-hidden="true">＋</span><span className={styles.actionLabel}>Новый объект</span></button></>}
       </header>
 
       <div className={styles.content}>
         <div className={styles.headingRow}>
           <div><span className={styles.eyebrow}>База недвижимости</span><h2>Каталог объектов</h2><p>Новостройки, доступные юниты и вторичная недвижимость</p></div>
-          <div className={styles.viewSwitch} aria-label="Режим отображения"><button className={view === "gallery" ? styles.viewActive : ""} type="button" onClick={() => setView("gallery")}>Галерея</button><button className={view === "table" ? styles.viewActive : ""} type="button" onClick={() => setView("table")}>Таблица</button></div>
+          {section !== "primary" && <div className={styles.viewSwitch} aria-label="Режим отображения"><button className={view === "gallery" ? styles.viewActive : ""} type="button" onClick={() => setView("gallery")}>Галерея</button><button className={view === "table" ? styles.viewActive : ""} type="button" onClick={() => setView("table")}>Таблица</button></div>}
         </div>
 
         <div className={styles.catalogTabs} role="tablist" aria-label="Раздел каталога">
@@ -279,12 +272,11 @@ export function PropertiesCatalog() {
           {viaEnabled && <button className={section === "via" ? styles.catalogTabActive : ""} type="button" onClick={() => changeSection("via")}>Via</button>}
           <button className={section === "archive" ? styles.catalogTabActive : ""} type="button" onClick={() => changeSection("archive")}>Архив{archivedProperties.length ? ` · ${archivedProperties.length}` : ""}</button>
         </div>
+        {section === "primary" && <DevelopmentsCatalog />}
         {(section === "secondary" || section === "rent") && <div className={styles.propertyCatalogActions}><button type="button" aria-pressed={myOnly} onClick={() => setMyOnly((value) => !value)}>{myOnly ? "Все объекты" : "Мои объекты"}</button><PropertyExcelTransfer onImported={loadProperties} /></div>}
 
-        <div className={styles.filters}>
-          <FilterSelect label="Тип" value={category} onChange={(value) => setCategory(value as "all" | PropertyCategory)} options={section === "primary" ? ["Квартира", "Коммерция"] : ["Квартира", "Дом", "Участок", "Коммерция"]} />
-          {section === "primary" && <FilterSelect label="Застройщик" value={developer} onChange={setDeveloper} options={developers} />}
-          {section === "primary" && <FilterSelect label="Строительство" value={construction} onChange={setConstruction} options={["Строится", "Сдан"]} />}
+        {section !== "primary" && <><div className={styles.filters}>
+          <FilterSelect label="Тип" value={category} onChange={(value) => setCategory(value as "all" | PropertyCategory)} options={["Квартира", "Дом", "Участок", "Коммерция"]} />
           <FilterSelect label="Район" value={district} onChange={setDistrict} options={["Приморский", "Киевский", "Пересыпский", "Хаджибейский"]} />
           <label className={styles.filter}><span>Цена до</span><input inputMode="numeric" value={maxPrice} onChange={(event) => setMaxPrice(event.target.value.replace(/\D/g, ""))} placeholder="Любая" /></label>
           <span className={styles.resultCount}>{resultTotal} из {catalogTotal}</span>
@@ -294,14 +286,14 @@ export function PropertiesCatalog() {
 
         {loadState === "loading" || (section === "via" && viaState === "loading") ? <LoadingState /> : loadState === "error" ? <ErrorState onRetry={loadProperties} /> : section === "via" && viaState === "error" ? <ErrorState onRetry={loadViaProperties} /> : resultTotal ? (
           <div className={styles.catalogResults}>
-            {visibleProperties.length > 0 && <CatalogGroup title={section === "archive" ? "Архив объектов" : section === "primary" ? "Новостройки" : section === "secondary" ? "Вторичная недвижимость" : section === "rent" ? "Аренда" : "Объекты"} description={section === "archive" ? "Объекты исключены из поиска и клиентских подборок" : "Квартиры, дома, участки и коммерческие помещения"} count={visibleProperties.length}>
+            {visibleProperties.length > 0 && <CatalogGroup title={section === "archive" ? "Архив объектов" : section === "secondary" ? "Вторичная недвижимость" : section === "rent" ? "Аренда" : "Объекты"} description={section === "archive" ? "Объекты исключены из поиска и клиентских подборок" : "Квартиры, дома, участки и коммерческие помещения"} count={visibleProperties.length}>
               {view === "gallery" ? <div className={styles.gallery}>{visibleProperties.map((property) => <PropertyCard property={property} onOpen={() => setSelectedId(property.id)} key={property.id} />)}</div> : <PropertyTable properties={visibleProperties} onOpen={setSelectedId} />}
             </CatalogGroup>}
             {visibleViaProperties.length > 0 && <CatalogGroup title="Каталог Via" description="Внешние объекты. Импортируйте выбранный объект, чтобы редактировать его в CRM." count={visibleViaProperties.length}>
               {view === "gallery" ? <div className={styles.gallery}>{visibleViaProperties.map((property) => <ViaPropertyCard property={property} importedId={importedVia.get(property.externalId)} importing={importingViaId === property.externalId} onImport={() => { void importViaProperty(property); }} onOpenImported={(id) => setSelectedId(id)} key={property.externalId} />)}</div> : <ViaPropertyTable properties={visibleViaProperties} importedVia={importedVia} importingViaId={importingViaId} onImport={(property) => { void importViaProperty(property); }} onOpenImported={setSelectedId} />}
             </CatalogGroup>}
           </div>
-        ) : <EmptyState onReset={resetFilters} hasFilters={hasFilters} archive={section === "archive"} />}
+        ) : <EmptyState onReset={resetFilters} hasFilters={hasFilters} archive={section === "archive"} />}</>}
       </div>
 
       {selectedProperty && <PropertyDrawer property={selectedProperty} onSave={saveProperty} onClose={() => setSelectedId(null)} onRefresh={loadProperties} onArchive={() => runPropertyLifecycle(selectedProperty.id, "archive")} onRestore={() => runPropertyLifecycle(selectedProperty.id, "restore")} onDelete={() => deleteProperty(selectedProperty.id)} canDelete={currentUser.organization.role !== "MANAGER"} />}

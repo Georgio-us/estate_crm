@@ -11,6 +11,7 @@ import { registerAuthRoutes } from "./auth/routes.js";
 import { registerPasswordResetRoutes } from "./auth/password-reset.js";
 import { registerContactRoutes } from "./contacts/routes.js";
 import { registerDashboardRoutes } from "./dashboard/routes.js";
+import { registerDevelopmentRoutes } from "./developments/routes.js";
 import { registerIntegrationRoutes } from "./integrations/routes.js";
 import { registerViaIntegrationRoutes } from "./integrations/via/routes.js";
 import { registerPipelineRoutes } from "./pipeline/routes.js";
@@ -84,6 +85,7 @@ export async function buildApp(
   await registerPropertyRoutes(app, database, config);
   await registerPropertyTransferRoutes(app, database);
   await registerPropertyPhotoRoutes(app, database, config);
+  await registerDevelopmentRoutes(app, database);
   await registerPropertySelectionRoutes(app, database);
   await registerPropertySelectionShareRoutes(app, database, config);
   await registerSettingsRoutes(app, database);
