@@ -430,9 +430,7 @@ export function DealDrawer({
                 <label><span>Время</span><input type="time" value={taskDueTime} onChange={(event) => setTaskDueTime(event.target.value)} /></label>
               </div>}
               <div className={styles.composerFooter}>
-                {composerMode === "note" ? (
-                  <button type="button" aria-label="Прикрепить файл">＋</button>
-                ) : <span className={styles.scheduleSummary}>{taskDueDate ? `◷ ${taskDueDate}${taskDueTime ? `, ${taskDueTime}` : ""}` : "◷ Без срока"}</span>}
+                {composerMode === "task" && <span className={styles.scheduleSummary}>{taskDueDate ? `◷ ${taskDueDate}${taskDueTime ? `, ${taskDueTime}` : ""}` : "◷ Без срока"}</span>}
                 <button className={styles.saveNoteButton} type="button" disabled={!composerText.trim() || isComposerSubmitting} onClick={() => { void submitComposer(); }}>{isComposerSubmitting ? "Сохраняем…" : composerMode === "note" ? "Сохранить" : "Создать задачу"}</button>
               </div>
             </div>

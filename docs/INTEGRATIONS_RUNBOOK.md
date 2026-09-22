@@ -42,6 +42,7 @@ Assignment produces an immediate short task notification. The Telegram runtime a
 
 ## Optional channels and deliberately not enabled
 
+- Via подключена технически, но выключена для Delmar штатным флагом `enabled`. При выключении CRM не загружает внешний каталог, не импортирует новые объекты и не принимает события Via. Ранее импортированные объекты остаются в CRM. Повторное включение выполняет только администратор и требует отдельного продуктового решения; рабочие клиентские подборки формируются собственной публичной ссылкой CRM.
 - No direct Meta Developer application, Meta webhook subscription, Instagram permission, or telephony account was created. Instagram Direct and telephony are **optional client decisions**, not prerequisites for the current CRM or Delmar Lead Ads flow.
 - The Google Sheets webhook secret is stored in Apps Script properties; the CRM stores only its hash in PostgreSQL. The Telegram bot token is kept as a sealed Railway variable on the API service, never in the frontend.
 - The Meta Lead Ads connection is `CONNECTED` for Delmar through Google Sheets. Other provider cards remain `CREDENTIALS_REQUIRED`; a simulated event does not connect an external service.
