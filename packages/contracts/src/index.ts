@@ -695,6 +695,36 @@ export interface PropertyImportPreviewResponse {
   counts: { create: number; update: number; skip: number; review: number };
 }
 
+export const propertyMappedImportFields = [
+  "crmId", "title", "address", "district", "category", "market", "operation", "status",
+  "price", "pricePerSquareMeter", "currency", "rooms", "area", "floor", "totalFloors",
+  "landArea", "project", "developer", "description", "buildingLabel", "unitDetail", "subtype",
+  "condition", "documentNotes", "ownerName", "ownerContacts", "assignmentNote",
+] as const;
+
+export type PropertyMappedImportField = typeof propertyMappedImportFields[number];
+
+export interface PropertyMappedImportRow {
+  rowNumber: number;
+  sourceSheet: string;
+  values: Partial<Record<PropertyMappedImportField, string>>;
+}
+
+export interface PropertyMappedImportPreviewRow {
+  rowNumber: number;
+  title: string;
+  category: PropertyCategory;
+  operation: PropertyOperation;
+  action: "CREATE" | "UPDATE" | "SKIP" | "REVIEW";
+  warnings: string[];
+  existingId: string | null;
+}
+
+export interface PropertyMappedImportPreviewResponse {
+  rows: PropertyMappedImportPreviewRow[];
+  counts: { create: number; update: number; skip: number; review: number };
+}
+
 export type DevelopmentConstructionStatus = "PLANNED" | "UNDER_CONSTRUCTION" | "COMPLETED" | "PAUSED";
 export type DevelopmentSalesStatus = "EXPECTED" | "LAUNCH" | "OPEN" | "CLOSED";
 export type DevelopmentAssetKind = "COVER" | "GALLERY" | "CHESSBOARD" | "PRICE_LIST" | "LAYOUT" | "PROMOTION" | "PRESENTATION" | "PERMIT" | "OTHER";

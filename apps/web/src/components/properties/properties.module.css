@@ -305,3 +305,53 @@
 .propertyExcelRows > div { padding: 7px 0; border-top: 1px solid #eee; }
 .propertyExcelRows span, .propertyExcelRows label { display: block; font-size: 13px; }
 .propertyExcelRows label { color: #8b5d16; margin-top: 4px; }
+
+.importWizardLayer { position: fixed; z-index: 120; inset: 0; display: grid; place-items: center; padding: 28px; background: rgb(18 25 38 / 46%); backdrop-filter: blur(3px); }
+.importWizard { display: flex; width: min(980px, 100%); max-height: min(860px, calc(100vh - 56px)); flex-direction: column; overflow: hidden; border: 1px solid #dfe3e9; border-radius: 22px; background: #fff; box-shadow: 0 28px 80px rgb(13 24 42 / 24%); }
+.importWizard > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; padding: 24px 28px 20px; border-bottom: 1px solid #e8ebef; }
+.importWizard > header span { color: #7a818d; font-size: 11px; font-weight: 700; letter-spacing: .12em; }
+.importWizard > header h2 { margin: 4px 0 2px; font-size: 28px; line-height: 1.15; }
+.importWizard > header p { margin: 0; color: var(--text-muted); font-size: 13px; }
+.importWizard > header > button { width: 36px; height: 36px; border: 0; border-radius: 50%; background: #f3f5f7; color: #686f79; font-size: 25px; line-height: 1; cursor: pointer; }
+.importWizardBody { min-height: 0; overflow: auto; padding: 22px 28px 28px; }
+.importWizard > footer { display: flex; justify-content: flex-end; gap: 10px; padding: 16px 28px; border-top: 1px solid #e8ebef; background: #fff; }
+.importWizard > footer button { min-height: 42px; padding: 9px 18px; border: 1px solid #d7dce3; border-radius: 11px; background: #fff; color: var(--text); font: inherit; font-weight: 600; cursor: pointer; }
+.importWizard > footer button:disabled { cursor: default; opacity: .5; }
+.importWizard > footer .importPrimaryAction { border-color: var(--primary); background: var(--primary); color: #fff; }
+.importSheetSelect { display: grid; grid-template-columns: auto minmax(240px, 1fr); align-items: center; gap: 12px; max-width: 520px; margin-bottom: 18px; color: #69717d; font-size: 13px; }
+.importSheetSelect select, .importDefaults select, .importMappingRow select { min-height: 38px; padding: 7px 34px 7px 10px; border: 1px solid #d9dde3; border-radius: 9px; background: #fff; color: var(--text); font: inherit; }
+.importDefaults { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 20px; padding: 14px; border-radius: 13px; background: #f6f8fa; }
+.importDefaults label { display: grid; gap: 6px; color: #69717d; font-size: 12px; }
+.importNotice { margin-bottom: 14px; padding: 10px 12px; border: 1px solid #ead7aa; border-radius: 10px; background: #fff9e9; color: #805d16; font-size: 13px; }
+.importMappingTable { overflow: hidden; border: 1px solid #e1e4e9; border-radius: 14px; }
+.importMappingHead, .importMappingRow { display: grid; grid-template-columns: minmax(160px, .9fr) minmax(180px, 1.2fr) minmax(220px, 1fr); align-items: center; gap: 16px; }
+.importMappingHead { padding: 10px 14px; background: #f5f6f8; color: #7b828d; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+.importMappingRow { min-height: 58px; padding: 9px 14px; border-top: 1px solid #eceef1; }
+.importMappingRow strong { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.importMappingRow > span { overflow: hidden; color: #767d88; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.importSummary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+.importSummary > div { display: grid; gap: 2px; padding: 15px; border: 1px solid #e0e4e9; border-radius: 13px; background: #fafbfc; }
+.importSummary strong { font-size: 24px; }
+.importSummary span { color: #7a818b; font-size: 12px; }
+.importSummaryDanger { border-color: #edc9c6 !important; background: #fff6f5 !important; color: #a13d35; }
+.importPreviewRows { overflow: hidden; border: 1px solid #e1e4e9; border-radius: 14px; }
+.importPreviewRows article { display: grid; gap: 8px; padding: 13px 15px; border-top: 1px solid #eceef1; }
+.importPreviewRows article:first-child { border-top: 0; }
+.importPreviewRows article > div { display: flex; justify-content: space-between; gap: 20px; }
+.importPreviewRows article strong { font-size: 13px; }
+.importPreviewRows article > div > span { flex: none; color: #6d7580; font-size: 12px; }
+.importPreviewRows label { display: flex; align-items: flex-start; gap: 8px; color: #845f19; font-size: 12px; }
+.importPreviewRows input { margin-top: 2px; }
+
+@media (max-width: 760px) {
+  .importWizardLayer { align-items: end; padding: 0; }
+  .importWizard { width: 100%; max-height: 96vh; border-radius: 18px 18px 0 0; }
+  .importWizard > header, .importWizardBody, .importWizard > footer { padding-right: 16px; padding-left: 16px; }
+  .importWizard > header h2 { font-size: 23px; }
+  .importDefaults, .importSummary { grid-template-columns: 1fr 1fr; }
+  .importMappingHead { display: none; }
+  .importMappingRow { grid-template-columns: 1fr; gap: 5px; padding: 12px; }
+  .importMappingRow > span { margin-bottom: 5px; }
+  .importWizard > footer { align-items: stretch; flex-direction: column-reverse; }
+  .importWizard > footer button { width: 100%; }
+}

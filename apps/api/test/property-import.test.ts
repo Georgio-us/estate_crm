@@ -6,7 +6,7 @@ import { buildApp } from "../src/app.js";
 const config = { host: "127.0.0.1", port: 3001, webOrigins: ["http://localhost:3000"], databaseUrl: "postgresql://unused-in-test", sessionDays: 30, secureCookies: false };
 const cookie = { cookie: "estate_crm_session=test-token" };
 
-test("Excel preview, apply, repeated upload and export keep owner and source cells", async () => {
+test("Excel preview, apply, repeated upload and clean export keep owner data", async () => {
   const records: Array<Record<string, any>> = [];
   const client: Record<string, any> = {
     session: { async findUnique() { return { id: "session-1", expiresAt: new Date(Date.now() + 60_000), user: { id: "user-1", name: "Admin", email: "admin@example.com", memberships: [{ role: "ADMIN", organization: { id: "org-1", name: "CRM", slug: "crm" } }] } }; } },
@@ -39,9 +39,11 @@ test("Excel preview, apply, repeated upload and export keep owner and source cel
   assert.equal(repeated.json().created, 0);
   const exported = await app.inject({ method: "GET", url: "/properties/export", headers: cookie });
   assert.equal(exported.statusCode, 200);
-  const sheet = exported.json().sheets.квартиры as string[][];
-  assert.equal(sheet[1]?.[11], "важная безымянная ячейка");
-  assert.equal(sheet[1]?.[12], "f48ab88b-b1cb-4adf-b930-3537767cfb92");
+  const sheet = exported.json().sheets.Объекты as string[][];
+  assert.equal(sheet[0]?.[0], "CRM ID");
+  assert.equal(sheet[1]?.[0], "f48ab88b-b1cb-4adf-b930-3537767cfb92");
+  assert.equal(sheet[1]?.[22], "Собственник");
+  assert.equal(sheet[1]?.[23], "+380000000");
   // Source price can change without erasing a CRM-only title edit.
   records[0]!.title = "Ручное название";
   const changedRows = [{ sheet: "квартиры", rowNumber: 2, cells: cells.map((cell, index) => index === 7 ? "130000" : cell), headers, crmId: records[0]!.id }];
@@ -56,6 +58,39 @@ test("Excel preview, apply, repeated upload and export keep owner and source cel
   const conflictingRows = [{ ...changedRows[0]!, cells: changedRows[0]!.cells.map((cell, index) => index === 8 ? "Изменено в Excel" : cell) }];
   const conflict = await app.inject({ method: "POST", url: "/properties/import/preview", headers: cookie, payload: { rows: conflictingRows } });
   assert.equal(conflict.json().rows[0].action, "REVIEW");
+  await app.close();
+});
+
+test("mapped import accepts arbitrary columns and safely updates by CRM ID", async () => {
+  const records: Array<Record<string, any>> = [];
+  const client: Record<string, any> = {
+    session: { async findUnique() { return { id: "session-1", expiresAt: new Date(Date.now() + 60_000), user: { id: "user-1", name: "Admin", email: "admin@example.com", memberships: [{ role: "ADMIN", organization: { id: "org-1", name: "CRM", slug: "crm" } }] } }; } },
+    property: {
+      async findMany({ where }: { where: Record<string, any> }) {
+        return records.filter((record) => where.OR.some((clause: Record<string, any>) => clause.sourceHash?.in?.includes(record.sourceHash) || clause.id?.in?.includes(record.id)));
+      },
+      async create({ data }: { data: Record<string, any> }) { records.push({ ...data, id: "f48ab88b-b1cb-4adf-b930-3537767cfb92", number: 1 }); },
+      async update({ where, data }: { where: { id: string }; data: Record<string, any> }) { Object.assign(records.find((record) => record.id === where.id)!, data); },
+    },
+  };
+  const app = await buildApp(config, { client, async ping() {}, async disconnect() {} } as unknown as DatabaseConnection);
+  const baseValues = { title: "Квартира у моря", address: "ул. Тестовая, 1", category: "Квартира", market: "Вторичный", operation: "Продажа", status: "Доступен", price: "125 000", currency: "USD", area: "52,5", rooms: "2" };
+  const rows = [{ rowNumber: 2, sourceSheet: "foreign.xlsx · Sheet 1", values: baseValues }];
+  const preview = await app.inject({ method: "POST", url: "/properties/import/mapped/preview", headers: cookie, payload: { rows } });
+  assert.equal(preview.statusCode, 200);
+  assert.equal(preview.json().counts.create, 1);
+  const applied = await app.inject({ method: "POST", url: "/properties/import/mapped/apply", headers: cookie, payload: { rows } });
+  assert.equal(applied.statusCode, 200);
+  assert.equal(records[0]?.category, "APARTMENT");
+  assert.equal(records[0]?.price, 125000);
+  assert.equal(records[0]?.area, 52.5);
+  const repeated = await app.inject({ method: "POST", url: "/properties/import/mapped/preview", headers: cookie, payload: { rows } });
+  assert.equal(repeated.json().counts.skip, 1);
+  const changedRows = [{ ...rows[0], values: { ...baseValues, crmId: records[0]!.id, price: "130000" } }];
+  const changed = await app.inject({ method: "POST", url: "/properties/import/mapped/apply", headers: cookie, payload: { rows: changedRows } });
+  assert.equal(changed.statusCode, 200);
+  assert.equal(changed.json().updated, 1);
+  assert.equal(records[0]?.price, 130000);
   await app.close();
 });
 
