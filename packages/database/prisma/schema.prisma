@@ -130,6 +130,41 @@ enum DevelopmentSalesStatus {
   CLOSED
 }
 
+enum DevelopmentAssetKind {
+  COVER
+  GALLERY
+  CHESSBOARD
+  PRICE_LIST
+  LAYOUT
+  PROMOTION
+  PRESENTATION
+  PERMIT
+  OTHER
+}
+
+enum DevelopmentAssetStatus {
+  PENDING
+  READY
+  PROCESSING
+  REVIEW_REQUIRED
+  FAILED
+}
+
+enum DevelopmentImportStatus {
+  DRAFT
+  PROCESSING
+  REVIEW_REQUIRED
+  PUBLISHED
+  FAILED
+}
+
+enum DevelopmentUnitStatus {
+  AVAILABLE
+  RESERVED
+  SOLD
+  UNKNOWN
+}
+
 enum Currency {
   USD
   EUR
@@ -217,6 +252,12 @@ model Organization {
   propertyEvents          PropertyEvent[]
   developmentDevelopers   DevelopmentDeveloper[]
   developmentProjects     DevelopmentProject[]
+  developmentAssets       DevelopmentAsset[]
+  developmentBuildings    DevelopmentBuilding[]
+  developmentSections     DevelopmentSection[]
+  developmentUnits        DevelopmentUnit[]
+  developmentImportBatches DevelopmentImportBatch[]
+  developmentImportRows   DevelopmentImportRow[]
   dealPropertySelections  DealPropertySelection[]
   propertySelectionShares PropertySelectionShare[]
   integrationConnections  IntegrationConnection[]
@@ -267,6 +308,7 @@ model User {
   assignedTasks                  Task[]                       @relation("TaskAssignee")
   assignedProperties             Property[]                   @relation("PropertyAssignee")
   propertyPhotoUploads           PropertyPhoto[]              @relation("PropertyPhotoUploader")
+  developmentAssetUploads        DevelopmentAsset[]            @relation("DevelopmentAssetUploader")
   propertyEvents                 PropertyEvent[]              @relation("PropertyEventActor")
   telegramRecipients             TelegramRecipient[]
   telegramConnectTokens          TelegramConnectToken[]
@@ -763,11 +805,146 @@ model DevelopmentProject {
   updatedAt          DateTime                      @updatedAt @map("updated_at")
   organization       Organization                  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   developer          DevelopmentDeveloper          @relation(fields: [developerId], references: [id], onDelete: Cascade)
+  assets             DevelopmentAsset[]
+  buildings          DevelopmentBuilding[]
+  units              DevelopmentUnit[]
+  importBatches      DevelopmentImportBatch[]
 
   @@unique([developerId, slug])
   @@index([organizationId, constructionStatus, salesStatus])
   @@index([developerId, name])
   @@map("development_projects")
+}
+
+model DevelopmentAsset {
+  id             String                 @id @default(uuid()) @db.Uuid
+  organizationId String                 @map("organization_id") @db.Uuid
+  projectId      String                 @map("project_id") @db.Uuid
+  uploadedById   String?                @map("uploaded_by_id") @db.Uuid
+  storageKey     String                 @unique @map("storage_key")
+  filename       String
+  mimeType       String                 @map("mime_type")
+  sizeBytes      Int                    @map("size_bytes")
+  kind           DevelopmentAssetKind
+  status         DevelopmentAssetStatus @default(PENDING)
+  version        Int                    @default(1)
+  isCover        Boolean                @default(false) @map("is_cover")
+  sortOrder      Int                    @default(0) @map("sort_order")
+  errorMessage   String?                @map("error_message")
+  extraction     Json?
+  createdAt      DateTime               @default(now()) @map("created_at")
+  readyAt        DateTime?              @map("ready_at")
+  updatedAt      DateTime               @updatedAt @map("updated_at")
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project        DevelopmentProject     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploadedBy     User?                  @relation("DevelopmentAssetUploader", fields: [uploadedById], references: [id], onDelete: SetNull)
+  importBatch    DevelopmentImportBatch?
+
+  @@index([organizationId, projectId, kind, status])
+  @@map("development_assets")
+}
+
+model DevelopmentBuilding {
+  id             String               @id @default(uuid()) @db.Uuid
+  organizationId String               @map("organization_id") @db.Uuid
+  projectId      String               @map("project_id") @db.Uuid
+  name           String
+  position       Int                  @default(0)
+  createdAt      DateTime             @default(now()) @map("created_at")
+  updatedAt      DateTime             @updatedAt @map("updated_at")
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project        DevelopmentProject   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sections       DevelopmentSection[]
+  units          DevelopmentUnit[]
+
+  @@unique([projectId, name])
+  @@index([organizationId, projectId, position])
+  @@map("development_buildings")
+}
+
+model DevelopmentSection {
+  id             String              @id @default(uuid()) @db.Uuid
+  organizationId String              @map("organization_id") @db.Uuid
+  buildingId     String              @map("building_id") @db.Uuid
+  name           String
+  position       Int                 @default(0)
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  building       DevelopmentBuilding @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+  units          DevelopmentUnit[]
+
+  @@unique([buildingId, name])
+  @@index([organizationId, buildingId, position])
+  @@map("development_sections")
+}
+
+model DevelopmentUnit {
+  id             String                @id @default(uuid()) @db.Uuid
+  organizationId String                @map("organization_id") @db.Uuid
+  projectId      String                @map("project_id") @db.Uuid
+  buildingId     String?               @map("building_id") @db.Uuid
+  sectionId      String?               @map("section_id") @db.Uuid
+  unitNumber     String                @map("unit_number")
+  floor          Int?
+  rooms          Int?
+  area           Float?
+  price          Int?
+  currency       Currency              @default(USD)
+  status         DevelopmentUnitStatus @default(UNKNOWN)
+  layoutAssetId  String?               @map("layout_asset_id") @db.Uuid
+  sourceData     Json?                 @map("source_data")
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project        DevelopmentProject    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  building       DevelopmentBuilding?  @relation(fields: [buildingId], references: [id], onDelete: SetNull)
+  section        DevelopmentSection?   @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, buildingId, sectionId, unitNumber])
+  @@index([organizationId, projectId, status, floor])
+  @@map("development_units")
+}
+
+model DevelopmentImportBatch {
+  id             String                  @id @default(uuid()) @db.Uuid
+  organizationId String                  @map("organization_id") @db.Uuid
+  projectId      String                  @map("project_id") @db.Uuid
+  assetId        String                  @unique @map("asset_id") @db.Uuid
+  status         DevelopmentImportStatus @default(DRAFT)
+  parserKey      String?                 @map("parser_key")
+  summary        Json?
+  errorMessage   String?                 @map("error_message")
+  createdAt      DateTime                @default(now()) @map("created_at")
+  updatedAt      DateTime                @updatedAt @map("updated_at")
+  publishedAt    DateTime?               @map("published_at")
+  organization   Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project        DevelopmentProject      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  asset          DevelopmentAsset        @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  rows           DevelopmentImportRow[]
+
+  @@index([organizationId, projectId, status])
+  @@map("development_import_batches")
+}
+
+model DevelopmentImportRow {
+  id             String                 @id @default(uuid()) @db.Uuid
+  organizationId String                 @map("organization_id") @db.Uuid
+  batchId        String                 @map("batch_id") @db.Uuid
+  rowNumber      Int                    @map("row_number")
+  rawData        Json                   @map("raw_data")
+  mappedData     Json?                  @map("mapped_data")
+  confidence     Float?
+  issues         Json?
+  approved       Boolean                @default(false)
+  createdAt      DateTime               @default(now()) @map("created_at")
+  updatedAt      DateTime               @updatedAt @map("updated_at")
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  batch          DevelopmentImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@unique([batchId, rowNumber])
+  @@index([organizationId, batchId, approved])
+  @@map("development_import_rows")
 }
 
 enum PropertyPhotoStatus {

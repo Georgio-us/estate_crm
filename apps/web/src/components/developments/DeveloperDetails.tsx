@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { CreateDevelopmentProjectRequest, DevelopmentDeveloperRecord, DevelopmentProjectRecord } from "@/types/developments";
 
 import { Field } from "./DevelopmentsCatalog";
+import { ProjectAssets } from "./ProjectAssets";
 import styles from "./developments.module.css";
 
 type ProjectTab = "all" | "construction" | "completed" | "launch";
@@ -54,15 +55,18 @@ export function DeveloperDetails({ developerId }: { developerId: string }) {
 export function ProjectDetails({ developerId, projectId }: { developerId: string; projectId: string }) {
   const [developer, setDeveloper] = useState<DevelopmentDeveloperRecord | null>(null);
   const [editing, setEditing] = useState(false);
+  const [coverUrl, setCoverUrl] = useState<string | null>(null);
   async function reload() { const response = await fetch(`/api/crm/development-developers/${developerId}`, { cache: "no-store" }); const payload = await response.json() as { developer?: DevelopmentDeveloperRecord }; setDeveloper(payload.developer || null); }
   useEffect(() => { void fetch(`/api/crm/development-developers/${developerId}`, { cache: "no-store" }).then((response) => response.json()).then((payload: { developer?: DevelopmentDeveloperRecord }) => setDeveloper(payload.developer || null)); }, [developerId]);
   const item = developer?.projects?.find((project) => project.id === projectId);
   if (!developer) return <PageState title="Загружаем проект" />;
   if (!item) return <PageState title="Проект не найден" action="Вернуться к застройщику" href={`/objects/developers/${developerId}`} />;
+  const heroImage = coverUrl || item.imageUrl;
   return <section className={styles.detailPage}><header className={styles.detailTopbar}><Link href={`/objects/developers/${developer.id}`}>← {developer.name}</Link><span>Новостройки / {developer.name} / {item.name}</span><button className={styles.topbarAction} type="button" onClick={() => setEditing(true)}>Редактировать</button></header><main className={styles.projectDetail}>
-    <section className={styles.projectDetailHero} style={item.imageUrl ? { backgroundImage: `linear-gradient(90deg, rgba(18,18,17,.72), rgba(18,18,17,.18)), url("${item.imageUrl}")` } : undefined}><div><span>{constructionLabels[item.constructionStatus]}</span><h1>{item.name}</h1><p>{item.address || item.district || "Адрес уточняется"}</p></div></section>
+    <section className={styles.projectDetailHero} style={heroImage ? { backgroundImage: `linear-gradient(90deg, rgba(18,18,17,.72), rgba(18,18,17,.18)), url("${heroImage}")` } : undefined}><div><span>{constructionLabels[item.constructionStatus]}</span><h1>{item.name}</h1><p>{item.address || item.district || "Адрес уточняется"}</p></div></section>
     <div className={styles.projectDetailGrid}><section><span className={styles.sectionEyebrow}>О проекте</span><h2>Основная информация</h2><p>{item.description || "Описание проекта можно дополнить после проверки информации у застройщика."}</p>{item.sourceUrl && <a href={item.sourceUrl} target="_blank" rel="noreferrer">Открыть официальный источник ↗</a>}</section><dl><Info label="Строительство" value={constructionLabels[item.constructionStatus]} /><Info label="Продажи" value={salesLabels[item.salesStatus]} /><Info label="Срок сдачи" value={item.plannedCompletion || "Уточняется"} /><Info label="Класс" value={item.className || "Уточняется"} /><Info label="Корпуса" value={item.buildingsCount?.toString() || "Уточняется"} /><Info label="Секции" value={item.sectionsCount?.toString() || "Уточняется"} /><Info label="Этажность" value={item.floors || "Уточняется"} /></dl></div>
-    <section className={styles.futureLayer}><div><span className={styles.sectionEyebrow}>Следующий слой</span><h2>Корпуса, шахматка и файлы</h2><p>Здесь появятся доступные квартиры, цены, планировки, акции и документы проекта. Файлы будут храниться в закрытом Cloudflare R2.</p></div><span>Подготовлено для следующего этапа</span></section>
+    <ProjectAssets projectId={item.id} onCoverChange={setCoverUrl} />
+    <section className={styles.futureLayer}><div><span className={styles.sectionEyebrow}>Структура продаж</span><h2>Корпуса, секции и помещения</h2><p>База уже подготовлена для квартир, цен, планировок и статусов. После подключения обработчика строки из шахматки сначала попадут в черновик и только после проверки будут опубликованы.</p></div><span>Черновик → проверка → публикация</span></section>
   </main>{editing && <ProjectModal developerId={developer.id} initial={item} onClose={() => setEditing(false)} onCreated={() => { setEditing(false); void reload(); }} />}</section>;
 }
 
