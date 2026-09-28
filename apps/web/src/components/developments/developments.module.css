@@ -8,10 +8,11 @@
 .catalogSearch span { color: var(--text-subtle); font-size: var(--font-size-caption); }
 .catalogSearch input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; font: inherit; }
 .developerGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; padding-top: 25px; }
-.developerCard { display: grid; min-height: 218px; grid-template-columns: 122px 1fr; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-lg); color: inherit; text-decoration: none; transition: border-color 140ms, transform 140ms, box-shadow 140ms; }
+.developerCard { position: relative; min-height: 218px; overflow: visible; border: 1px solid var(--border); border-radius: var(--radius-lg); color: inherit; transition: border-color 140ms, transform 140ms, box-shadow 140ms; }
 .developerCard:hover { transform: translateY(-2px); border-color: #c9c9c4; box-shadow: 0 10px 28px rgba(25,25,23,.08); }
+.developerCardLink { display: grid; min-height: 216px; grid-template-columns: 122px 1fr; overflow: hidden; border-radius: inherit; color: inherit; text-decoration: none; }
 .developerMark, .heroMark { display: grid; place-items: center; background: linear-gradient(145deg, #e7e0d2, #d8e3e4); color: #4d514f; font-size: 28px; font-weight: 750; letter-spacing: -.05em; }
-.developerMark span { width: 100%; height: 100%; background-position: center; background-repeat: no-repeat; background-size: contain; }
+.developerMark span, .heroMark span { width: 100%; height: 100%; background-position: center; background-repeat: no-repeat; background-size: cover; }
 .developerBody { display: grid; align-content: space-between; gap: 15px; padding: 22px; }
 .developerBody > div:first-child, .projectBody > div:first-child { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .developerBody h4 { margin: 0; font-size: 20px; }
@@ -24,6 +25,24 @@
 .catalogState, .pageState { display: grid; min-height: 320px; place-items: center; align-content: center; gap: 8px; color: var(--text-muted); }
 .catalogState h4, .pageState h2 { margin: 0; color: var(--text); }
 .catalogState button, .pageState a { border: 0; background: transparent; color: var(--primary); cursor: pointer; text-decoration: none; }
+.developmentTabs { display: flex; gap: 22px; margin-top: 26px; border-bottom: 1px solid var(--border); }
+.developmentTabs button { height: 42px; padding: 0; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--text-muted); cursor: pointer; }
+.developmentTabs .activeTab { border-bottom-color: var(--text); color: var(--text); font-weight: 650; }
+.catalogNotice { margin: 14px 0 0; padding: 10px 12px; border-radius: var(--radius-sm); background: #f0f6ef; color: #46704c; font-size: var(--font-size-caption); }
+.cardMenu { position: absolute; z-index: 4; top: 12px; right: 12px; }
+.cardMenu > button { width: 34px; height: 30px; border: 1px solid rgba(90,90,85,.18); border-radius: var(--radius-sm); background: rgba(255,255,255,.93); cursor: pointer; }
+.cardMenu > div { position: absolute; top: 35px; right: 0; display: grid; min-width: 175px; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-sm); background: #fff; box-shadow: 0 10px 30px rgba(25,25,23,.14); }
+.cardMenu > div button, .cardMenu > div a { padding: 10px 12px; border: 0; background: #fff; color: var(--text); cursor: pointer; font: inherit; font-size: 12px; text-align: left; text-decoration: none; }
+.cardMenu > div button:hover, .cardMenu > div a:hover { background: var(--surface-muted); }
+.archiveStack { display: grid; gap: 26px; padding-top: 24px; }
+.archiveGroup h4 { margin: 0 0 10px; }
+.archiveGroup > div { overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-lg); }
+.archiveRow { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 16px 18px; border-bottom: 1px solid var(--border); }
+.archiveRow:last-child { border-bottom: 0; }
+.archiveRow > div { display: flex; align-items: center; gap: 10px; }
+.archiveRow > div:first-child { display: grid; gap: 4px; }
+.archiveRow span { color: var(--text-muted); font-size: 12px; }
+.archiveRow button, .coverPicker button { min-height: 34px; padding: 0 11px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: #fff; cursor: pointer; }
 
 .detailPage { min-height: 100vh; background: #fff; }
 .detailTopbar { position: sticky; z-index: 10; top: 0; display: flex; height: var(--topbar-height); align-items: center; gap: 22px; padding: 0 28px; border-bottom: 1px solid var(--border); background: rgba(255,255,255,.96); }
@@ -49,8 +68,9 @@
 .statusTabs .activeTab { border-bottom-color: var(--text); color: var(--text); font-weight: 650; }
 .projectToolbar > input { width: 220px; height: 34px; margin-bottom: 8px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); outline: 0; }
 .projectGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 15px; padding-top: 24px; }
-.projectCard { overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-lg); color: inherit; text-decoration: none; transition: transform 140ms, box-shadow 140ms; }
+.projectCard { position: relative; overflow: visible; border: 1px solid var(--border); border-radius: var(--radius-lg); color: inherit; transition: transform 140ms, box-shadow 140ms; }
 .projectCard:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(25,25,23,.08); }
+.projectCardLink { display: block; overflow: hidden; border-radius: inherit; color: inherit; text-decoration: none; }
 .projectVisual { position: relative; display: grid; height: 175px; place-items: center; background: linear-gradient(145deg, #d9e2df, #e7dfd0); background-position: center; background-size: cover; }
 .projectVisual span { position: absolute; top: 13px; left: 13px; padding: 5px 8px; border-radius: 999px; background: rgba(255,255,255,.9); color: #535653; font-size: 11px; }
 .projectVisual b { color: rgba(50,55,52,.3); font-size: 72px; }
@@ -130,6 +150,13 @@
 .field textarea { min-height: 90px; padding: 9px; resize: vertical; }
 .formColumns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .formError { margin: 0; color: #a24d4d; font-size: var(--font-size-caption); }
+.formHint { margin: -2px 0 0; color: var(--text-subtle); font-size: 12px; }
+.coverPicker { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 14px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: #fbfbfa; }
+.coverPicker > span { min-height: 88px; border-radius: var(--radius-sm); background-position: center; background-size: cover; }
+.coverPicker > div { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.coverPicker strong, .coverPicker small { width: 100%; }
+.coverPicker small { color: var(--text-subtle); }
+.coverPicker .dangerAction, .archiveRow .dangerAction { color: #a24d4d; }
 .modal footer { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 24px; border-top: 1px solid var(--border); background: #fbfbfa; }
 .modal footer button { height: 36px; padding: 0 14px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: #fff; cursor: pointer; }
 .modal footer .primary { border-color: var(--primary); background: var(--primary); color: #fff; }
@@ -139,7 +166,7 @@
 @media (max-width: 700px) {
   .catalogHeader { align-items: stretch; flex-direction: column; }
   .catalogHeader button { width: 100%; }
-  .developerCard { grid-template-columns: 82px 1fr; }
+  .developerCardLink { grid-template-columns: 82px 1fr; }
   .developerBody { padding: 16px; }
   .developerBody dl { gap: 12px; }
   .detailTopbar { padding: 0 16px 0 66px; }
@@ -162,6 +189,8 @@
   .documentList article { grid-template-columns: 44px minmax(0, 1fr); }
   .assetStatus, .fileActions { grid-column: 2; justify-self: start; }
   .formColumns { grid-template-columns: 1fr; }
+  .archiveRow { align-items: flex-start; flex-direction: column; }
+  .coverPicker { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 440px) { .assetGallery { grid-template-columns: 1fr; } }

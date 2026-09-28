@@ -146,6 +146,38 @@ test("lead can see organization data but cannot change administrator settings", 
   await app.close();
 });
 
+test("manager can read new developments but cannot change catalog or files", async () => {
+  let writes = 0;
+  const database = {
+    client: {
+      session: { async findUnique() { return session("MANAGER"); } },
+      developmentDeveloper: {
+        async count() { return 1; },
+        async findMany() { return []; },
+        async create() { writes += 1; throw new Error("must not write"); },
+      },
+      developmentProject: {
+        async findFirst() { writes += 1; throw new Error("must not query mutation target"); },
+      },
+    },
+    async ping() {},
+    async disconnect() {},
+  } as unknown as DatabaseConnection;
+  const app = await buildApp(config, database);
+
+  const list = await app.inject({ method: "GET", url: "/development-developers", headers: { cookie: "estate_crm_session=test-token" } });
+  const create = await app.inject({ method: "POST", url: "/development-developers", headers: { cookie: "estate_crm_session=test-token" }, payload: { name: "Недоступный застройщик" } });
+  const archive = await app.inject({ method: "POST", url: "/development-projects/14a292bd-d84e-447c-b71a-aa185b809b88/archive", headers: { cookie: "estate_crm_session=test-token" } });
+  const upload = await app.inject({ method: "POST", url: "/development-projects/14a292bd-d84e-447c-b71a-aa185b809b88/assets/prepare", headers: { cookie: "estate_crm_session=test-token" }, payload: { filename: "cover.jpg", mimeType: "image/jpeg", sizeBytes: 10, kind: "GALLERY" } });
+
+  assert.equal(list.statusCode, 200);
+  assert.equal(create.statusCode, 403);
+  assert.equal(archive.statusCode, 403);
+  assert.equal(upload.statusCode, 403);
+  assert.equal(writes, 0);
+  await app.close();
+});
+
 test("assignee choices expose the active organization team to leaders and managers", async () => {
   const captured: Array<Record<string, unknown>> = [];
   let role: "LEAD" | "MANAGER" = "LEAD";

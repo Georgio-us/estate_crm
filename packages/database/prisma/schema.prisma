@@ -770,8 +770,13 @@ model DevelopmentDeveloper {
   phone          String?
   email          String?
   logoUrl        String?              @map("logo_url")
+  coverFilename  String?              @map("cover_filename")
+  coverMimeType  String?              @map("cover_mime_type")
+  coverSizeBytes Int?                 @map("cover_size_bytes")
+  coverReadyAt   DateTime?            @map("cover_ready_at")
   sourceUrl      String?              @map("source_url")
   verifiedAt     DateTime?            @map("verified_at")
+  archivedAt     DateTime?            @map("archived_at")
   createdAt      DateTime             @default(now()) @map("created_at")
   updatedAt      DateTime             @updatedAt @map("updated_at")
   organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -779,6 +784,7 @@ model DevelopmentDeveloper {
 
   @@unique([organizationId, slug])
   @@index([organizationId, name])
+  @@index([organizationId, archivedAt, name])
   @@map("development_developers")
 }
 
@@ -801,6 +807,7 @@ model DevelopmentProject {
   imageUrl           String?                       @map("image_url")
   sourceUrl          String?                       @map("source_url")
   verifiedAt         DateTime?                     @map("verified_at")
+  archivedAt         DateTime?                     @map("archived_at")
   createdAt          DateTime                      @default(now()) @map("created_at")
   updatedAt          DateTime                      @updatedAt @map("updated_at")
   organization       Organization                  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -812,6 +819,7 @@ model DevelopmentProject {
 
   @@unique([developerId, slug])
   @@index([organizationId, constructionStatus, salesStatus])
+  @@index([organizationId, archivedAt, updatedAt])
   @@index([developerId, name])
   @@map("development_projects")
 }

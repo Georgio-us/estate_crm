@@ -264,14 +264,14 @@ export function PropertiesCatalog() {
           {section !== "primary" && <div className={styles.viewSwitch} aria-label="Режим отображения"><button className={view === "gallery" ? styles.viewActive : ""} type="button" onClick={() => setView("gallery")}>Галерея</button><button className={view === "table" ? styles.viewActive : ""} type="button" onClick={() => setView("table")}>Таблица</button></div>}
         </div>
 
-        <div className={styles.catalogTabs} role="tablist" aria-label="Раздел каталога">
+        <div className={styles.catalogModes} aria-label="Тип каталога"><button className={section !== "primary" ? styles.catalogModeActive : ""} type="button" onClick={() => changeSection("all")}>База объектов</button><button className={section === "primary" ? styles.catalogModeActive : ""} type="button" onClick={() => changeSection("primary")}>Новостройки</button></div>
+        {section !== "primary" && <div className={styles.catalogTabs} role="tablist" aria-label="Раздел базы объектов">
           <button className={section === "all" ? styles.catalogTabActive : ""} type="button" onClick={() => changeSection("all")}>Все</button>
-          <button className={section === "primary" ? styles.catalogTabActive : ""} type="button" onClick={() => changeSection("primary")}>Новостройки</button>
           <button className={section === "secondary" ? styles.catalogTabActive : ""} type="button" onClick={() => changeSection("secondary")}>Вторичная недвижимость</button>
           <button className={section === "rent" ? styles.catalogTabActive : ""} type="button" onClick={() => changeSection("rent")}>Аренда</button>
           {viaEnabled && <button className={section === "via" ? styles.catalogTabActive : ""} type="button" onClick={() => changeSection("via")}>Via</button>}
           <button className={section === "archive" ? styles.catalogTabActive : ""} type="button" onClick={() => changeSection("archive")}>Архив{archivedProperties.length ? ` · ${archivedProperties.length}` : ""}</button>
-        </div>
+        </div>}
         {section === "primary" && <DevelopmentsCatalog />}
         {(section === "secondary" || section === "rent") && <div className={styles.propertyCatalogActions}><button type="button" aria-pressed={myOnly} onClick={() => setMyOnly((value) => !value)}>{myOnly ? "Все объекты" : "Мои объекты"}</button><PropertyExcelTransfer onImported={loadProperties} /></div>}
 

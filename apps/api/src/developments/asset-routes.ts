@@ -50,6 +50,7 @@ const assetInclude = { importBatch: { include: { _count: { select: { rows: true 
 
 export async function registerDevelopmentAssetRoutes(app: FastifyInstance, database: DatabaseConnection, config: ApiConfig) {
   const r2 = propertyStorage(config);
+  const canManage = (role: "ADMIN" | "LEAD" | "MANAGER") => role !== "MANAGER";
   const paramsSchema = { type: "object", required: ["projectId"], properties: { projectId: { type: "string", format: "uuid" }, assetId: { type: "string", format: "uuid" } } } as const;
   async function projectForUser(projectId: string, organizationId: string) {
     return database.client.developmentProject.findFirst({ where: { id: projectId, organizationId }, select: { id: true, developerId: true } });
@@ -72,6 +73,7 @@ export async function registerDevelopmentAssetRoutes(app: FastifyInstance, datab
     } } },
   }, async (request, reply) => {
     const user = await requireUser(request, reply, database); if (!user) return reply;
+    if (!canManage(user.organization.role)) return reply.status(403).send({ error: "forbidden", message: "Управлять файлами новостроек может руководитель или администратор." });
     const project = await projectForUser(request.params.projectId, user.organization.id);
     if (!project) return reply.status(404).send({ error: "project_not_found", message: "Проект не найден." });
     if (!r2) return reply.status(503).send({ error: "storage_not_configured", message: "Cloudflare R2 не подключён на сервере." });
@@ -91,6 +93,7 @@ export async function registerDevelopmentAssetRoutes(app: FastifyInstance, datab
 
   app.post<{ Params: { projectId: string; assetId: string } }>("/development-projects/:projectId/assets/:assetId/finalize", { schema: { params: paramsSchema } }, async (request, reply) => {
     const user = await requireUser(request, reply, database); if (!user) return reply;
+    if (!canManage(user.organization.role)) return reply.status(403).send({ error: "forbidden" });
     const asset = await database.client.developmentAsset.findFirst({ where: { id: request.params.assetId, projectId: request.params.projectId, organizationId: user.organization.id } });
     if (!asset) return reply.status(404).send({ error: "asset_not_found" });
     if (!r2) return reply.status(503).send({ error: "storage_not_configured" });
@@ -124,6 +127,7 @@ export async function registerDevelopmentAssetRoutes(app: FastifyInstance, datab
 
   app.patch<{ Params: { projectId: string; assetId: string }; Body: { isCover?: boolean; reviewed?: boolean } }>("/development-projects/:projectId/assets/:assetId", { schema: { params: paramsSchema, body: { type: "object", additionalProperties: false, minProperties: 1, properties: { isCover: { type: "boolean" }, reviewed: { type: "boolean" } } } } }, async (request, reply) => {
     const user = await requireUser(request, reply, database); if (!user) return reply;
+    if (!canManage(user.organization.role)) return reply.status(403).send({ error: "forbidden" });
     const asset = await database.client.developmentAsset.findFirst({ where: { id: request.params.assetId, projectId: request.params.projectId, organizationId: user.organization.id }, include: assetInclude });
     if (!asset) return reply.status(404).send({ error: "asset_not_found" });
     if (request.body.isCover && !asset.mimeType.startsWith("image/")) return reply.status(400).send({ error: "cover_must_be_image", message: "Обложкой может быть только изображение." });
@@ -140,6 +144,7 @@ export async function registerDevelopmentAssetRoutes(app: FastifyInstance, datab
 
   app.delete<{ Params: { projectId: string; assetId: string } }>("/development-projects/:projectId/assets/:assetId", { schema: { params: paramsSchema } }, async (request, reply) => {
     const user = await requireUser(request, reply, database); if (!user) return reply;
+    if (!canManage(user.organization.role)) return reply.status(403).send({ error: "forbidden" });
     const asset = await database.client.developmentAsset.findFirst({ where: { id: request.params.assetId, projectId: request.params.projectId, organizationId: user.organization.id } });
     if (!asset) return reply.status(404).send({ error: "asset_not_found" });
     if (!r2) return reply.status(503).send({ error: "storage_not_configured" });
@@ -152,6 +157,61 @@ export async function registerDevelopmentAssetRoutes(app: FastifyInstance, datab
         await tx.developmentProject.update({ where: { id: asset.projectId }, data: { imageUrl: replacement ? `/api/crm/development-projects/${asset.projectId}/assets/${replacement.id}/content` : null } });
       }
     });
+    return { deleted: true };
+  });
+
+  const developerParamsSchema = { type: "object", required: ["developerId"], properties: { developerId: { type: "string", format: "uuid" } } } as const;
+  const coverBodySchema = { type: "object", additionalProperties: false, required: ["filename", "mimeType", "sizeBytes"], properties: {
+    filename: { type: "string", minLength: 1, maxLength: 255 }, mimeType: { type: "string", enum: [...imageMimeTypes] },
+    sizeBytes: { type: "integer", minimum: 1, maximum: maxImageBytes },
+  } } as const;
+  const developerCoverKey = (organizationId: string, developerId: string) => `crm/${organizationId}/developments/${developerId}/developer-cover`;
+
+  app.post<{ Params: { developerId: string }; Body: { filename: string; mimeType: string; sizeBytes: number } }>("/development-developers/:developerId/cover/prepare", {
+    schema: { params: developerParamsSchema, body: coverBodySchema },
+  }, async (request, reply) => {
+    const user = await requireUser(request, reply, database); if (!user) return reply;
+    if (!canManage(user.organization.role)) return reply.status(403).send({ error: "forbidden", message: "Изменять обложки может руководитель или администратор." });
+    const developer = await database.client.developmentDeveloper.findFirst({ where: { id: request.params.developerId, organizationId: user.organization.id }, select: { id: true } });
+    if (!developer) return reply.status(404).send({ error: "developer_not_found", message: "Застройщик не найден." });
+    if (!r2) return reply.status(503).send({ error: "storage_not_configured", message: "Cloudflare R2 не подключён на сервере." });
+    const key = developerCoverKey(user.organization.id, developer.id);
+    const uploadUrl = await getSignedUrl(r2.client, new PutObjectCommand({ Bucket: r2.bucket, Key: key, ContentType: request.body.mimeType }), { expiresIn: 300 });
+    return { uploadUrl, expiresIn: 300 };
+  });
+
+  app.post<{ Params: { developerId: string }; Body: { filename: string; mimeType: string; sizeBytes: number } }>("/development-developers/:developerId/cover/finalize", {
+    schema: { params: developerParamsSchema, body: coverBodySchema },
+  }, async (request, reply) => {
+    const user = await requireUser(request, reply, database); if (!user) return reply;
+    if (!canManage(user.organization.role)) return reply.status(403).send({ error: "forbidden" });
+    const developer = await database.client.developmentDeveloper.findFirst({ where: { id: request.params.developerId, organizationId: user.organization.id }, select: { id: true } });
+    if (!developer) return reply.status(404).send({ error: "developer_not_found" });
+    if (!r2) return reply.status(503).send({ error: "storage_not_configured" });
+    try {
+      const object = await r2.client.send(new HeadObjectCommand({ Bucket: r2.bucket, Key: developerCoverKey(user.organization.id, developer.id) }));
+      if (object.ContentLength !== request.body.sizeBytes) return reply.status(409).send({ error: "upload_size_mismatch", message: "Размер файла не совпадает с исходным." });
+    } catch { return reply.status(409).send({ error: "upload_missing", message: "Файл не найден в хранилище." }); }
+    const coverReadyAt = new Date();
+    await database.client.developmentDeveloper.update({ where: { id: developer.id }, data: { coverFilename: request.body.filename, coverMimeType: request.body.mimeType, coverSizeBytes: request.body.sizeBytes, coverReadyAt } });
+    return { coverUrl: `/api/crm/development-developers/${developer.id}/cover/content?v=${coverReadyAt.getTime()}` };
+  });
+
+  app.get<{ Params: { developerId: string } }>("/development-developers/:developerId/cover/content", { schema: { params: developerParamsSchema } }, async (request, reply) => {
+    const user = await requireUser(request, reply, database); if (!user) return reply;
+    const developer = await database.client.developmentDeveloper.findFirst({ where: { id: request.params.developerId, organizationId: user.organization.id }, select: { id: true, coverFilename: true, coverReadyAt: true } });
+    if (!developer?.coverReadyAt || !r2) return reply.status(404).send({ error: "cover_not_found" });
+    return reply.redirect(await getSignedUrl(r2.client, new GetObjectCommand({ Bucket: r2.bucket, Key: developerCoverKey(user.organization.id, developer.id), ResponseContentDisposition: `inline; filename="${encodeURIComponent(developer.coverFilename || "cover")}"` }), { expiresIn: 60 }));
+  });
+
+  app.delete<{ Params: { developerId: string } }>("/development-developers/:developerId/cover", { schema: { params: developerParamsSchema } }, async (request, reply) => {
+    const user = await requireUser(request, reply, database); if (!user) return reply;
+    if (!canManage(user.organization.role)) return reply.status(403).send({ error: "forbidden" });
+    const developer = await database.client.developmentDeveloper.findFirst({ where: { id: request.params.developerId, organizationId: user.organization.id }, select: { id: true, coverReadyAt: true } });
+    if (!developer) return reply.status(404).send({ error: "developer_not_found" });
+    if (developer.coverReadyAt && !r2) return reply.status(503).send({ error: "storage_not_configured", message: "Нельзя удалить обложку: хранилище R2 не подключено." });
+    if (developer.coverReadyAt && r2) await r2.client.send(new DeleteObjectCommand({ Bucket: r2.bucket, Key: developerCoverKey(user.organization.id, developer.id) }));
+    await database.client.developmentDeveloper.update({ where: { id: developer.id }, data: { coverFilename: null, coverMimeType: null, coverSizeBytes: null, coverReadyAt: null } });
     return { deleted: true };
   });
 }

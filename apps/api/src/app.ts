@@ -86,7 +86,7 @@ export async function buildApp(
   await registerPropertyRoutes(app, database, config);
   await registerPropertyTransferRoutes(app, database);
   await registerPropertyPhotoRoutes(app, database, config);
-  await registerDevelopmentRoutes(app, database);
+  await registerDevelopmentRoutes(app, database, config);
   await registerDevelopmentAssetRoutes(app, database, config);
   await registerPropertySelectionRoutes(app, database);
   await registerPropertySelectionShareRoutes(app, database, config);

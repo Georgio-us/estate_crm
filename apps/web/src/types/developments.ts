@@ -14,12 +14,12 @@ export interface DevelopmentProjectRecord {
   id: string; developerId: string; slug: string; name: string; address: string | null; district: string | null; description: string | null;
   constructionStatus: DevelopmentConstructionStatus; salesStatus: DevelopmentSalesStatus; plannedCompletion: string | null; className: string | null;
   buildingsCount: number | null; sectionsCount: number | null; floors: string | null; imageUrl: string | null; sourceUrl: string | null;
-  verifiedAt: string | null; createdAt: string; updatedAt: string;
+  verifiedAt: string | null; archivedAt: string | null; createdAt: string; updatedAt: string;
 }
 
 export interface DevelopmentDeveloperRecord {
   id: string; slug: string; name: string; description: string | null; website: string | null; phone: string | null; email: string | null;
-  logoUrl: string | null; sourceUrl: string | null; verifiedAt: string | null;
+  logoUrl: string | null; coverUrl: string | null; sourceUrl: string | null; verifiedAt: string | null; archivedAt: string | null;
   projectCounts: { all: number; construction: number; completed: number; launch: number };
   projects?: DevelopmentProjectRecord[]; createdAt: string; updatedAt: string;
 }

@@ -780,6 +780,7 @@ export interface DevelopmentProjectRecord {
   imageUrl: string | null;
   sourceUrl: string | null;
   verifiedAt: string | null;
+  archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -793,8 +794,10 @@ export interface DevelopmentDeveloperRecord {
   phone: string | null;
   email: string | null;
   logoUrl: string | null;
+  coverUrl: string | null;
   sourceUrl: string | null;
   verifiedAt: string | null;
+  archivedAt: string | null;
   projectCounts: { all: number; construction: number; completed: number; launch: number };
   projects?: DevelopmentProjectRecord[];
   createdAt: string;
