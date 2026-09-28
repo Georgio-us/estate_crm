@@ -24,6 +24,7 @@ export interface Deal {
   updatedAt?: string;
   source: "Meta" | "Website" | "Call" | "Referral" | "Manual";
   status?: DealStatus;
+  lossReason?: string;
   closedAt?: string;
   assigneeId?: string;
   assignee: string;

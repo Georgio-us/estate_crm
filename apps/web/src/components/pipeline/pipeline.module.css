@@ -717,7 +717,8 @@
 .assignmentModal h3 { margin: 9px 0 8px; font-size: 25px; line-height: 1.18; }
 .assignmentModal > p { margin: 0; color: var(--text-muted); font-size: var(--font-size-body-sm); line-height: 1.5; }
 .assignmentActions { display: grid; gap: 10px; margin-top: 22px; }
-.assignmentActions button, .assignmentDelegate select { min-height: 46px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font: inherit; }
+.assignmentActions button, .assignmentActions select, .assignmentDelegate select { min-height: 46px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font: inherit; }
+.assignmentActions select { width: 100%; padding: 0 12px; background: #fff; }
 .assignmentActions button { padding: 0 16px; cursor: pointer; }
 .assignmentActions button:disabled, .assignmentDelegate select:disabled { cursor: wait; opacity: .55; }
 .assignmentPrimary { border-color: var(--primary); background: var(--primary); color: #fff; font-weight: var(--font-weight-semibold); }

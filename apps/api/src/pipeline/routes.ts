@@ -57,6 +57,7 @@ function mapDeal(deal: {
   preferredProject: string | null;
   source: "META" | "WEBSITE" | "CALL" | "REFERRAL" | "MANUAL";
   status: "ACTIVE" | "WON" | "LOST" | "ARCHIVED";
+  lossReason: string | null;
   position: number;
   closedAt: Date | null;
   createdAt: Date;
@@ -880,7 +881,7 @@ export async function registerPipelineRoutes(
   }>("/deals/:dealId/lifecycle", {
     schema: {
       params: { type: "object", required: ["dealId"], properties: { dealId: { type: "string", format: "uuid" } } },
-      body: { type: "object", additionalProperties: false, required: ["status"], properties: { status: { type: "string", enum: ["ACTIVE", "WON", "LOST", "ARCHIVED"] } } },
+      body: { type: "object", additionalProperties: false, required: ["status"], properties: { status: { type: "string", enum: ["ACTIVE", "WON", "LOST", "ARCHIVED"] }, lossReason: { anyOf: [{ type: "string", maxLength: 100 }, { type: "null" }] } } },
     },
   }, async (request, reply) => {
     const user = await requireUser(request, reply, database);
@@ -896,6 +897,7 @@ export async function registerPipelineRoutes(
       where: { id: deal.id },
       data: {
         status: request.body.status,
+        lossReason: request.body.status === "LOST" ? optionalText(request.body.lossReason ?? undefined) : null,
         closedAt: request.body.status === "ACTIVE" ? null : deal.closedAt ?? new Date(),
       },
       include: {
@@ -915,6 +917,7 @@ export async function registerPipelineRoutes(
           authorId: user.id,
           category: "CHANGE",
           title: lifecycleLabels[request.body.status],
+          description: request.body.status === "LOST" ? optionalText(request.body.lossReason ?? undefined) : null,
         },
       });
     }

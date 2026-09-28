@@ -123,6 +123,7 @@ interface ApiDeal {
   preferredProject: string | null;
   source: keyof typeof sourceFromApi;
   status: DealStatus;
+  lossReason: string | null;
   closedAt: string | null;
   assignee: { id: string; name: string } | null;
   comment: string | null;
@@ -157,6 +158,7 @@ function mapApiDeal(deal: ApiDeal): Deal {
     preferredProject: deal.preferredProject || undefined,
     source: sourceFromApi[deal.source],
     status: deal.status,
+    lossReason: deal.lossReason || undefined,
     closedAt: deal.closedAt || undefined,
     assigneeId: deal.assignee?.id,
     assignee: deal.assignee?.name || "Не назначен",
@@ -232,6 +234,9 @@ export function PipelineBoard() {
   const [assignmentPromptOpen, setAssignmentPromptOpen] = useState(false);
   const [assignmentChoiceId, setAssignmentChoiceId] = useState("");
   const [assignmentActionPending, setAssignmentActionPending] = useState(false);
+  const [pendingLostDealId, setPendingLostDealId] = useState<string | null>(null);
+  const [lossReason, setLossReason] = useState("");
+  const [lossReasons, setLossReasons] = useState<string[]>(["Дорого", "Не отвечает", "Выбрал другой объект", "Отложил решение", "Неактуально"]);
   const readDealsStorageKey = `estate-crm:read-deals:${user.organization.id}:${user.id}`;
   const [readDealIds, setReadDealIds] = useState<Set<string>>(() => {
     if (typeof window === "undefined") return new Set();
@@ -242,6 +247,7 @@ export function PipelineBoard() {
       return new Set();
     }
   });
+  useEffect(() => { void fetch("/api/crm/settings/references", { cache: "no-store" }).then(async (response) => { if (!response.ok) return; const payload = await response.json() as { groups?: { LOSS_REASON?: Array<{ label: string; isActive: boolean }> } }; const options = payload.groups?.LOSS_REASON?.filter((item) => item.isActive).map((item) => item.label) ?? []; if (options.length) setLossReasons(options); }).catch(() => undefined); }, []);
 
   const markDealRead = useCallback((dealId: string) => {
     setReadDealIds((current) => {
@@ -346,11 +352,11 @@ export function PipelineBoard() {
     if (!response.ok) await reloadPipeline();
   }
 
-  async function updateDealLifecycle(dealId: string, status: DealStatus) {
+  async function updateDealLifecycle(dealId: string, status: DealStatus, lossReason?: string) {
     const response = await fetch(`/api/crm/deals/${dealId}/lifecycle`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, ...(status === "LOST" ? { lossReason } : {}) }),
     });
     const payload = await response.json() as { deal?: ApiDeal; stageId?: string; message?: string };
     if (!response.ok || !payload.deal || !payload.stageId) throw new Error(payload.message || "Не удалось изменить состояние сделки.");
@@ -365,12 +371,17 @@ export function PipelineBoard() {
     setNotice(status === "ACTIVE" ? "Сделка возвращена в работу" : status === "WON" ? "Сделка успешно завершена" : status === "LOST" ? "Сделка закрыта как неуспешная" : "Сделка перенесена в архив");
   }
 
-  async function runDealLifecycle(dealId: string, status: DealStatus) {
+  async function runDealLifecycle(dealId: string, status: DealStatus, reason?: string) {
     try {
-      await updateDealLifecycle(dealId, status);
+      await updateDealLifecycle(dealId, status, reason);
     } catch (cause) {
       setNotice(cause instanceof Error ? cause.message : "Не удалось изменить состояние сделки");
     }
+  }
+
+  async function requestDealLifecycle(dealId: string, status: DealStatus): Promise<void> {
+    if (status !== "LOST") return runDealLifecycle(dealId, status);
+    setLossReason(lossReasons[0] || ""); setPendingLostDealId(dealId);
   }
 
   async function deleteClosedDeals(dealIds: string[]) {
@@ -961,7 +972,7 @@ export function PipelineBoard() {
               readDealIds={readDealIds}
               onOpenDeal={(dealId) => openDeal(dealId, stage.id)}
               onAddTask={(dealId) => setSelected({ dealId, stageId: stage.id, composer: "task" })}
-              onLifecycle={(dealId, status) => runDealLifecycle(dealId, status)}
+              onLifecycle={(dealId, status) => requestDealLifecycle(dealId, status)}
               onAddDeal={() => { setNewDealContactId(null); setNewDealStageId(stage.id); }}
             />
           ))}
@@ -990,7 +1001,7 @@ export function PipelineBoard() {
           onUnlinkContact={unlinkContact}
           onAddTask={addTask}
           onCompleteTask={completeTask}
-          onLifecycle={(status) => runDealLifecycle(selectedDeal.id, status)}
+          onLifecycle={(status) => requestDealLifecycle(selectedDeal.id, status)}
           onOpenContact={(contactId) => router.push(`/contacts?contact=${contactId}`)}
           onRefreshActivities={refreshSelectedActivities}
           onClose={closeDealDrawer}
@@ -1015,6 +1026,18 @@ export function PipelineBoard() {
               </div>
               <button className={styles.assignmentReturn} type="button" disabled={assignmentActionPending} onClick={() => setAssignmentPromptOpen(false)}>Отмена</button>
             </div>
+          </section>
+        </div>
+      )}
+
+      {pendingLostDealId && (
+        <div className={styles.assignmentLayer} role="dialog" aria-modal="true" aria-labelledby="loss-reason-title">
+          <button className={styles.assignmentBackdrop} type="button" aria-label="Отмена" onClick={() => setPendingLostDealId(null)} />
+          <section className={styles.assignmentModal}>
+            <span className={styles.assignmentEyebrow}>Завершение сделки</span>
+            <h3 id="loss-reason-title">Почему сделка закрыта?</h3>
+            <p>Причина сохранится в истории и поможет разбирать отказы без удаления сделки.</p>
+            <div className={styles.assignmentActions}><select aria-label="Причина отказа" value={lossReason} onChange={(event) => setLossReason(event.target.value)}>{lossReasons.map((reason) => <option value={reason} key={reason}>{reason}</option>)}</select><button className={styles.assignmentPrimary} type="button" disabled={!lossReason} onClick={() => { const dealId = pendingLostDealId; setPendingLostDealId(null); void runDealLifecycle(dealId, "LOST", lossReason); }}>Закрыть неуспешно</button><button className={styles.assignmentReturn} type="button" onClick={() => setPendingLostDealId(null)}>Отмена</button></div>
           </section>
         </div>
       )}

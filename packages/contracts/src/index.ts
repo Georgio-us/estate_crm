@@ -317,6 +317,7 @@ export interface PipelineDealRecord {
   preferredProject: string | null;
   source: ContactSource;
   status: DealStatus;
+  lossReason: string | null;
   assignee: ContactAssignee | null;
   comment: string | null;
   position: number;
@@ -416,6 +417,7 @@ export interface MoveDealRequest {
 
 export interface UpdateDealLifecycleRequest {
   status: DealStatus;
+  lossReason?: string | null;
 }
 
 export interface DealPropertySelectionRecord {
