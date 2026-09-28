@@ -169,14 +169,12 @@ test("manager can read new developments but cannot change catalog or files", asy
   const create = await app.inject({ method: "POST", url: "/development-developers", headers: { cookie: "estate_crm_session=test-token" }, payload: { name: "Недоступный застройщик" } });
   const archive = await app.inject({ method: "POST", url: "/development-projects/14a292bd-d84e-447c-b71a-aa185b809b88/archive", headers: { cookie: "estate_crm_session=test-token" } });
   const upload = await app.inject({ method: "POST", url: "/development-projects/14a292bd-d84e-447c-b71a-aa185b809b88/assets/prepare", headers: { cookie: "estate_crm_session=test-token" }, payload: { filename: "cover.jpg", mimeType: "image/jpeg", sizeBytes: 10, kind: "GALLERY" } });
-  const source = await app.inject({ method: "GET", url: "/development-projects/14a292bd-d84e-447c-b71a-aa185b809b88/assets/201f180c-d032-49a0-8aa7-04db19095eb2/source", headers: { cookie: "estate_crm_session=test-token" } });
   const importPreview = await app.inject({ method: "POST", url: "/development-projects/14a292bd-d84e-447c-b71a-aa185b809b88/assets/201f180c-d032-49a0-8aa7-04db19095eb2/import/preview", headers: { cookie: "estate_crm_session=test-token" }, payload: { rows: [{ rowNumber: 2, sourceSheet: "test.xlsx · Sheet1", raw: { A: "1" }, values: { unitNumber: "1" } }] } });
 
   assert.equal(list.statusCode, 200);
   assert.equal(create.statusCode, 403);
   assert.equal(archive.statusCode, 403);
   assert.equal(upload.statusCode, 403);
-  assert.equal(source.statusCode, 403);
   assert.equal(importPreview.statusCode, 403);
   assert.equal(writes, 0);
   await app.close();

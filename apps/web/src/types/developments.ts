@@ -33,6 +33,7 @@ export interface CreateDevelopmentProjectRequest {
 
 export type DevelopmentUnitStatus = "AVAILABLE" | "RESERVED" | "SOLD" | "UNKNOWN";
 export interface DevelopmentUnitRecord {
-  id: string; unitNumber: string; building: string | null; section: string | null; floor: number | null; rooms: number | null;
-  area: number | null; price: number | null; currency: "USD" | "EUR" | "UAH"; status: DevelopmentUnitStatus; updatedAt: string;
+  id: string; unitNumber: string; building: string | null; section: string | null; floor: number | null; rooms: number | null; roomsLabel: string | null;
+  area: number | null; price: number | null; pricePerSquareMeter: number | null; currency: "USD" | "EUR" | "UAH"; status: DevelopmentUnitStatus;
+  renovationType: string | null; renovationCompletion: string | null; note: string | null; updatedAt: string;
 }

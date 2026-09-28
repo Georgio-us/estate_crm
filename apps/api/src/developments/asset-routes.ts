@@ -103,7 +103,7 @@ export async function registerDevelopmentAssetRoutes(app: FastifyInstance, datab
     catch { return reply.status(409).send({ error: "upload_missing", message: "Файл не найден в хранилище. Повторите загрузку." }); }
     if (size !== asset.sizeBytes) return reply.status(409).send({ error: "upload_size_mismatch", message: "Размер загруженного файла не совпадает с исходным." });
     const isImage = imageMimeTypes.includes(asset.mimeType as typeof imageMimeTypes[number]);
-    const needsImportDraft = asset.kind === "CHESSBOARD" || asset.kind === "PRICE_LIST";
+    const needsImportDraft = asset.kind === "CHESSBOARD";
     await database.client.$transaction(async (tx) => {
       const coverCount = isImage ? await tx.developmentAsset.count({ where: { projectId: asset.projectId, status: "READY", isCover: true } }) : 0;
       if (asset.kind === "COVER") await tx.developmentAsset.updateMany({ where: { projectId: asset.projectId, isCover: true }, data: { isCover: false } });
@@ -127,7 +127,6 @@ export async function registerDevelopmentAssetRoutes(app: FastifyInstance, datab
 
   app.get<{ Params: { projectId: string; assetId: string } }>("/development-projects/:projectId/assets/:assetId/source", { schema: { params: paramsSchema } }, async (request, reply) => {
     const user = await requireUser(request, reply, database); if (!user) return reply;
-    if (!canManage(user.organization.role)) return reply.status(403).send({ error: "forbidden" });
     const asset = await database.client.developmentAsset.findFirst({ where: { id: request.params.assetId, projectId: request.params.projectId, organizationId: user.organization.id, status: { not: "PENDING" } } });
     if (!asset) return reply.status(404).send({ error: "asset_not_found" });
     if (!r2) return reply.status(503).send({ error: "storage_not_configured" });

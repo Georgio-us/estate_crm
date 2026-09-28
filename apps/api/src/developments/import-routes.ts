@@ -4,7 +4,7 @@ import type { DatabaseConnection } from "@estate-crm/database";
 
 import { requireUser } from "../auth/require-user.js";
 
-type ImportField = "unitNumber" | "building" | "section" | "floor" | "rooms" | "area" | "price" | "currency" | "status";
+type ImportField = "unitNumber" | "building" | "section" | "floor" | "rooms" | "area" | "price" | "pricePerSquareMeter" | "currency" | "status" | "renovationType" | "renovationCompletion" | "note";
 type ImportValues = Partial<Record<ImportField, string>>;
 type MappedRow = { rowNumber: number; sourceSheet: string; raw: Record<string, string>; values: ImportValues };
 type CheckedRow = {
@@ -12,7 +12,7 @@ type CheckedRow = {
   action: "CREATE" | "UPDATE" | "REVIEW"; warnings: string[]; errors: string[];
 };
 
-const importFields = ["unitNumber", "building", "section", "floor", "rooms", "area", "price", "currency", "status"] as const;
+const importFields = ["unitNumber", "building", "section", "floor", "rooms", "area", "price", "pricePerSquareMeter", "currency", "status", "renovationType", "renovationCompletion", "note"] as const;
 const paramsSchema = { type: "object", required: ["projectId", "assetId"], properties: { projectId: { type: "string", format: "uuid" }, assetId: { type: "string", format: "uuid" } } } as const;
 const rowsSchema = {
   type: "object", additionalProperties: false, required: ["rows"], properties: {
@@ -29,6 +29,7 @@ function normalized(value: string | null) { return (value || "").toLocaleLowerCa
 function numberValue(value: string | undefined) {
   const source = value?.trim(); if (!source) return null;
   const compact = source.replace(/\s/g, "").replace(/,/g, ".").replace(/[^\d.-]/g, "");
+  if (!/\d/.test(compact)) return Number.NaN;
   const parsed = Number(compact); return Number.isFinite(parsed) ? parsed : Number.NaN;
 }
 function integerValue(value: string | undefined) { const parsed = numberValue(value); return parsed === null || Number.isNaN(parsed) ? parsed : Math.round(parsed); }
@@ -62,14 +63,14 @@ export async function registerDevelopmentImportRoutes(app: FastifyInstance, data
     const user = await requireUser(request, reply, database); if (!user) return reply;
     if (!canManage(user.organization.role)) return reply.status(403).send({ error: "forbidden", message: "Импортировать шахматку может руководитель или администратор." });
     const batch = await context(request.params.projectId, request.params.assetId, user.organization.id);
-    if (!batch || (batch.asset.kind !== "CHESSBOARD" && batch.asset.kind !== "PRICE_LIST")) return reply.status(404).send({ error: "import_not_found", message: "Черновик импорта не найден." });
+    if (!batch || batch.asset.kind !== "CHESSBOARD") return reply.status(404).send({ error: "import_not_found", message: "Черновик шахматки не найден." });
     const existing = await database.client.developmentUnit.findMany({ where: { organizationId: user.organization.id, projectId: request.params.projectId }, include: { building: { select: { name: true } }, section: { select: { name: true } } } });
     const seen = new Set<string>();
     const checked: CheckedRow[] = request.body.rows.map((row) => {
       const unitNumber = clean(row.values.unitNumber) ?? ""; const building = clean(row.values.building); const section = clean(row.values.section);
       const warnings: string[] = []; const errors: string[] = [];
       if (!unitNumber) errors.push("Не указан номер квартиры/помещения.");
-      for (const [label, value, integer] of [["Этаж", row.values.floor, true], ["Комнаты", row.values.rooms, true], ["Площадь", row.values.area, false], ["Цена", row.values.price, true]] as const) {
+      for (const [label, value, integer] of [["Этаж", row.values.floor, true], ["Площадь", row.values.area, false], ["Цена", row.values.price, true], ["Цена за м²", row.values.pricePerSquareMeter, true]] as const) {
         const parsed = integer ? integerValue(value) : numberValue(value); if (parsed !== null && Number.isNaN(parsed)) errors.push(`${label}: не удалось распознать число.`);
       }
       if (!currencyValue(row.values.currency)) errors.push("Не удалось распознать валюту.");
@@ -87,7 +88,7 @@ export async function registerDevelopmentImportRoutes(app: FastifyInstance, data
         const result = checked.find((item) => item.rowNumber === row.rowNumber)!;
         await tx.developmentImportRow.create({ data: { organizationId: user.organization.id, batchId: batch.id, rowNumber: row.rowNumber, rawData: row.raw, mappedData: { sourceSheet: row.sourceSheet, values: row.values }, issues: { warnings: result.warnings, errors: result.errors, action: result.action }, approved: !result.errors.length } });
       }
-      await tx.developmentImportBatch.update({ where: { id: batch.id }, data: { status: "REVIEW_REQUIRED", parserKey: "mapped-xlsx-v1", summary: counts, errorMessage: null } });
+      await tx.developmentImportBatch.update({ where: { id: batch.id }, data: { status: "REVIEW_REQUIRED", parserKey: "block-xlsx-v2", summary: counts, errorMessage: null } });
       await tx.developmentAsset.update({ where: { id: batch.assetId }, data: { status: "REVIEW_REQUIRED", errorMessage: null } });
     });
     return { rows: checked, counts };
@@ -119,7 +120,8 @@ export async function registerDevelopmentImportRoutes(app: FastifyInstance, data
           const sectionKey = `${buildingId}:${normalized(sectionName)}`; sectionId = sections.get(sectionKey) ?? null;
           if (!sectionId) { const section = await tx.developmentSection.upsert({ where: { buildingId_name: { buildingId, name: sectionName } }, update: {}, create: { organizationId: user.organization.id, buildingId, name: sectionName } }); sectionId = section.id; sections.set(sectionKey, section.id); }
         }
-        const data = { floor: integerValue(values.floor), rooms: integerValue(values.rooms), area: numberValue(values.area), price: integerValue(values.price), currency: currencyValue(values.currency)!, status: statusValue(values.status)!, sourceData: { assetId: batch.assetId, batchId: batch.id, rowNumber: row.rowNumber, sourceSheet: mapped?.sourceSheet, raw: row.rawData } };
+        const parsedRooms = integerValue(values.rooms); const roomsLabel = clean(values.rooms);
+        const data = { floor: integerValue(values.floor), rooms: parsedRooms !== null && !Number.isNaN(parsedRooms) ? parsedRooms : null, roomsLabel, area: numberValue(values.area), price: integerValue(values.price), pricePerSquareMeter: integerValue(values.pricePerSquareMeter), currency: currencyValue(values.currency)!, status: statusValue(values.status)!, renovationType: clean(values.renovationType), renovationCompletion: clean(values.renovationCompletion), note: clean(values.note), sourceData: { assetId: batch.assetId, batchId: batch.id, rowNumber: row.rowNumber, sourceSheet: mapped?.sourceSheet, raw: row.rawData } };
         const existing = await tx.developmentUnit.findFirst({ where: { projectId: batch.projectId, buildingId, sectionId, unitNumber } });
         if (existing) { await tx.developmentUnit.update({ where: { id: existing.id }, data }); updated += 1; }
         else { await tx.developmentUnit.create({ data: { organizationId: user.organization.id, projectId: batch.projectId, buildingId, sectionId, unitNumber, ...data } }); created += 1; }
@@ -137,6 +139,6 @@ export async function registerDevelopmentImportRoutes(app: FastifyInstance, data
     const project = await database.client.developmentProject.findFirst({ where: { id: request.params.projectId, organizationId: user.organization.id }, select: { id: true } });
     if (!project) return reply.status(404).send({ error: "project_not_found" });
     const units = await database.client.developmentUnit.findMany({ where: { organizationId: user.organization.id, projectId: project.id }, include: { building: { select: { name: true } }, section: { select: { name: true } } }, orderBy: [{ building: { name: "asc" } }, { section: { name: "asc" } }, { floor: "asc" }, { unitNumber: "asc" }] });
-    return { units: units.map((unit) => ({ id: unit.id, unitNumber: unit.unitNumber, building: unit.building?.name ?? null, section: unit.section?.name ?? null, floor: unit.floor, rooms: unit.rooms, area: unit.area, price: unit.price, currency: unit.currency, status: unit.status, updatedAt: unit.updatedAt.toISOString() })) };
+    return { units: units.map((unit) => ({ id: unit.id, unitNumber: unit.unitNumber, building: unit.building?.name ?? null, section: unit.section?.name ?? null, floor: unit.floor, rooms: unit.rooms, roomsLabel: unit.roomsLabel, area: unit.area, price: unit.price, pricePerSquareMeter: unit.pricePerSquareMeter, currency: unit.currency, status: unit.status, renovationType: unit.renovationType, renovationCompletion: unit.renovationCompletion, note: unit.note, updatedAt: unit.updatedAt.toISOString() })) };
   });
 }

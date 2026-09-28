@@ -896,10 +896,15 @@ model DevelopmentUnit {
   unitNumber     String                @map("unit_number")
   floor          Int?
   rooms          Int?
+  roomsLabel     String?               @map("rooms_label")
   area           Float?
   price          Int?
+  pricePerSquareMeter Int?              @map("price_per_square_meter")
   currency       Currency              @default(USD)
   status         DevelopmentUnitStatus @default(UNKNOWN)
+  renovationType String?                @map("renovation_type")
+  renovationCompletion String?          @map("renovation_completion")
+  note           String?
   layoutAssetId  String?               @map("layout_asset_id") @db.Uuid
   sourceData     Json?                 @map("source_data")
   createdAt      DateTime              @default(now()) @map("created_at")
