@@ -125,6 +125,18 @@ export async function registerDevelopmentAssetRoutes(app: FastifyInstance, datab
     return reply.redirect(await getSignedUrl(r2.client, new GetObjectCommand({ Bucket: r2.bucket, Key: asset.storageKey, ResponseContentDisposition: `inline; filename="${encodeURIComponent(asset.filename)}"` }), { expiresIn: 60 }));
   });
 
+  app.get<{ Params: { projectId: string; assetId: string } }>("/development-projects/:projectId/assets/:assetId/source", { schema: { params: paramsSchema } }, async (request, reply) => {
+    const user = await requireUser(request, reply, database); if (!user) return reply;
+    if (!canManage(user.organization.role)) return reply.status(403).send({ error: "forbidden" });
+    const asset = await database.client.developmentAsset.findFirst({ where: { id: request.params.assetId, projectId: request.params.projectId, organizationId: user.organization.id, status: { not: "PENDING" } } });
+    if (!asset) return reply.status(404).send({ error: "asset_not_found" });
+    if (!r2) return reply.status(503).send({ error: "storage_not_configured" });
+    const object = await r2.client.send(new GetObjectCommand({ Bucket: r2.bucket, Key: asset.storageKey }));
+    if (!object.Body) return reply.status(404).send({ error: "asset_not_found" });
+    reply.header("content-type", asset.mimeType).header("content-disposition", `inline; filename="${encodeURIComponent(asset.filename)}"`).header("cache-control", "private, no-store");
+    return reply.send(Buffer.from(await object.Body.transformToByteArray()));
+  });
+
   app.patch<{ Params: { projectId: string; assetId: string }; Body: { isCover?: boolean; reviewed?: boolean } }>("/development-projects/:projectId/assets/:assetId", { schema: { params: paramsSchema, body: { type: "object", additionalProperties: false, minProperties: 1, properties: { isCover: { type: "boolean" }, reviewed: { type: "boolean" } } } } }, async (request, reply) => {
     const user = await requireUser(request, reply, database); if (!user) return reply;
     if (!canManage(user.organization.role)) return reply.status(403).send({ error: "forbidden" });

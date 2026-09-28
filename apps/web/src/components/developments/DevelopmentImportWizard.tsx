@@ -1,0 +1,53 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import type { DevelopmentAssetRecord } from "@/types/developments";
+import styles from "./developments.module.css";
+
+type Field = "unitNumber" | "building" | "section" | "floor" | "rooms" | "area" | "price" | "currency" | "status";
+type ParsedSheet = { name: string; headers: string[]; rows: string[][] };
+type Mapping = Record<number, Field | "">;
+type Preview = { rows: Array<{ rowNumber: number; unitNumber: string; building: string | null; section: string | null; action: "CREATE" | "UPDATE" | "REVIEW"; warnings: string[]; errors: string[] }>; counts: { create: number; update: number; review: number } };
+
+const fields: Array<{ value: Field; label: string }> = [
+  { value: "unitNumber", label: "№ квартиры / помещения" }, { value: "building", label: "Корпус / дом" }, { value: "section", label: "Секция / подъезд" },
+  { value: "floor", label: "Этаж" }, { value: "rooms", label: "Комнаты" }, { value: "area", label: "Площадь, м²" },
+  { value: "price", label: "Цена" }, { value: "currency", label: "Валюта" }, { value: "status", label: "Статус" },
+];
+const aliases: Record<string, Field> = {
+  "№ квартиры": "unitNumber", "номер квартиры": "unitNumber", "квартира": "unitNumber", "номер": "unitNumber", "unit": "unitNumber", "apartment": "unitNumber",
+  "корпус": "building", "дом": "building", "building": "building", "секция": "section", "подъезд": "section", "section": "section",
+  "этаж": "floor", "floor": "floor", "комнаты": "rooms", "комнат": "rooms", "комнатность": "rooms", "rooms": "rooms",
+  "площадь": "area", "площадь м²": "area", "площадь м2": "area", "общая площадь": "area", "area": "area", "м²": "area", "м2": "area",
+  "цена": "price", "стоимость": "price", "price": "price", "валюта": "currency", "currency": "currency", "статус": "status", "status": "status", "состояние": "status",
+};
+function normalize(value: string) { return value.trim().toLocaleLowerCase("ru").replace(/ё/g, "е").replace(/[.,()_\-/]+/g, " ").replace(/\s+/g, " "); }
+
+export function DevelopmentImportWizard({ projectId, asset, onClose, onPublished }: { projectId: string; asset: DevelopmentAssetRecord; onClose: () => void; onPublished: () => Promise<void> }) {
+  const [sheets, setSheets] = useState<ParsedSheet[]>([]); const [sheetIndex, setSheetIndex] = useState(0); const [mapping, setMapping] = useState<Mapping>({});
+  const [defaults, setDefaults] = useState({ currency: "USD", status: "AVAILABLE" }); const [preview, setPreview] = useState<Preview | null>(null);
+  const [confirmed, setConfirmed] = useState<number[]>([]); const [busy, setBusy] = useState(true); const [error, setError] = useState(""); const sheet = sheets[sheetIndex];
+
+  function autoMapping(headers: string[]) { const used = new Set<Field>(); return Object.fromEntries(headers.map((header, index) => { const field = aliases[normalize(header)]; if (!field || used.has(field)) return [index, ""]; used.add(field); return [index, field]; })) as Mapping; }
+  useEffect(() => { let active = true; void (async () => { try {
+    const response = await fetch(`/api/crm/development-projects/${projectId}/assets/${asset.id}/source`, { cache: "no-store" }); if (!response.ok) throw new Error("Не удалось прочитать файл из хранилища.");
+    const XLSX = await import("xlsx"); const workbook = XLSX.read(await response.arrayBuffer(), { type: "array" });
+    const parsed = workbook.SheetNames.flatMap((name) => { const worksheet = workbook.Sheets[name]; if (!worksheet) return []; const values = XLSX.utils.sheet_to_json<unknown[]>(worksheet, { header: 1, defval: "", raw: false, blankrows: false }); const headers = (values[0] ?? []).map((cell, index) => String(cell ?? "").trim() || `Колонка ${index + 1}`); const rows = values.slice(1).map((row) => headers.map((_, index) => String(row[index] ?? ""))).filter((row) => row.some((cell) => cell.trim())); return headers.length && rows.length ? [{ name, headers, rows }] : []; });
+    if (!parsed.length) throw new Error("В файле не найдена таблица с заголовками и строками."); if (active) { setSheets(parsed); setMapping(autoMapping(parsed[0]!.headers)); }
+  } catch (cause) { if (active) setError(cause instanceof Error ? cause.message : "Не удалось разобрать Excel."); } finally { if (active) setBusy(false); } })(); return () => { active = false; }; }, [asset.id, projectId]);
+
+  function rows() { if (!sheet) return []; return sheet.rows.slice(0, 1000).map((cells, index) => { const values: Partial<Record<Field, string>> = { ...defaults }; const raw = Object.fromEntries(sheet.headers.map((header, column) => [header, cells[column] ?? ""])); for (const [column, field] of Object.entries(mapping)) { if (!field) continue; const value = cells[Number(column)]?.trim(); if (value) values[field] = value; } return { rowNumber: index + 2, sourceSheet: `${asset.filename} · ${sheet.name}`.slice(0, 300), raw, values }; }); }
+  async function check() { if (!Object.values(mapping).includes("unitNumber")) { setError("Сопоставьте колонку с номером квартиры или помещения."); return; } setBusy(true); setError(""); try { const response = await fetch(`/api/crm/development-projects/${projectId}/assets/${asset.id}/import/preview`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ rows: rows() }) }); const payload = await response.json() as Preview & { message?: string }; if (!response.ok || !payload.rows) throw new Error(payload.message || "Не удалось проверить строки."); setPreview(payload); setConfirmed([]); } catch (cause) { setError(cause instanceof Error ? cause.message : "Не удалось проверить строки."); } finally { setBusy(false); } }
+  async function publish() { setBusy(true); setError(""); try { const response = await fetch(`/api/crm/development-projects/${projectId}/assets/${asset.id}/import/publish`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ confirmedRows: confirmed }) }); const payload = await response.json() as { message?: string }; if (!response.ok) throw new Error(payload.message || "Не удалось опубликовать шахматку."); await onPublished(); onClose(); } catch (cause) { setError(cause instanceof Error ? cause.message : "Не удалось опубликовать шахматку."); } finally { setBusy(false); } }
+  const warningsConfirmed = preview?.rows.every((row) => !row.warnings.length || confirmed.includes(row.rowNumber)) ?? false;
+
+  return <div className={styles.importLayer} role="dialog" aria-modal="true" aria-labelledby="development-import-title"><div className={styles.importDialog}><header><div><span>ШАХМАТКА ИЗ EXCEL</span><h2 id="development-import-title">{preview ? "Проверьте результат" : "Сопоставьте колонки"}</h2><p>{asset.filename}</p></div><button type="button" onClick={onClose} aria-label="Закрыть">×</button></header>
+    <div className={styles.importBody}>{busy && !sheet ? <div className={styles.assetEmpty}>Читаем Excel…</div> : error && !sheet ? <div className={styles.importError}>{error}</div> : !preview && sheet ? <>
+      {sheets.length > 1 && <label className={styles.importSheet}>Лист<select value={sheetIndex} onChange={(event) => { const next = Number(event.target.value); setSheetIndex(next); setMapping(autoMapping(sheets[next]!.headers)); }} >{sheets.map((item, index) => <option key={item.name} value={index}>{item.name} · {item.rows.length} строк</option>)}</select></label>}
+      <div className={styles.importDefaults}><label>Валюта по умолчанию<select value={defaults.currency} onChange={(event) => setDefaults((current) => ({ ...current, currency: event.target.value }))}><option value="USD">USD</option><option value="EUR">EUR</option><option value="UAH">UAH</option></select></label><label>Статус по умолчанию<select value={defaults.status} onChange={(event) => setDefaults((current) => ({ ...current, status: event.target.value }))}><option value="AVAILABLE">В продаже</option><option value="RESERVED">Резерв</option><option value="SOLD">Продано</option><option value="UNKNOWN">Неизвестно</option></select></label></div>
+      {sheet.rows.length > 1000 && <p className={styles.importNotice}>За один импорт будут обработаны первые 1000 строк из {sheet.rows.length}.</p>}
+      <div className={styles.importMap}><div><b>Колонка Excel</b><b>Пример</b><b>Поле CRM</b></div>{sheet.headers.map((header, index) => <div key={`${header}:${index}`}><strong>{header}</strong><span title={sheet.rows[0]?.[index]}>{sheet.rows[0]?.[index] || "—"}</span><select value={mapping[index] ?? ""} onChange={(event) => { const next = event.target.value as Field | ""; setMapping((current) => ({ ...Object.fromEntries(Object.entries(current).map(([key, value]) => value === next && Number(key) !== index ? [key, ""] : [key, value])), [index]: next })); }}><option value="">Не импортировать</option>{fields.map((field) => <option key={field.value} value={field.value}>{field.label}</option>)}</select></div>)}</div>
+    </> : preview ? <><div className={styles.importSummary}><div><strong>{preview.counts.create}</strong><span>новых</span></div><div><strong>{preview.counts.update}</strong><span>обновятся</span></div><div className={preview.counts.review ? styles.summaryDanger : ""}><strong>{preview.counts.review}</strong><span>с ошибками</span></div></div><div className={styles.importRows}>{preview.rows.map((row) => <article key={row.rowNumber}><div><strong>Строка {row.rowNumber} · № {row.unitNumber || "не указан"}</strong><span>{[row.building, row.section].filter(Boolean).join(" · ") || "Без корпуса и секции"} · {row.action === "CREATE" ? "новая" : row.action === "UPDATE" ? "обновление" : "нужно исправить"}</span></div>{row.errors.length > 0 && <p>{row.errors.join(" ")}</p>}{row.warnings.length > 0 && <label><input type="checkbox" checked={confirmed.includes(row.rowNumber)} onChange={(event) => setConfirmed((current) => event.target.checked ? [...current, row.rowNumber] : current.filter((number) => number !== row.rowNumber))} /><span>{row.warnings.join(" ")}</span></label>}</article>)}</div></> : null}{error && sheet && <p className={styles.importError}>{error}</p>}</div>
+    <footer><button type="button" onClick={preview ? () => { setPreview(null); setConfirmed([]); setError(""); } : onClose}>{preview ? "Назад к колонкам" : "Отмена"}</button>{sheet && !preview && <button className={styles.primary} type="button" disabled={busy} onClick={() => { void check(); }}>{busy ? "Проверяем…" : `Проверить ${Math.min(sheet.rows.length, 1000)} строк`}</button>}{preview && <button className={styles.primary} type="button" disabled={busy || preview.counts.review > 0 || !warningsConfirmed} onClick={() => { void publish(); }}>{busy ? "Публикуем…" : "Опубликовать шахматку"}</button>}</footer>
+  </div></div>;
+}

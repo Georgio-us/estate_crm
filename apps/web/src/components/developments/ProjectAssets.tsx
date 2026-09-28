@@ -5,6 +5,8 @@ import { useCurrentUser } from "@/components/auth/AuthContext";
 
 import type { DevelopmentAssetKind, DevelopmentAssetRecord } from "@/types/developments";
 
+import { DevelopmentImportWizard } from "./DevelopmentImportWizard";
+
 import styles from "./developments.module.css";
 
 const kindLabels: Record<DevelopmentAssetKind, string> = {
@@ -13,7 +15,7 @@ const kindLabels: Record<DevelopmentAssetKind, string> = {
 };
 const statusLabels = { PENDING: "Загружается", READY: "Готов", PROCESSING: "Обрабатывается", REVIEW_REQUIRED: "Нужно проверить", FAILED: "Ошибка" } as const;
 
-export function ProjectAssets({ projectId, onCoverChange }: { projectId: string; onCoverChange?: (url: string | null) => void }) {
+export function ProjectAssets({ projectId, onCoverChange, onImportPublished }: { projectId: string; onCoverChange?: (url: string | null) => void; onImportPublished?: () => void }) {
   const canManage = useCurrentUser().organization.role !== "MANAGER";
   const [assets, setAssets] = useState<DevelopmentAssetRecord[]>([]);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
@@ -21,6 +23,7 @@ export function ProjectAssets({ projectId, onCoverChange }: { projectId: string;
   const [progress, setProgress] = useState("");
   const [error, setError] = useState("");
   const [documentKind, setDocumentKind] = useState<DevelopmentAssetKind>("CHESSBOARD");
+  const [importAsset, setImportAsset] = useState<DevelopmentAssetRecord | null>(null);
   const photoInput = useRef<HTMLInputElement>(null);
   const documentInput = useRef<HTMLInputElement>(null);
 
@@ -95,8 +98,9 @@ export function ProjectAssets({ projectId, onCoverChange }: { projectId: string;
     </div>
     <div className={styles.assetBlock}>
       <div className={styles.assetBlockHeader}><div><h3>Документы</h3><p>PDF, Excel и Word до 100 МБ. Шахматка и прайс получают отдельный черновик импорта.</p></div>{canManage && <div className={styles.documentUpload}><select value={documentKind} onChange={(event) => setDocumentKind(event.target.value as DevelopmentAssetKind)}>{(["CHESSBOARD", "PRICE_LIST", "LAYOUT", "PROMOTION", "PRESENTATION", "PERMIT", "OTHER"] as DevelopmentAssetKind[]).map((kind) => <option value={kind} key={kind}>{kindLabels[kind]}</option>)}</select><input ref={documentInput} hidden type="file" accept="application/pdf,.pdf,.xlsx,.xls,.doc,.docx" onChange={(event) => { const files = Array.from(event.target.files ?? []); if (files.length) void uploadFiles(files, documentKind); event.target.value = ""; }} /><button type="button" disabled={uploading} onClick={() => documentInput.current?.click()}>{uploading ? progress : "＋ Загрузить файл"}</button></div>}</div>
-      {documents.length ? <div className={styles.documentList}>{documents.map((asset) => <article key={asset.id}><div className={styles.fileIcon}>{asset.mimeType === "application/pdf" ? "PDF" : asset.mimeType.includes("sheet") || asset.mimeType.includes("excel") ? "XLS" : "DOC"}</div><div className={styles.fileInfo}><strong>{asset.filename}</strong><span>{kindLabels[asset.kind]} · версия {asset.version} · {formatSize(asset.sizeBytes)}</span>{asset.importBatch && <small>Черновик импорта: {asset.importBatch.rowCount ? `${asset.importBatch.approvedCount} из ${asset.importBatch.rowCount} строк подтверждено` : "ожидает подключения обработчика"}</small>}</div><span className={`${styles.assetStatus} ${asset.status === "FAILED" ? styles.assetStatusFailed : ""}`}>{statusLabels[asset.status]}</span><div className={styles.fileActions}><a href={asset.url} target="_blank" rel="noreferrer">Открыть</a>{canManage && asset.status === "REVIEW_REQUIRED" && <button type="button" onClick={() => { void updateAsset(asset.id, { reviewed: true }); }}>Проверено</button>}{canManage && <button className={styles.dangerAction} type="button" onClick={() => { void removeAsset(asset); }}>Удалить</button>}</div></article>)}</div> : <div className={styles.assetEmpty}>Документы ещё не загружены.</div>}
+      {documents.length ? <div className={styles.documentList}>{documents.map((asset) => { const importable = Boolean(asset.importBatch) && /\.(xlsx?|csv)$/i.test(asset.filename); return <article key={asset.id}><div className={styles.fileIcon}>{asset.mimeType === "application/pdf" ? "PDF" : asset.mimeType.includes("sheet") || asset.mimeType.includes("excel") ? "XLS" : "DOC"}</div><div className={styles.fileInfo}><strong>{asset.filename}</strong><span>{kindLabels[asset.kind]} · версия {asset.version} · {formatSize(asset.sizeBytes)}</span>{asset.importBatch && <small>{asset.importBatch.status === "PUBLISHED" ? `Опубликовано: ${asset.importBatch.rowCount} строк` : asset.importBatch.rowCount ? `Проверено ${asset.importBatch.approvedCount} из ${asset.importBatch.rowCount} строк` : "Excel готов к разбору и сопоставлению колонок"}</small>}</div><span className={`${styles.assetStatus} ${asset.status === "FAILED" ? styles.assetStatusFailed : ""}`}>{statusLabels[asset.status]}</span><div className={styles.fileActions}><a href={asset.url} target="_blank" rel="noreferrer">Открыть</a>{canManage && importable && <button className={styles.importAction} type="button" onClick={() => setImportAsset(asset)}>{asset.importBatch?.status === "PUBLISHED" ? "Обновить шахматку" : "Разобрать таблицу"}</button>}{canManage && !asset.importBatch && asset.status === "REVIEW_REQUIRED" && <button type="button" onClick={() => { void updateAsset(asset.id, { reviewed: true }); }}>Проверено</button>}{canManage && <button className={styles.dangerAction} type="button" onClick={() => { void removeAsset(asset); }}>Удалить</button>}</div></article>; })}</div> : <div className={styles.assetEmpty}>Документы ещё не загружены.</div>}
     </div>
+    {importAsset && <DevelopmentImportWizard projectId={projectId} asset={importAsset} onClose={() => setImportAsset(null)} onPublished={async () => { await load(); onImportPublished?.(); }} />}
   </section>;
 }
 

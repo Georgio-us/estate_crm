@@ -1,0 +1,17 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import type { DevelopmentUnitRecord, DevelopmentUnitStatus } from "@/types/developments";
+import styles from "./developments.module.css";
+
+const statusLabels: Record<DevelopmentUnitStatus, string> = { AVAILABLE: "В продаже", RESERVED: "Резерв", SOLD: "Продано", UNKNOWN: "Уточняется" };
+
+export function ProjectUnits({ projectId, refreshKey }: { projectId: string; refreshKey: number }) {
+  const [units, setUnits] = useState<DevelopmentUnitRecord[]>([]); const [loading, setLoading] = useState(true); const [query, setQuery] = useState(""); const [status, setStatus] = useState<DevelopmentUnitStatus | "ALL">("ALL");
+  useEffect(() => { let active = true; void fetch(`/api/crm/development-projects/${projectId}/units?refresh=${refreshKey}`, { cache: "no-store" }).then(async (response) => { const payload = await response.json() as { units?: DevelopmentUnitRecord[] }; if (!response.ok || !payload.units) throw new Error(); if (active) setUnits(payload.units); }).catch(() => { if (active) setUnits([]); }).finally(() => { if (active) setLoading(false); }); return () => { active = false; }; }, [projectId, refreshKey]);
+  const visible = useMemo(() => units.filter((unit) => { const haystack = `${unit.unitNumber} ${unit.building || ""} ${unit.section || ""}`.toLocaleLowerCase("ru"); return (status === "ALL" || unit.status === status) && haystack.includes(query.trim().toLocaleLowerCase("ru")); }), [query, status, units]);
+  const available = units.filter((unit) => unit.status === "AVAILABLE").length;
+  return <section className={styles.unitsSection}><header><div><span className={styles.sectionEyebrow}>Структура продаж</span><h2>Квартиры и помещения</h2><p>{units.length ? `Всего ${units.length}, в продаже ${available}. Данные опубликованы из проверенной шахматки.` : "Загрузите Excel-шахматку, сопоставьте колонки и опубликуйте её — помещения появятся здесь."}</p></div>{units.length > 0 && <div className={styles.unitsFilters}><input type="search" placeholder="№, корпус или секция" value={query} onChange={(event) => setQuery(event.target.value)} /><select value={status} onChange={(event) => setStatus(event.target.value as DevelopmentUnitStatus | "ALL")}><option value="ALL">Все статусы</option>{Object.entries(statusLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></div>}</header>
+    {loading ? <div className={styles.assetEmpty}>Загружаем шахматку…</div> : units.length === 0 ? <div className={styles.unitsEmpty}><strong>Шахматка пока не опубликована</strong><span>Excel-файл останется в документах, а его строки после проверки станут рабочей базой помещений.</span></div> : <div className={styles.unitsTable}><div className={styles.unitsHead}><b>№</b><b>Корпус / секция</b><b>Этаж</b><b>Комнаты</b><b>Площадь</b><b>Цена</b><b>Статус</b></div>{visible.map((unit) => <div key={unit.id}><strong>{unit.unitNumber}</strong><span>{[unit.building, unit.section].filter(Boolean).join(" · ") || "—"}</span><span>{unit.floor ?? "—"}</span><span>{unit.rooms ?? "—"}</span><span>{unit.area != null ? `${unit.area} м²` : "—"}</span><span>{unit.price != null ? `${new Intl.NumberFormat("ru-RU").format(unit.price)} ${unit.currency}` : "—"}</span><span className={`${styles.unitStatus} ${styles[`unitStatus${unit.status}`]}`}>{statusLabels[unit.status]}</span></div>)}{visible.length === 0 && <p className={styles.unitsNoResults}>По выбранному фильтру помещений нет.</p>}</div>}
+  </section>;
+}

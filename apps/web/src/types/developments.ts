@@ -30,3 +30,9 @@ export interface CreateDevelopmentProjectRequest {
   salesStatus?: DevelopmentSalesStatus; plannedCompletion?: string | null; className?: string | null; buildingsCount?: number | null;
   sectionsCount?: number | null; floors?: string | null; imageUrl?: string | null; sourceUrl?: string | null;
 }
+
+export type DevelopmentUnitStatus = "AVAILABLE" | "RESERVED" | "SOLD" | "UNKNOWN";
+export interface DevelopmentUnitRecord {
+  id: string; unitNumber: string; building: string | null; section: string | null; floor: number | null; rooms: number | null;
+  area: number | null; price: number | null; currency: "USD" | "EUR" | "UAH"; status: DevelopmentUnitStatus; updatedAt: string;
+}
