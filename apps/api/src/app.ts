@@ -92,7 +92,7 @@ export async function buildApp(
   await registerDevelopmentImportRoutes(app, database);
   await registerPropertySelectionRoutes(app, database);
   await registerPropertySelectionShareRoutes(app, database, config);
-  await registerSettingsRoutes(app, database);
+  await registerSettingsRoutes(app, database, config);
   await registerDashboardRoutes(app, database);
   await registerPilotRoutes(app, database);
   await registerIntegrationRoutes(app, database);

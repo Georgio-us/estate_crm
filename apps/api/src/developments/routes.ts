@@ -13,6 +13,7 @@ import type {
 import type { DatabaseConnection } from "@estate-crm/database";
 
 import { requireUser } from "../auth/require-user.js";
+import { canManageDevelopments } from "../auth/authorization.js";
 import type { ApiConfig } from "../config.js";
 import { propertyStorage } from "../properties/photo-routes.js";
 import { developmentCatalogSeed } from "./catalog-seed.js";
@@ -29,6 +30,8 @@ function mapProject(project: {
   id: string; developerId: string; slug: string; name: string; address: string | null; district: string | null; description: string | null;
   constructionStatus: "PLANNED" | "UNDER_CONSTRUCTION" | "COMPLETED" | "PAUSED"; salesStatus: "EXPECTED" | "LAUNCH" | "OPEN" | "CLOSED";
   plannedCompletion: string | null; className: string | null; buildingsCount: number | null; sectionsCount: number | null; floors: string | null;
+  constructionTechnology: string | null; heating: string | null; territory: string | null; parking: string | null; apartmentCondition: string | null;
+  ceilingHeight: string | null; installmentTerms: string | null; downPayment: string | null; infrastructure: string | null; managerNote: string | null;
   imageUrl: string | null; sourceUrl: string | null; verifiedAt: Date | null; archivedAt: Date | null; createdAt: Date; updatedAt: Date;
 }): DevelopmentProjectRecord {
   return { ...project, verifiedAt: project.verifiedAt?.toISOString() ?? null, archivedAt: project.archivedAt?.toISOString() ?? null, createdAt: project.createdAt.toISOString(), updatedAt: project.updatedAt.toISOString() };
@@ -77,6 +80,11 @@ const projectFields = {
   plannedCompletion: { anyOf: [{ type: "string", maxLength: 100 }, { type: "null" }] }, className: { anyOf: [{ type: "string", maxLength: 100 }, { type: "null" }] },
   buildingsCount: { anyOf: [{ type: "integer", minimum: 0 }, { type: "null" }] }, sectionsCount: { anyOf: [{ type: "integer", minimum: 0 }, { type: "null" }] },
   floors: { anyOf: [{ type: "string", maxLength: 100 }, { type: "null" }] }, imageUrl: { anyOf: [{ type: "string", maxLength: 2_000 }, { type: "null" }] },
+  constructionTechnology: { anyOf: [{ type: "string", maxLength: 200 }, { type: "null" }] }, heating: { anyOf: [{ type: "string", maxLength: 200 }, { type: "null" }] },
+  territory: { anyOf: [{ type: "string", maxLength: 1_000 }, { type: "null" }] }, parking: { anyOf: [{ type: "string", maxLength: 500 }, { type: "null" }] },
+  apartmentCondition: { anyOf: [{ type: "string", maxLength: 500 }, { type: "null" }] }, ceilingHeight: { anyOf: [{ type: "string", maxLength: 100 }, { type: "null" }] },
+  installmentTerms: { anyOf: [{ type: "string", maxLength: 1_000 }, { type: "null" }] }, downPayment: { anyOf: [{ type: "string", maxLength: 200 }, { type: "null" }] },
+  infrastructure: { anyOf: [{ type: "string", maxLength: 2_000 }, { type: "null" }] }, managerNote: { anyOf: [{ type: "string", maxLength: 2_000 }, { type: "null" }] },
   sourceUrl: { anyOf: [{ type: "string", maxLength: 2_000 }, { type: "null" }] },
 } as const;
 
@@ -89,7 +97,6 @@ function projectData(body: CreateDevelopmentProjectRequest | UpdateDevelopmentPr
 
 export async function registerDevelopmentRoutes(app: FastifyInstance, database: DatabaseConnection, config: ApiConfig): Promise<void> {
   const storage = propertyStorage(config);
-  const canManage = (role: "ADMIN" | "LEAD" | "MANAGER") => role !== "MANAGER";
   const forbidden = (reply: FastifyReply) => reply.status(403).send({ error: "forbidden", message: "Управлять новостройками может руководитель или администратор." });
 
   app.get<{ Querystring: { archived?: "only" | "all" }; Reply: { developers: DevelopmentDeveloperRecord[] } | ApiErrorResponse }>("/development-developers", async (request, reply) => {
@@ -114,7 +121,7 @@ export async function registerDevelopmentRoutes(app: FastifyInstance, database: 
 
   app.post<{ Body: CreateDevelopmentDeveloperRequest; Reply: { developer: DevelopmentDeveloperRecord } | ApiErrorResponse }>("/development-developers", { schema: { body: { type: "object", additionalProperties: false, required: ["name"], properties: developerFields } } }, async (request, reply) => {
     const user = await requireUser(request, reply, database); if (!user) return reply;
-    if (!canManage(user.organization.role)) return forbidden(reply);
+    if (!canManageDevelopments(user)) return forbidden(reply);
     const slug = `${slugify(request.body.name)}-${crypto.randomUUID().slice(0, 6)}`;
     const developer = await database.client.developmentDeveloper.create({ data: { organizationId: user.organization.id, slug, name: request.body.name.trim(), ...developerData(request.body) }, include: { projects: true } });
     return reply.status(201).send({ developer: mapDeveloper(developer) });
@@ -122,7 +129,7 @@ export async function registerDevelopmentRoutes(app: FastifyInstance, database: 
 
   app.patch<{ Params: { developerId: string }; Body: UpdateDevelopmentDeveloperRequest; Reply: { developer: DevelopmentDeveloperRecord } | ApiErrorResponse }>("/development-developers/:developerId", { schema: { body: { type: "object", additionalProperties: false, minProperties: 1, properties: developerFields } } }, async (request, reply) => {
     const user = await requireUser(request, reply, database); if (!user) return reply;
-    if (!canManage(user.organization.role)) return forbidden(reply);
+    if (!canManageDevelopments(user)) return forbidden(reply);
     const existing = await database.client.developmentDeveloper.findFirst({ where: { id: request.params.developerId, organizationId: user.organization.id }, select: { id: true } });
     if (!existing) return reply.status(404).send({ error: "developer_not_found", message: "Застройщик не найден." });
     const developer = await database.client.developmentDeveloper.update({ where: { id: existing.id }, data: developerData(request.body), include: { projects: { orderBy: { name: "asc" } } } });
@@ -131,7 +138,7 @@ export async function registerDevelopmentRoutes(app: FastifyInstance, database: 
 
   app.post<{ Params: { developerId: string }; Body: CreateDevelopmentProjectRequest; Reply: { project: DevelopmentProjectRecord } | ApiErrorResponse }>("/development-developers/:developerId/projects", { schema: { body: { type: "object", additionalProperties: false, required: ["name"], properties: projectFields } } }, async (request, reply) => {
     const user = await requireUser(request, reply, database); if (!user) return reply;
-    if (!canManage(user.organization.role)) return forbidden(reply);
+    if (!canManageDevelopments(user)) return forbidden(reply);
     const developer = await database.client.developmentDeveloper.findFirst({ where: { id: request.params.developerId, organizationId: user.organization.id }, select: { id: true } });
     if (!developer) return reply.status(404).send({ error: "developer_not_found", message: "Застройщик не найден." });
     const project = await database.client.developmentProject.create({ data: { organizationId: user.organization.id, developerId: developer.id, slug: `${slugify(request.body.name)}-${crypto.randomUUID().slice(0, 6)}`, name: request.body.name.trim(), ...projectData(request.body) } });
@@ -140,7 +147,7 @@ export async function registerDevelopmentRoutes(app: FastifyInstance, database: 
 
   app.patch<{ Params: { projectId: string }; Body: UpdateDevelopmentProjectRequest; Reply: { project: DevelopmentProjectRecord } | ApiErrorResponse }>("/development-projects/:projectId", { schema: { body: { type: "object", additionalProperties: false, minProperties: 1, properties: projectFields } } }, async (request, reply) => {
     const user = await requireUser(request, reply, database); if (!user) return reply;
-    if (!canManage(user.organization.role)) return forbidden(reply);
+    if (!canManageDevelopments(user)) return forbidden(reply);
     const existing = await database.client.developmentProject.findFirst({ where: { id: request.params.projectId, organizationId: user.organization.id }, select: { id: true } });
     if (!existing) return reply.status(404).send({ error: "project_not_found", message: "Проект не найден." });
     const project = await database.client.developmentProject.update({ where: { id: existing.id }, data: projectData(request.body) });
@@ -149,7 +156,7 @@ export async function registerDevelopmentRoutes(app: FastifyInstance, database: 
 
   app.post<{ Params: { developerId: string }; Reply: { developer: DevelopmentDeveloperRecord } | ApiErrorResponse }>("/development-developers/:developerId/archive", async (request, reply) => {
     const user = await requireUser(request, reply, database); if (!user) return reply;
-    if (!canManage(user.organization.role)) return forbidden(reply);
+    if (!canManageDevelopments(user)) return forbidden(reply);
     const existing = await database.client.developmentDeveloper.findFirst({ where: { id: request.params.developerId, organizationId: user.organization.id }, select: { id: true } });
     if (!existing) return reply.status(404).send({ error: "developer_not_found", message: "Застройщик не найден." });
     const developer = await database.client.developmentDeveloper.update({ where: { id: existing.id }, data: { archivedAt: new Date() }, include: { projects: { where: { archivedAt: null }, orderBy: { name: "asc" } } } });
@@ -158,7 +165,7 @@ export async function registerDevelopmentRoutes(app: FastifyInstance, database: 
 
   app.post<{ Params: { developerId: string }; Reply: { developer: DevelopmentDeveloperRecord } | ApiErrorResponse }>("/development-developers/:developerId/restore", async (request, reply) => {
     const user = await requireUser(request, reply, database); if (!user) return reply;
-    if (!canManage(user.organization.role)) return forbidden(reply);
+    if (!canManageDevelopments(user)) return forbidden(reply);
     const existing = await database.client.developmentDeveloper.findFirst({ where: { id: request.params.developerId, organizationId: user.organization.id }, select: { id: true } });
     if (!existing) return reply.status(404).send({ error: "developer_not_found", message: "Застройщик не найден." });
     const developer = await database.client.developmentDeveloper.update({ where: { id: existing.id }, data: { archivedAt: null }, include: { projects: { where: { archivedAt: null }, orderBy: { name: "asc" } } } });
@@ -167,7 +174,7 @@ export async function registerDevelopmentRoutes(app: FastifyInstance, database: 
 
   app.delete<{ Params: { developerId: string }; Reply: { deleted: true } | ApiErrorResponse }>("/development-developers/:developerId", async (request, reply) => {
     const user = await requireUser(request, reply, database); if (!user) return reply;
-    if (!canManage(user.organization.role)) return forbidden(reply);
+    if (!canManageDevelopments(user)) return forbidden(reply);
     const existing = await database.client.developmentDeveloper.findFirst({ where: { id: request.params.developerId, organizationId: user.organization.id }, include: { projects: { include: { assets: { select: { storageKey: true } } } } } });
     if (!existing) return reply.status(404).send({ error: "developer_not_found", message: "Застройщик не найден." });
     if (!existing.archivedAt) return reply.status(409).send({ error: "developer_not_archived", message: "Сначала перенесите застройщика в архив." });
@@ -181,7 +188,7 @@ export async function registerDevelopmentRoutes(app: FastifyInstance, database: 
 
   app.post<{ Params: { projectId: string }; Reply: { project: DevelopmentProjectRecord } | ApiErrorResponse }>("/development-projects/:projectId/archive", async (request, reply) => {
     const user = await requireUser(request, reply, database); if (!user) return reply;
-    if (!canManage(user.organization.role)) return forbidden(reply);
+    if (!canManageDevelopments(user)) return forbidden(reply);
     const existing = await database.client.developmentProject.findFirst({ where: { id: request.params.projectId, organizationId: user.organization.id }, select: { id: true } });
     if (!existing) return reply.status(404).send({ error: "project_not_found", message: "Проект не найден." });
     return { project: mapProject(await database.client.developmentProject.update({ where: { id: existing.id }, data: { archivedAt: new Date() } })) };
@@ -189,7 +196,7 @@ export async function registerDevelopmentRoutes(app: FastifyInstance, database: 
 
   app.post<{ Params: { projectId: string }; Reply: { project: DevelopmentProjectRecord } | ApiErrorResponse }>("/development-projects/:projectId/restore", async (request, reply) => {
     const user = await requireUser(request, reply, database); if (!user) return reply;
-    if (!canManage(user.organization.role)) return forbidden(reply);
+    if (!canManageDevelopments(user)) return forbidden(reply);
     const existing = await database.client.developmentProject.findFirst({ where: { id: request.params.projectId, organizationId: user.organization.id }, select: { id: true } });
     if (!existing) return reply.status(404).send({ error: "project_not_found", message: "Проект не найден." });
     return { project: mapProject(await database.client.developmentProject.update({ where: { id: existing.id }, data: { archivedAt: null } })) };
@@ -197,7 +204,7 @@ export async function registerDevelopmentRoutes(app: FastifyInstance, database: 
 
   app.delete<{ Params: { projectId: string }; Reply: { deleted: true } | ApiErrorResponse }>("/development-projects/:projectId", async (request, reply) => {
     const user = await requireUser(request, reply, database); if (!user) return reply;
-    if (!canManage(user.organization.role)) return forbidden(reply);
+    if (!canManageDevelopments(user)) return forbidden(reply);
     const existing = await database.client.developmentProject.findFirst({ where: { id: request.params.projectId, organizationId: user.organization.id }, include: { assets: { select: { storageKey: true } } } });
     if (!existing) return reply.status(404).send({ error: "project_not_found", message: "Проект не найден." });
     if (!existing.archivedAt) return reply.status(409).send({ error: "project_not_archived", message: "Сначала перенесите проект в архив." });

@@ -1,7 +1,11 @@
 import type { AuthenticatedUser } from "@estate-crm/contracts";
 
 export function hasOrganizationWideDataAccess(user: AuthenticatedUser): boolean {
-  return user.organization.role === "ADMIN" || user.organization.role === "LEAD";
+  return user.organization.role === "ADMIN" || user.organization.role === "LEAD" || Boolean(user.organization.permissions?.seeAllDeals);
+}
+
+export function canManageDevelopments(user: AuthenticatedUser): boolean {
+  return user.organization.role !== "MANAGER" || Boolean(user.organization.permissions?.manageDevelopments);
 }
 
 export function dataScope(user: AuthenticatedUser): {

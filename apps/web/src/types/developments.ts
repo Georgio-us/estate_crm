@@ -14,6 +14,9 @@ export interface DevelopmentProjectRecord {
   id: string; developerId: string; slug: string; name: string; address: string | null; district: string | null; description: string | null;
   constructionStatus: DevelopmentConstructionStatus; salesStatus: DevelopmentSalesStatus; plannedCompletion: string | null; className: string | null;
   buildingsCount: number | null; sectionsCount: number | null; floors: string | null; imageUrl: string | null; sourceUrl: string | null;
+  constructionTechnology: string | null; heating: string | null; territory: string | null; parking: string | null;
+  apartmentCondition: string | null; ceilingHeight: string | null; installmentTerms: string | null; downPayment: string | null;
+  infrastructure: string | null; managerNote: string | null;
   verifiedAt: string | null; archivedAt: string | null; createdAt: string; updatedAt: string;
 }
 
@@ -29,6 +32,9 @@ export interface CreateDevelopmentProjectRequest {
   name: string; address?: string | null; district?: string | null; description?: string | null; constructionStatus?: DevelopmentConstructionStatus;
   salesStatus?: DevelopmentSalesStatus; plannedCompletion?: string | null; className?: string | null; buildingsCount?: number | null;
   sectionsCount?: number | null; floors?: string | null; imageUrl?: string | null; sourceUrl?: string | null;
+  constructionTechnology?: string | null; heating?: string | null; territory?: string | null; parking?: string | null;
+  apartmentCondition?: string | null; ceilingHeight?: string | null; installmentTerms?: string | null; downPayment?: string | null;
+  infrastructure?: string | null; managerNote?: string | null;
 }
 
 export type DevelopmentUnitStatus = "AVAILABLE" | "RESERVED" | "SOLD" | "UNKNOWN";
@@ -36,4 +42,5 @@ export interface DevelopmentUnitRecord {
   id: string; unitNumber: string; building: string | null; section: string | null; floor: number | null; rooms: number | null; roomsLabel: string | null;
   area: number | null; price: number | null; pricePerSquareMeter: number | null; currency: "USD" | "EUR" | "UAH"; status: DevelopmentUnitStatus;
   renovationType: string | null; renovationCompletion: string | null; note: string | null; updatedAt: string;
+  manualFields: string[]; manualUpdatedAt: string | null; archivedAt: string | null;
 }

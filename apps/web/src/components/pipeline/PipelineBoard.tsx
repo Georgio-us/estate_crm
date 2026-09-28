@@ -1025,6 +1025,7 @@ export function PipelineBoard() {
           viewLabel={`${dealsCount} ${pipelineView === "active" ? "активных" : "закрытых"} сделок`}
           onImport={importDeals}
           onClose={() => setTransferOpen(false)}
+          canExport={user.organization.role !== "MANAGER" || Boolean(user.organization.permissions?.exportData)}
         />
       )}
       {notice && <div className={styles.notice} role="status">{notice}</div>}

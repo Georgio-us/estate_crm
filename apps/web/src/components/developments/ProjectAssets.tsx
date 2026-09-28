@@ -16,7 +16,8 @@ const kindLabels: Record<DevelopmentAssetKind, string> = {
 const statusLabels = { PENDING: "Загружается", READY: "Готов", PROCESSING: "Обрабатывается", REVIEW_REQUIRED: "Нужно проверить", FAILED: "Ошибка" } as const;
 
 export function ProjectAssets({ projectId, projectName, onCoverChange, onImportPublished }: { projectId: string; projectName: string; onCoverChange?: (url: string | null) => void; onImportPublished?: () => void }) {
-  const canManage = useCurrentUser().organization.role !== "MANAGER";
+  const currentUser = useCurrentUser();
+  const canManage = currentUser.organization.role !== "MANAGER" || Boolean(currentUser.organization.permissions?.manageDevelopments);
   const [assets, setAssets] = useState<DevelopmentAssetRecord[]>([]);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [uploading, setUploading] = useState(false);

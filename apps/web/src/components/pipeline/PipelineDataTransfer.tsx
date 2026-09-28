@@ -11,6 +11,7 @@ interface PipelineDataTransferProps {
   viewLabel: string;
   onImport: (rows: ImportedDealRow[]) => Promise<{ created: number; updated: number; skipped: number; errors: string[] }>;
   onClose: () => void;
+  canExport: boolean;
 }
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -31,7 +32,7 @@ function dateSuffix() {
   return new Date().toISOString().slice(0, 10);
 }
 
-export function PipelineDataTransfer({ rows, viewLabel, onImport, onClose }: PipelineDataTransferProps) {
+export function PipelineDataTransfer({ rows, viewLabel, onImport, onClose, canExport }: PipelineDataTransferProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [accept, setAccept] = useState(".csv,text/csv");
   const [busy, setBusy] = useState(false);
@@ -104,7 +105,7 @@ export function PipelineDataTransfer({ rows, viewLabel, onImport, onClose }: Pip
     <button className={styles.transferBackdrop} type="button" aria-label="Закрыть импорт и экспорт" onClick={onClose} />
     <section className={styles.transferModal} role="dialog" aria-modal="true" aria-labelledby="pipeline-transfer-title">
       <header><div><span>Данные воронки</span><h3 id="pipeline-transfer-title">Импорт и экспорт</h3><p>{viewLabel}</p></div><button type="button" aria-label="Закрыть" onClick={onClose}>×</button></header>
-      <div className={styles.transferSection}><div><strong>Экспортировать</strong><span>Скачать сделки с техническими ID для безопасного обратного импорта.</span></div><div className={styles.transferActions}><button type="button" disabled={busy} onClick={exportCsv}><b>CSV</b><span>Обычная таблица</span></button><button type="button" disabled={busy} onClick={() => { void exportXlsx(); }}><b>Excel</b><span>Файл .xlsx</span></button></div></div>
+      {canExport && <div className={styles.transferSection}><div><strong>Экспортировать</strong><span>Скачать сделки с техническими ID для безопасного обратного импорта.</span></div><div className={styles.transferActions}><button type="button" disabled={busy} onClick={exportCsv}><b>CSV</b><span>Обычная таблица</span></button><button type="button" disabled={busy} onClick={() => { void exportXlsx(); }}><b>Excel</b><span>Файл .xlsx</span></button></div></div>}
       <div className={styles.transferSection}><div><strong>Импортировать</strong><span>Первая строка должна содержать названия колонок. Можно использовать экспортированный файл как шаблон.</span></div><div className={styles.transferActions}><button type="button" disabled={busy} onClick={() => chooseFile("csv")}><b>CSV</b><span>Выбрать файл</span></button><button type="button" disabled={busy} onClick={() => chooseFile("xlsx")}><b>Excel</b><span>.xlsx или .xls</span></button></div><input ref={inputRef} className={styles.hiddenFileInput} type="file" accept={accept} onChange={(event) => { const file = event.target.files?.[0]; if (file) void importFile(file); }} /></div>
       {(result || errors.length > 0) && <footer className={styles.transferResult} aria-live="polite"><strong>{result}</strong>{errors.map((error) => <span key={error}>{error}</span>)}</footer>}
     </section>

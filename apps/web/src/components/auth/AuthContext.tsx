@@ -11,6 +11,13 @@ export interface SessionUser {
     name: string;
     slug: string;
     role: "ADMIN" | "LEAD" | "MANAGER";
+    permissions?: {
+      seeAllDeals: boolean;
+      seeUnassignedPhones: boolean;
+      claimUnassigned: boolean;
+      manageDevelopments: boolean;
+      exportData: boolean;
+    };
   };
 }
 

@@ -317,6 +317,7 @@
 .auditList article > span,
 .entityList article > span,
 .matrixRows label > span,
+.matrixRows > div > span,
 .memberAccess label > span {
   display: flex;
   min-width: 0;
@@ -532,6 +533,7 @@
 
 .matrix { width: 100%; max-width: 820px; }
 .matrixRows label,
+.matrixRows > div,
 .memberAccess label {
   min-height: 76px;
   display: flex;
@@ -560,6 +562,7 @@
 .modalBody input:focus,
 .modalBody select:focus { border-color: #a9bfe9; box-shadow: var(--shadow-focus); }
 .matrixRows select:disabled { border-color: transparent; color: var(--text-muted); opacity: 1; }
+.matrixRows > div > b { color: var(--text-muted); font-size: var(--font-size-body-sm); font-weight: 600; }
 
 .inviteList article,
 .auditList article,
@@ -767,7 +770,7 @@
   .peopleGrid { grid-template-columns: 1fr; gap: 32px; }
   .peopleGrid section > button > i { display: block; color: var(--text-subtle); font-style: normal; }
   .roles { grid-template-columns: 1fr; gap: 38px; padding-top: 30px; }
-  .matrixRows label, .memberAccess label { min-height: 84px; gap: 12px; }
+  .matrixRows label, .matrixRows > div, .memberAccess label { min-height: 84px; gap: 12px; }
   .matrixRows select { width: 142px; }
   .inviteList article { grid-template-columns: 40px 1fr; padding: 16px 0; }
   .inviteList article > span:nth-child(3), .inviteList article > div { grid-column: 2; }
@@ -796,7 +799,7 @@
   .composition > header, .loadSection > header, .sectionTitle { flex-direction: column; gap: 7px; }
   .composition header > span, .loadSection header > span { text-align: left; }
   .matrix > header { align-items: flex-start; }
-  .matrixRows label { align-items: flex-start; flex-direction: column; padding: 14px 0; }
+  .matrixRows label, .matrixRows > div { align-items: flex-start; flex-direction: column; padding: 14px 0; }
   .matrixRows select { width: 100%; }
   .modal footer { padding: 16px; }
 }

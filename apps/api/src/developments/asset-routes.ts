@@ -8,6 +8,7 @@ import type { DevelopmentAssetKind, DevelopmentAssetRecord } from "@estate-crm/c
 import type { DatabaseConnection } from "@estate-crm/database";
 
 import { requireUser } from "../auth/require-user.js";
+import { canManageDevelopments } from "../auth/authorization.js";
 import type { ApiConfig } from "../config.js";
 import { propertyStorage } from "../properties/photo-routes.js";
 
@@ -50,7 +51,6 @@ const assetInclude = { importBatch: { include: { _count: { select: { rows: true 
 
 export async function registerDevelopmentAssetRoutes(app: FastifyInstance, database: DatabaseConnection, config: ApiConfig) {
   const r2 = propertyStorage(config);
-  const canManage = (role: "ADMIN" | "LEAD" | "MANAGER") => role !== "MANAGER";
   const paramsSchema = { type: "object", required: ["projectId"], properties: { projectId: { type: "string", format: "uuid" }, assetId: { type: "string", format: "uuid" } } } as const;
   async function projectForUser(projectId: string, organizationId: string) {
     return database.client.developmentProject.findFirst({ where: { id: projectId, organizationId }, select: { id: true, developerId: true } });
@@ -73,7 +73,7 @@ export async function registerDevelopmentAssetRoutes(app: FastifyInstance, datab
     } } },
   }, async (request, reply) => {
     const user = await requireUser(request, reply, database); if (!user) return reply;
-    if (!canManage(user.organization.role)) return reply.status(403).send({ error: "forbidden", message: "Управлять файлами новостроек может руководитель или администратор." });
+    if (!canManageDevelopments(user)) return reply.status(403).send({ error: "forbidden", message: "Управлять файлами новостроек может руководитель, администратор или менеджер с выданным правом." });
     const project = await projectForUser(request.params.projectId, user.organization.id);
     if (!project) return reply.status(404).send({ error: "project_not_found", message: "Проект не найден." });
     if (!r2) return reply.status(503).send({ error: "storage_not_configured", message: "Cloudflare R2 не подключён на сервере." });
@@ -93,7 +93,7 @@ export async function registerDevelopmentAssetRoutes(app: FastifyInstance, datab
 
   app.post<{ Params: { projectId: string; assetId: string } }>("/development-projects/:projectId/assets/:assetId/finalize", { schema: { params: paramsSchema } }, async (request, reply) => {
     const user = await requireUser(request, reply, database); if (!user) return reply;
-    if (!canManage(user.organization.role)) return reply.status(403).send({ error: "forbidden" });
+    if (!canManageDevelopments(user)) return reply.status(403).send({ error: "forbidden" });
     const asset = await database.client.developmentAsset.findFirst({ where: { id: request.params.assetId, projectId: request.params.projectId, organizationId: user.organization.id } });
     if (!asset) return reply.status(404).send({ error: "asset_not_found" });
     if (!r2) return reply.status(503).send({ error: "storage_not_configured" });
@@ -138,7 +138,7 @@ export async function registerDevelopmentAssetRoutes(app: FastifyInstance, datab
 
   app.patch<{ Params: { projectId: string; assetId: string }; Body: { isCover?: boolean; reviewed?: boolean } }>("/development-projects/:projectId/assets/:assetId", { schema: { params: paramsSchema, body: { type: "object", additionalProperties: false, minProperties: 1, properties: { isCover: { type: "boolean" }, reviewed: { type: "boolean" } } } } }, async (request, reply) => {
     const user = await requireUser(request, reply, database); if (!user) return reply;
-    if (!canManage(user.organization.role)) return reply.status(403).send({ error: "forbidden" });
+    if (!canManageDevelopments(user)) return reply.status(403).send({ error: "forbidden" });
     const asset = await database.client.developmentAsset.findFirst({ where: { id: request.params.assetId, projectId: request.params.projectId, organizationId: user.organization.id }, include: assetInclude });
     if (!asset) return reply.status(404).send({ error: "asset_not_found" });
     if (request.body.isCover && !asset.mimeType.startsWith("image/")) return reply.status(400).send({ error: "cover_must_be_image", message: "Обложкой может быть только изображение." });
@@ -155,7 +155,7 @@ export async function registerDevelopmentAssetRoutes(app: FastifyInstance, datab
 
   app.delete<{ Params: { projectId: string; assetId: string } }>("/development-projects/:projectId/assets/:assetId", { schema: { params: paramsSchema } }, async (request, reply) => {
     const user = await requireUser(request, reply, database); if (!user) return reply;
-    if (!canManage(user.organization.role)) return reply.status(403).send({ error: "forbidden" });
+    if (!canManageDevelopments(user)) return reply.status(403).send({ error: "forbidden" });
     const asset = await database.client.developmentAsset.findFirst({ where: { id: request.params.assetId, projectId: request.params.projectId, organizationId: user.organization.id } });
     if (!asset) return reply.status(404).send({ error: "asset_not_found" });
     if (!r2) return reply.status(503).send({ error: "storage_not_configured" });
@@ -182,7 +182,7 @@ export async function registerDevelopmentAssetRoutes(app: FastifyInstance, datab
     schema: { params: developerParamsSchema, body: coverBodySchema },
   }, async (request, reply) => {
     const user = await requireUser(request, reply, database); if (!user) return reply;
-    if (!canManage(user.organization.role)) return reply.status(403).send({ error: "forbidden", message: "Изменять обложки может руководитель или администратор." });
+    if (!canManageDevelopments(user)) return reply.status(403).send({ error: "forbidden", message: "Изменять обложки может руководитель, администратор или менеджер с выданным правом." });
     const developer = await database.client.developmentDeveloper.findFirst({ where: { id: request.params.developerId, organizationId: user.organization.id }, select: { id: true } });
     if (!developer) return reply.status(404).send({ error: "developer_not_found", message: "Застройщик не найден." });
     if (!r2) return reply.status(503).send({ error: "storage_not_configured", message: "Cloudflare R2 не подключён на сервере." });
@@ -195,7 +195,7 @@ export async function registerDevelopmentAssetRoutes(app: FastifyInstance, datab
     schema: { params: developerParamsSchema, body: coverBodySchema },
   }, async (request, reply) => {
     const user = await requireUser(request, reply, database); if (!user) return reply;
-    if (!canManage(user.organization.role)) return reply.status(403).send({ error: "forbidden" });
+    if (!canManageDevelopments(user)) return reply.status(403).send({ error: "forbidden" });
     const developer = await database.client.developmentDeveloper.findFirst({ where: { id: request.params.developerId, organizationId: user.organization.id }, select: { id: true } });
     if (!developer) return reply.status(404).send({ error: "developer_not_found" });
     if (!r2) return reply.status(503).send({ error: "storage_not_configured" });
@@ -217,7 +217,7 @@ export async function registerDevelopmentAssetRoutes(app: FastifyInstance, datab
 
   app.delete<{ Params: { developerId: string } }>("/development-developers/:developerId/cover", { schema: { params: developerParamsSchema } }, async (request, reply) => {
     const user = await requireUser(request, reply, database); if (!user) return reply;
-    if (!canManage(user.organization.role)) return reply.status(403).send({ error: "forbidden" });
+    if (!canManageDevelopments(user)) return reply.status(403).send({ error: "forbidden" });
     const developer = await database.client.developmentDeveloper.findFirst({ where: { id: request.params.developerId, organizationId: user.organization.id }, select: { id: true, coverReadyAt: true } });
     if (!developer) return reply.status(404).send({ error: "developer_not_found" });
     if (developer.coverReadyAt && !r2) return reply.status(503).send({ error: "storage_not_configured", message: "Нельзя удалить обложку: хранилище R2 не подключено." });

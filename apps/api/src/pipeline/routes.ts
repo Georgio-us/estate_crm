@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 
 import type {
   ApiErrorResponse,
+  AuthenticatedUser,
   CreateDealRequest,
   LinkDealContactRequest,
   MoveDealRequest,
@@ -78,8 +79,10 @@ function mapDeal(deal: {
   };
 }
 
-function shouldHideDealPhones(role: "ADMIN" | "LEAD" | "MANAGER", userId: string, assignee: { id: string } | null): boolean {
-  return !assignee || (role === "MANAGER" && assignee.id !== userId);
+function shouldHideDealPhones(user: AuthenticatedUser, assignee: { id: string } | null): boolean {
+  if (assignee?.id === user.id) return false;
+  if (!assignee) return user.organization.role === "MANAGER" ? user.organization.permissions?.seeUnassignedPhones !== true : true;
+  return user.organization.role === "MANAGER";
 }
 
 async function ensureDefaultPipeline(database: DatabaseConnection, organizationId: string) {
@@ -149,7 +152,7 @@ export async function registerPipelineRoutes(
           title: stage.title,
           color: stage.color,
           position: stage.position,
-          deals: stage.deals.map((deal) => mapDeal(deal, shouldHideDealPhones(user.organization.role, user.id, deal.assignee))),
+          deals: stage.deals.map((deal) => mapDeal(deal, shouldHideDealPhones(user, deal.assignee))),
         })),
       },
     };
@@ -441,7 +444,7 @@ export async function registerPipelineRoutes(
       },
     });
 
-    return reply.status(201).send({ deal: mapDeal(deal, shouldHideDealPhones(user.organization.role, user.id, deal.assignee)), stageId: stage.id });
+    return reply.status(201).send({ deal: mapDeal(deal, shouldHideDealPhones(user, deal.assignee)), stageId: stage.id });
   });
 
   app.get<{
@@ -465,7 +468,7 @@ export async function registerPipelineRoutes(
       },
     });
     if (!deal) return reply.status(404).send({ error: "deal_not_found", message: "Сделка не найдена." });
-    return { deal: mapDeal(deal, shouldHideDealPhones(user.organization.role, user.id, deal.assignee)), stageId: deal.stageId };
+    return { deal: mapDeal(deal, shouldHideDealPhones(user, deal.assignee)), stageId: deal.stageId };
   });
 
   app.post<{
@@ -480,6 +483,7 @@ export async function registerPipelineRoutes(
   }, async (request, reply) => {
     const user = await requireUser(request, reply, database);
     if (!user) return reply;
+    if (user.organization.role === "MANAGER" && user.organization.permissions?.claimUnassigned === false) return reply.status(403).send({ error: "forbidden", message: "Администратор отключил самостоятельное получение новых лидов." });
     const existing = await database.client.deal.findFirst({
       where: { id: request.params.dealId, organizationId: user.organization.id, status: "ACTIVE" },
       select: { id: true, contactId: true, organizationId: true, assigneeId: true, assignee: { select: { name: true } } },
@@ -543,7 +547,7 @@ export async function registerPipelineRoutes(
       const current = await database.client.deal.findUnique({ where: { id: existing.id }, include: { assignee: { select: { name: true } } } });
       return reply.status(409).send({ error: "deal_already_assigned", message: current?.assignee ? `Лид уже распределён. Ответственный — ${current.assignee.name}.` : "Лид уже распределён другим сотрудником." });
     }
-    return { deal: mapDeal(assigned, shouldHideDealPhones(user.organization.role, user.id, assigned.assignee)), stageId: assigned.stageId };
+    return { deal: mapDeal(assigned, shouldHideDealPhones(user, assigned.assignee)), stageId: assigned.stageId };
   });
 
   app.patch<{
@@ -650,6 +654,12 @@ export async function registerPipelineRoutes(
         where: { id: existing.contactId },
         data: { assigneeId: updated.assignee?.id ?? null },
       });
+      if (existing.assigneeId && updated.assignee?.id) {
+        await database.client.task.updateMany({
+          where: { organizationId: user.organization.id, dealId: existing.id, assigneeId: existing.assigneeId, status: "ACTIVE" },
+          data: { assigneeId: updated.assignee.id },
+        });
+      }
     }
 
     if (request.body.source !== undefined && request.body.source !== existing.source && hasOrganizationWideDataAccess(user)) {
@@ -717,7 +727,7 @@ export async function registerPipelineRoutes(
       });
     }
 
-    return { deal: mapDeal(updated, shouldHideDealPhones(user.organization.role, user.id, updated.assignee)), stageId: updated.stageId };
+    return { deal: mapDeal(updated, shouldHideDealPhones(user, updated.assignee)), stageId: updated.stageId };
   });
 
   app.post<{
@@ -814,7 +824,7 @@ export async function registerPipelineRoutes(
         tasks: { where: { status: "ACTIVE" }, orderBy: [{ dueDate: "asc" }, { dueTime: "asc" }], take: 1, select: { id: true, title: true, dueDate: true, dueTime: true } },
       },
     });
-    return { deal: mapDeal(updated, shouldHideDealPhones(user.organization.role, user.id, updated.assignee)), stageId: updated.stageId };
+    return { deal: mapDeal(updated, shouldHideDealPhones(user, updated.assignee)), stageId: updated.stageId };
   });
 
   app.delete<{
@@ -860,7 +870,7 @@ export async function registerPipelineRoutes(
         tasks: { where: { status: "ACTIVE" }, orderBy: [{ dueDate: "asc" }, { dueTime: "asc" }], take: 1, select: { id: true, title: true, dueDate: true, dueTime: true } },
       },
     });
-    return { deal: mapDeal(updated, shouldHideDealPhones(user.organization.role, user.id, updated.assignee)), stageId: updated.stageId };
+    return { deal: mapDeal(updated, shouldHideDealPhones(user, updated.assignee)), stageId: updated.stageId };
   });
 
   app.patch<{
@@ -909,7 +919,7 @@ export async function registerPipelineRoutes(
       });
     }
 
-    return { deal: mapDeal(updated, shouldHideDealPhones(user.organization.role, user.id, updated.assignee)), stageId: updated.stageId };
+    return { deal: mapDeal(updated, shouldHideDealPhones(user, updated.assignee)), stageId: updated.stageId };
   });
 
   app.patch<{
@@ -952,6 +962,6 @@ export async function registerPipelineRoutes(
         description: `Сделка перенесена в «${stage.title}»`,
       },
     });
-    return { deal: mapDeal(updated, shouldHideDealPhones(user.organization.role, user.id, updated.assignee)), stageId: stage.id };
+    return { deal: mapDeal(updated, shouldHideDealPhones(user, updated.assignee)), stageId: stage.id };
   });
 }

@@ -20,6 +20,13 @@ export interface AuthenticatedOrganization {
   name: string;
   slug: string;
   role: MembershipRole;
+  permissions?: {
+    seeAllDeals: boolean;
+    seeUnassignedPhones: boolean;
+    claimUnassigned: boolean;
+    manageDevelopments: boolean;
+    exportData: boolean;
+  };
 }
 
 export interface AuthenticatedUser {
@@ -51,6 +58,7 @@ export interface WorkspaceSettingsResponse {
     name: string;
     email: string;
     phone: string | null;
+    avatarUrl: string | null;
   };
 }
 
@@ -777,6 +785,16 @@ export interface DevelopmentProjectRecord {
   buildingsCount: number | null;
   sectionsCount: number | null;
   floors: string | null;
+  constructionTechnology: string | null;
+  heating: string | null;
+  territory: string | null;
+  parking: string | null;
+  apartmentCondition: string | null;
+  ceilingHeight: string | null;
+  installmentTerms: string | null;
+  downPayment: string | null;
+  infrastructure: string | null;
+  managerNote: string | null;
   imageUrl: string | null;
   sourceUrl: string | null;
   verifiedAt: string | null;
@@ -828,6 +846,16 @@ export interface CreateDevelopmentProjectRequest {
   buildingsCount?: number | null;
   sectionsCount?: number | null;
   floors?: string | null;
+  constructionTechnology?: string | null;
+  heating?: string | null;
+  territory?: string | null;
+  parking?: string | null;
+  apartmentCondition?: string | null;
+  ceilingHeight?: string | null;
+  installmentTerms?: string | null;
+  downPayment?: string | null;
+  infrastructure?: string | null;
+  managerNote?: string | null;
   imageUrl?: string | null;
   sourceUrl?: string | null;
 }

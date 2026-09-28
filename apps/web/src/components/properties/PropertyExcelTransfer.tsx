@@ -48,7 +48,7 @@ function normalizeHeader(value: string) { return value.trim().toLocaleLowerCase(
 function csvSafe(value: string) { return /^[=+\-@]/.test(value) ? `'${value}` : value; }
 function dateSuffix() { return new Date().toISOString().slice(0, 10); }
 
-export function PropertyExcelTransfer({ onImported }: { onImported: () => Promise<void> }) {
+export function PropertyExcelTransfer({ onImported, canExport = true }: { onImported: () => Promise<void>; canExport?: boolean }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -146,7 +146,7 @@ export function PropertyExcelTransfer({ onImported }: { onImported: () => Promis
   return <div className={styles.propertyExcelTransfer}>
     <button type="button" disabled={busy} onClick={() => inputRef.current?.click()}>Импорт таблицы</button>
     <input ref={inputRef} type="file" accept=".xlsx,.xls,.csv,text/csv" hidden onChange={(event) => { const file = event.target.files?.[0]; if (file) void readFile(file); event.target.value = ""; }} />
-    <button type="button" disabled={busy} onClick={() => { void exportFile(); }}>Экспорт Excel</button>
+    {canExport && <button type="button" disabled={busy} onClick={() => { void exportFile(); }}>Экспорт Excel</button>}
     {message && <p role="status">{message}</p>}
     {sheet && <div className={styles.importWizardLayer} role="dialog" aria-modal="true" aria-labelledby="property-import-title">
       <div className={styles.importWizard}>

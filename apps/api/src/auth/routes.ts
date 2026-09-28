@@ -42,7 +42,7 @@ function mapAuthenticatedUser(session: {
     name: string;
     memberships: Array<{
       role: "ADMIN" | "LEAD" | "MANAGER";
-      organization: { id: string; name: string; slug: string };
+      organization: { id: string; name: string; slug: string; managersSeeAllDeals: boolean; managersSeeUnassignedPhones: boolean; managersCanClaimUnassigned: boolean; managersCanManageDevelopments: boolean; managersCanExport: boolean };
     }>;
   };
 }): AuthenticatedUser | null {
@@ -57,8 +57,17 @@ function mapAuthenticatedUser(session: {
     email: session.user.email,
     name: session.user.name,
     organization: {
-      ...membership.organization,
+      id: membership.organization.id,
+      name: membership.organization.name,
+      slug: membership.organization.slug,
       role: membership.role,
+      permissions: {
+        seeAllDeals: membership.organization.managersSeeAllDeals,
+        seeUnassignedPhones: membership.organization.managersSeeUnassignedPhones,
+        claimUnassigned: membership.organization.managersCanClaimUnassigned,
+        manageDevelopments: membership.organization.managersCanManageDevelopments,
+        exportData: membership.organization.managersCanExport,
+      },
     },
   };
 }

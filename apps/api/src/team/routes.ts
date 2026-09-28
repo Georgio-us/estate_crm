@@ -383,7 +383,9 @@ export async function registerTeamRoutes(app: FastifyInstance, config: ApiConfig
         await tx.propertyEvent.create({ data: { organizationId, propertyId: property.id, actorId: actor.id, title: replacement ? "Ответственный за объект изменён" : "Объект требует ответственного", description: replacement ? "Сотрудник отключён или удалён" : member.user.name } });
       }
       for (const assigneeId of assigneeIds) {
-        await tx.deal.updateMany({ where: { organizationId, id: { in: assignments.filter((item) => item.assigneeId === assigneeId).map((item) => item.dealId) } }, data: { assigneeId } });
+        const transferredDealIds = assignments.filter((item) => item.assigneeId === assigneeId).map((item) => item.dealId);
+        await tx.deal.updateMany({ where: { organizationId, id: { in: transferredDealIds } }, data: { assigneeId } });
+        await tx.task.updateMany({ where: { organizationId, dealId: { in: transferredDealIds }, assigneeId: null, status: "ACTIVE" }, data: { assigneeId } });
       }
       const assignedIds = new Set(assignments.map((item) => item.dealId));
       const deferred = deals.filter((deal) => !assignedIds.has(deal.id));

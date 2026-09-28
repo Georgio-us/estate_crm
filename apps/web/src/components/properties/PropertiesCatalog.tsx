@@ -273,7 +273,7 @@ export function PropertiesCatalog() {
           <button className={section === "archive" ? styles.catalogTabActive : ""} type="button" onClick={() => changeSection("archive")}>Архив{archivedProperties.length ? ` · ${archivedProperties.length}` : ""}</button>
         </div>}
         {section === "primary" && <DevelopmentsCatalog />}
-        {(section === "secondary" || section === "rent") && <div className={styles.propertyCatalogActions}><button type="button" aria-pressed={myOnly} onClick={() => setMyOnly((value) => !value)}>{myOnly ? "Все объекты" : "Мои объекты"}</button><PropertyExcelTransfer onImported={loadProperties} /></div>}
+        {(section === "secondary" || section === "rent") && <div className={styles.propertyCatalogActions}><button type="button" aria-pressed={myOnly} onClick={() => setMyOnly((value) => !value)}>{myOnly ? "Все объекты" : "Мои объекты"}</button><PropertyExcelTransfer canExport={currentUser.organization.role !== "MANAGER" || Boolean(currentUser.organization.permissions?.exportData)} onImported={loadProperties} /></div>}
 
         {section !== "primary" && <><div className={styles.filters}>
           <FilterSelect label="Тип" value={category} onChange={(value) => setCategory(value as "all" | PropertyCategory)} options={["Квартира", "Дом", "Участок", "Коммерция"]} />

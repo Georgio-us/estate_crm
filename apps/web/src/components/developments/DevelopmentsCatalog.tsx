@@ -12,7 +12,7 @@ type CatalogView = "active" | "archive";
 
 export function DevelopmentsCatalog() {
   const user = useCurrentUser();
-  const canManage = user.organization.role !== "MANAGER";
+  const canManage = user.organization.role !== "MANAGER" || Boolean(user.organization.permissions?.manageDevelopments);
   const [developers, setDevelopers] = useState<DevelopmentDeveloperRecord[]>([]);
   const [archived, setArchived] = useState<DevelopmentDeveloperRecord[]>([]);
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");

@@ -32,6 +32,13 @@ enum ContactStatus {
   ARCHIVED
 }
 
+enum OrganizationReferenceKind {
+  LEAD_SOURCE
+  DISTRICT
+  PROPERTY_TYPE
+  LOSS_REASON
+}
+
 enum DealOperation {
   PURCHASE
   RENT
@@ -237,6 +244,11 @@ model Organization {
   timezone                String                   @default("Europe/Madrid")
   locale                  String                   @default("ru")
   currency                Currency                 @default(USD)
+  managersSeeAllDeals     Boolean                  @default(false) @map("managers_see_all_deals")
+  managersSeeUnassignedPhones Boolean              @default(false) @map("managers_see_unassigned_phones")
+  managersCanClaimUnassigned Boolean               @default(true) @map("managers_can_claim_unassigned")
+  managersCanManageDevelopments Boolean            @default(false) @map("managers_can_manage_developments")
+  managersCanExport       Boolean                  @default(true) @map("managers_can_export")
   createdAt               DateTime                 @default(now()) @map("created_at")
   updatedAt               DateTime                 @updatedAt @map("updated_at")
   memberships             Membership[]
@@ -256,6 +268,7 @@ model Organization {
   developmentBuildings    DevelopmentBuilding[]
   developmentSections     DevelopmentSection[]
   developmentUnits        DevelopmentUnit[]
+  developmentUnitEvents   DevelopmentUnitEvent[]
   developmentImportBatches DevelopmentImportBatch[]
   developmentImportRows   DevelopmentImportRow[]
   dealPropertySelections  DealPropertySelection[]
@@ -270,8 +283,26 @@ model Organization {
   teamInvitations         TeamInvitation[]
   pilotEvents             PilotEvent[]
   passwordResetTokens     PasswordResetToken[]
+  references              OrganizationReference[]
 
   @@map("organizations")
+}
+
+model OrganizationReference {
+  id             String                    @id @default(uuid()) @db.Uuid
+  organizationId String                    @map("organization_id") @db.Uuid
+  kind           OrganizationReferenceKind
+  key            String
+  label          String
+  isActive       Boolean                   @default(true) @map("is_active")
+  position       Int                       @default(0)
+  createdAt      DateTime                  @default(now()) @map("created_at")
+  updatedAt      DateTime                  @updatedAt @map("updated_at")
+  organization   Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, kind, key])
+  @@index([organizationId, kind, isActive, position])
+  @@map("organization_references")
 }
 
 model TaskType {
@@ -298,6 +329,10 @@ model User {
   name                           String
   phone                          String?
   passwordHash                   String?                      @map("password_hash")
+  avatarStorageKey               String?                      @map("avatar_storage_key")
+  avatarMimeType                 String?                      @map("avatar_mime_type")
+  avatarSizeBytes                Int?                         @map("avatar_size_bytes")
+  avatarReadyAt                  DateTime?                    @map("avatar_ready_at")
   createdAt                      DateTime                     @default(now()) @map("created_at")
   updatedAt                      DateTime                     @updatedAt @map("updated_at")
   memberships                    Membership[]
@@ -309,6 +344,7 @@ model User {
   assignedProperties             Property[]                   @relation("PropertyAssignee")
   propertyPhotoUploads           PropertyPhoto[]              @relation("PropertyPhotoUploader")
   developmentAssetUploads        DevelopmentAsset[]            @relation("DevelopmentAssetUploader")
+  developmentUnitEvents          DevelopmentUnitEvent[]         @relation("DevelopmentUnitEventActor")
   propertyEvents                 PropertyEvent[]              @relation("PropertyEventActor")
   telegramRecipients             TelegramRecipient[]
   telegramConnectTokens          TelegramConnectToken[]
@@ -429,6 +465,7 @@ model Deal {
   preferredProject        String?                  @map("preferred_project")
   source                  ContactSource            @default(MANUAL)
   status                  DealStatus               @default(ACTIVE)
+  lossReason              String?                  @map("loss_reason")
   position                Int                      @default(0)
   closedAt                DateTime?                @map("closed_at")
   createdAt               DateTime                 @default(now()) @map("created_at")
@@ -804,6 +841,16 @@ model DevelopmentProject {
   buildingsCount     Int?                          @map("buildings_count")
   sectionsCount      Int?                          @map("sections_count")
   floors             String?
+  constructionTechnology String?                    @map("construction_technology")
+  heating            String?
+  territory          String?
+  parking            String?
+  apartmentCondition String?                        @map("apartment_condition")
+  ceilingHeight      String?                        @map("ceiling_height")
+  installmentTerms   String?                        @map("installment_terms")
+  downPayment        String?                        @map("down_payment")
+  infrastructure     String?
+  managerNote        String?                        @map("manager_note")
   imageUrl           String?                       @map("image_url")
   sourceUrl          String?                       @map("source_url")
   verifiedAt         DateTime?                     @map("verified_at")
@@ -907,16 +954,37 @@ model DevelopmentUnit {
   note           String?
   layoutAssetId  String?               @map("layout_asset_id") @db.Uuid
   sourceData     Json?                 @map("source_data")
+  manualFields   Json?                 @map("manual_fields")
+  manualUpdatedAt DateTime?            @map("manual_updated_at")
+  archivedAt     DateTime?             @map("archived_at")
   createdAt      DateTime              @default(now()) @map("created_at")
   updatedAt      DateTime              @updatedAt @map("updated_at")
   organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   project        DevelopmentProject    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   building       DevelopmentBuilding?  @relation(fields: [buildingId], references: [id], onDelete: SetNull)
   section        DevelopmentSection?   @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  events         DevelopmentUnitEvent[]
 
   @@unique([projectId, buildingId, sectionId, unitNumber])
   @@index([organizationId, projectId, status, floor])
+  @@index([organizationId, projectId, archivedAt])
   @@map("development_units")
+}
+
+model DevelopmentUnitEvent {
+  id             String          @id @default(uuid()) @db.Uuid
+  organizationId String          @map("organization_id") @db.Uuid
+  unitId         String          @map("unit_id") @db.Uuid
+  actorId        String?         @map("actor_id") @db.Uuid
+  title          String
+  changes        Json?
+  createdAt      DateTime        @default(now()) @map("created_at")
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  unit           DevelopmentUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  actor          User?           @relation("DevelopmentUnitEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, unitId, createdAt])
+  @@map("development_unit_events")
 }
 
 model DevelopmentImportBatch {

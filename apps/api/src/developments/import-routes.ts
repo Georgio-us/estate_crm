@@ -3,6 +3,7 @@ import type { FastifyInstance } from "fastify";
 import type { DatabaseConnection } from "@estate-crm/database";
 
 import { requireUser } from "../auth/require-user.js";
+import { canManageDevelopments } from "../auth/authorization.js";
 
 type ImportField = "unitNumber" | "building" | "section" | "floor" | "rooms" | "area" | "price" | "pricePerSquareMeter" | "currency" | "status" | "renovationType" | "renovationCompletion" | "note";
 type ImportValues = Partial<Record<ImportField, string>>;
@@ -10,6 +11,12 @@ type MappedRow = { rowNumber: number; sourceSheet: string; raw: Record<string, s
 type CheckedRow = {
   rowNumber: number; unitNumber: string; building: string | null; section: string | null;
   action: "CREATE" | "UPDATE" | "REVIEW"; warnings: string[]; errors: string[];
+};
+type EditableUnitField = "floor" | "rooms" | "area" | "price" | "pricePerSquareMeter" | "currency" | "status" | "renovationType" | "renovationCompletion" | "note";
+type UnitUpdateBody = {
+  floor?: number | null; rooms?: number | null; area?: number | null; price?: number | null; pricePerSquareMeter?: number | null;
+  currency?: "USD" | "EUR" | "UAH"; status?: "AVAILABLE" | "RESERVED" | "SOLD" | "UNKNOWN";
+  renovationType?: string | null; renovationCompletion?: string | null; note?: string | null;
 };
 
 const importFields = ["unitNumber", "building", "section", "floor", "rooms", "area", "price", "pricePerSquareMeter", "currency", "status", "renovationType", "renovationCompletion", "note"] as const;
@@ -23,6 +30,15 @@ const rowsSchema = {
     } } },
   },
 } as const;
+const unitParamsSchema = { type: "object", required: ["projectId", "unitId"], properties: { projectId: { type: "string", format: "uuid" }, unitId: { type: "string", format: "uuid" } } } as const;
+const unitFields = {
+  floor: { anyOf: [{ type: "integer" }, { type: "null" }] }, rooms: { anyOf: [{ type: "integer", minimum: 0 }, { type: "null" }] },
+  area: { anyOf: [{ type: "number", minimum: 0 }, { type: "null" }] }, price: { anyOf: [{ type: "integer", minimum: 0 }, { type: "null" }] },
+  pricePerSquareMeter: { anyOf: [{ type: "integer", minimum: 0 }, { type: "null" }] }, currency: { type: "string", enum: ["USD", "EUR", "UAH"] },
+  status: { type: "string", enum: ["AVAILABLE", "RESERVED", "SOLD", "UNKNOWN"] }, renovationType: { anyOf: [{ type: "string", maxLength: 300 }, { type: "null" }] },
+  renovationCompletion: { anyOf: [{ type: "string", maxLength: 300 }, { type: "null" }] }, note: { anyOf: [{ type: "string", maxLength: 2_000 }, { type: "null" }] },
+} as const;
+const editableUnitFields = Object.keys(unitFields) as EditableUnitField[];
 
 function clean(value: string | undefined) { const result = value?.trim(); return result || null; }
 function normalized(value: string | null) { return (value || "").toLocaleLowerCase("ru").replace(/ё/g, "е").replace(/\s+/g, " ").trim(); }
@@ -49,8 +65,18 @@ function statusValue(value: string | undefined): "AVAILABLE" | "RESERVED" | "SOL
   return null;
 }
 
+function unitRecord(unit: any) {
+  return {
+    id: unit.id, unitNumber: unit.unitNumber, building: unit.building?.name ?? null, section: unit.section?.name ?? null, floor: unit.floor,
+    rooms: unit.rooms, roomsLabel: unit.roomsLabel, area: unit.area, price: unit.price, pricePerSquareMeter: unit.pricePerSquareMeter,
+    currency: unit.currency, status: unit.status, renovationType: unit.renovationType, renovationCompletion: unit.renovationCompletion, note: unit.note,
+    manualFields: Array.isArray(unit.manualFields) ? unit.manualFields : [], manualUpdatedAt: unit.manualUpdatedAt?.toISOString() ?? null,
+    archivedAt: unit.archivedAt?.toISOString() ?? null, updatedAt: unit.updatedAt.toISOString(),
+    ...(unit.events ? { events: unit.events.map((event: any) => ({ id: event.id, title: event.title, changes: event.changes, actorName: event.actor?.name ?? null, createdAt: event.createdAt.toISOString() })) } : {}),
+  };
+}
+
 export async function registerDevelopmentImportRoutes(app: FastifyInstance, database: DatabaseConnection) {
-  const canManage = (role: "ADMIN" | "LEAD" | "MANAGER") => role !== "MANAGER";
 
   async function context(projectId: string, assetId: string, organizationId: string) {
     return database.client.developmentImportBatch.findFirst({
@@ -61,7 +87,7 @@ export async function registerDevelopmentImportRoutes(app: FastifyInstance, data
 
   app.post<{ Params: { projectId: string; assetId: string }; Body: { rows: MappedRow[] } }>("/development-projects/:projectId/assets/:assetId/import/preview", { schema: { params: paramsSchema, body: rowsSchema } }, async (request, reply) => {
     const user = await requireUser(request, reply, database); if (!user) return reply;
-    if (!canManage(user.organization.role)) return reply.status(403).send({ error: "forbidden", message: "Импортировать шахматку может руководитель или администратор." });
+    if (!canManageDevelopments(user)) return reply.status(403).send({ error: "forbidden", message: "Импортировать шахматку может руководитель, администратор или менеджер с выданным правом." });
     const batch = await context(request.params.projectId, request.params.assetId, user.organization.id);
     if (!batch || batch.asset.kind !== "CHESSBOARD") return reply.status(404).send({ error: "import_not_found", message: "Черновик шахматки не найден." });
     const existing = await database.client.developmentUnit.findMany({ where: { organizationId: user.organization.id, projectId: request.params.projectId }, include: { building: { select: { name: true } }, section: { select: { name: true } } } });
@@ -79,6 +105,7 @@ export async function registerDevelopmentImportRoutes(app: FastifyInstance, data
       const key = `${normalized(building || (section ? "Основной корпус" : null))}|${normalized(section)}|${normalized(unitNumber)}`;
       if (unitNumber && seen.has(key)) errors.push("Такая квартира уже встречается в этом файле."); else if (unitNumber) seen.add(key);
       const match = existing.find((item) => normalized(item.unitNumber) === normalized(unitNumber) && normalized(item.building?.name ?? null) === normalized(building || (section ? "Основной корпус" : null)) && normalized(item.section?.name ?? null) === normalized(section));
+      if (match && Array.isArray(match.manualFields) && match.manualFields.length) warnings.push(`Ручные поля будут сохранены: ${match.manualFields.join(", ")}.`);
       return { rowNumber: row.rowNumber, unitNumber, building, section, action: errors.length ? "REVIEW" : match ? "UPDATE" : "CREATE", warnings, errors };
     });
     const counts = { create: checked.filter((row) => row.action === "CREATE").length, update: checked.filter((row) => row.action === "UPDATE").length, review: checked.filter((row) => row.action === "REVIEW").length };
@@ -96,7 +123,7 @@ export async function registerDevelopmentImportRoutes(app: FastifyInstance, data
 
   app.post<{ Params: { projectId: string; assetId: string }; Body: { confirmedRows?: number[] } }>("/development-projects/:projectId/assets/:assetId/import/publish", { schema: { params: paramsSchema, body: { type: "object", additionalProperties: false, properties: { confirmedRows: { type: "array", items: { type: "integer" }, uniqueItems: true } } } } }, async (request, reply) => {
     const user = await requireUser(request, reply, database); if (!user) return reply;
-    if (!canManage(user.organization.role)) return reply.status(403).send({ error: "forbidden" });
+    if (!canManageDevelopments(user)) return reply.status(403).send({ error: "forbidden" });
     const batch = await database.client.developmentImportBatch.findFirst({ where: { projectId: request.params.projectId, assetId: request.params.assetId, organizationId: user.organization.id }, include: { rows: { orderBy: { rowNumber: "asc" } } } });
     if (!batch?.rows.length) return reply.status(409).send({ error: "preview_required", message: "Сначала проверьте сопоставление колонок." });
     const confirmations = new Set(request.body.confirmedRows ?? []);
@@ -123,7 +150,13 @@ export async function registerDevelopmentImportRoutes(app: FastifyInstance, data
         const parsedRooms = integerValue(values.rooms); const roomsLabel = clean(values.rooms);
         const data = { floor: integerValue(values.floor), rooms: parsedRooms !== null && !Number.isNaN(parsedRooms) ? parsedRooms : null, roomsLabel, area: numberValue(values.area), price: integerValue(values.price), pricePerSquareMeter: integerValue(values.pricePerSquareMeter), currency: currencyValue(values.currency)!, status: statusValue(values.status)!, renovationType: clean(values.renovationType), renovationCompletion: clean(values.renovationCompletion), note: clean(values.note), sourceData: { assetId: batch.assetId, batchId: batch.id, rowNumber: row.rowNumber, sourceSheet: mapped?.sourceSheet, raw: row.rawData } };
         const existing = await tx.developmentUnit.findFirst({ where: { projectId: batch.projectId, buildingId, sectionId, unitNumber } });
-        if (existing) { await tx.developmentUnit.update({ where: { id: existing.id }, data }); updated += 1; }
+        if (existing) {
+          const protectedFields = new Set(Array.isArray(existing.manualFields) ? existing.manualFields.filter((field): field is EditableUnitField => editableUnitFields.includes(field as EditableUnitField)) : []);
+          const safeData = Object.fromEntries(Object.entries(data).filter(([field]) => field === "sourceData" || !protectedFields.has(field as EditableUnitField)));
+          await tx.developmentUnit.update({ where: { id: existing.id }, data: { ...safeData, archivedAt: null } });
+          await tx.developmentUnitEvent.create({ data: { organizationId: user.organization.id, unitId: existing.id, actorId: user.id, title: protectedFields.size ? "Обновлено из шахматки с сохранением ручных полей" : "Обновлено из шахматки", changes: { protectedFields: [...protectedFields], batchId: batch.id } } });
+          updated += 1;
+        }
         else { await tx.developmentUnit.create({ data: { organizationId: user.organization.id, projectId: batch.projectId, buildingId, sectionId, unitNumber, ...data } }); created += 1; }
       }
       const summary = { created, updated, total: batch.rows.length };
@@ -134,11 +167,58 @@ export async function registerDevelopmentImportRoutes(app: FastifyInstance, data
     return { created, updated, total: batch.rows.length };
   });
 
-  app.get<{ Params: { projectId: string } }>("/development-projects/:projectId/units", { schema: { params: { type: "object", required: ["projectId"], properties: { projectId: { type: "string", format: "uuid" } } } } }, async (request, reply) => {
+  app.get<{ Params: { projectId: string }; Querystring: { archived?: "only" | "all" } }>("/development-projects/:projectId/units", { schema: { params: { type: "object", required: ["projectId"], properties: { projectId: { type: "string", format: "uuid" } } } } }, async (request, reply) => {
     const user = await requireUser(request, reply, database); if (!user) return reply;
     const project = await database.client.developmentProject.findFirst({ where: { id: request.params.projectId, organizationId: user.organization.id }, select: { id: true } });
     if (!project) return reply.status(404).send({ error: "project_not_found" });
-    const units = await database.client.developmentUnit.findMany({ where: { organizationId: user.organization.id, projectId: project.id }, include: { building: { select: { name: true } }, section: { select: { name: true } } }, orderBy: [{ building: { name: "asc" } }, { section: { name: "asc" } }, { floor: "asc" }, { unitNumber: "asc" }] });
-    return { units: units.map((unit) => ({ id: unit.id, unitNumber: unit.unitNumber, building: unit.building?.name ?? null, section: unit.section?.name ?? null, floor: unit.floor, rooms: unit.rooms, roomsLabel: unit.roomsLabel, area: unit.area, price: unit.price, pricePerSquareMeter: unit.pricePerSquareMeter, currency: unit.currency, status: unit.status, renovationType: unit.renovationType, renovationCompletion: unit.renovationCompletion, note: unit.note, updatedAt: unit.updatedAt.toISOString() })) };
+    const archiveWhere = request.query.archived === "all" ? {} : { archivedAt: request.query.archived === "only" ? { not: null } : null };
+    const units = await database.client.developmentUnit.findMany({ where: { organizationId: user.organization.id, projectId: project.id, ...archiveWhere }, include: { building: { select: { name: true } }, section: { select: { name: true } } }, orderBy: [{ building: { name: "asc" } }, { section: { name: "asc" } }, { floor: "asc" }, { unitNumber: "asc" }] });
+    return { units: units.map(unitRecord) };
+  });
+
+  app.get<{ Params: { projectId: string; unitId: string } }>("/development-projects/:projectId/units/:unitId", { schema: { params: unitParamsSchema } }, async (request, reply) => {
+    const user = await requireUser(request, reply, database); if (!user) return reply;
+    const unit = await database.client.developmentUnit.findFirst({ where: { id: request.params.unitId, projectId: request.params.projectId, organizationId: user.organization.id }, include: { building: { select: { name: true } }, section: { select: { name: true } }, events: { include: { actor: { select: { name: true } } }, orderBy: { createdAt: "desc" }, take: 30 } } });
+    if (!unit) return reply.status(404).send({ error: "unit_not_found", message: "Квартира не найдена." });
+    return { unit: unitRecord(unit) };
+  });
+
+  app.patch<{ Params: { projectId: string; unitId: string }; Body: UnitUpdateBody }>("/development-projects/:projectId/units/:unitId", { schema: { params: unitParamsSchema, body: { type: "object", additionalProperties: false, minProperties: 1, properties: unitFields } } }, async (request, reply) => {
+    const user = await requireUser(request, reply, database); if (!user) return reply;
+    if (!canManageDevelopments(user)) return reply.status(403).send({ error: "forbidden", message: "Изменять квартиры может руководитель, администратор или менеджер с выданным правом." });
+    const existing = await database.client.developmentUnit.findFirst({ where: { id: request.params.unitId, projectId: request.params.projectId, organizationId: user.organization.id } });
+    if (!existing) return reply.status(404).send({ error: "unit_not_found", message: "Квартира не найдена." });
+    const changedFields = editableUnitFields.filter((field) => field in request.body && request.body[field] !== existing[field]);
+    const manualFields = [...new Set([...(Array.isArray(existing.manualFields) ? existing.manualFields.filter((field): field is string => typeof field === "string") : []), ...changedFields])];
+    const changes = Object.fromEntries(changedFields.map((field) => [field, { from: existing[field], to: request.body[field] }]));
+    const unit = await database.client.$transaction(async (tx) => {
+      const updated = await tx.developmentUnit.update({ where: { id: existing.id }, data: { ...request.body, manualFields, manualUpdatedAt: new Date() }, include: { building: { select: { name: true } }, section: { select: { name: true } } } });
+      if (changedFields.length) await tx.developmentUnitEvent.create({ data: { organizationId: user.organization.id, unitId: existing.id, actorId: user.id, title: "Квартира изменена вручную", changes } });
+      return updated;
+    });
+    return { unit: unitRecord(unit) };
+  });
+
+  app.post<{ Params: { projectId: string; unitId: string }; Body: { action: "archive" | "restore" } }>("/development-projects/:projectId/units/:unitId/lifecycle", { schema: { params: unitParamsSchema, body: { type: "object", additionalProperties: false, required: ["action"], properties: { action: { type: "string", enum: ["archive", "restore"] } } } } }, async (request, reply) => {
+    const user = await requireUser(request, reply, database); if (!user) return reply;
+    if (!canManageDevelopments(user)) return reply.status(403).send({ error: "forbidden" });
+    const existing = await database.client.developmentUnit.findFirst({ where: { id: request.params.unitId, projectId: request.params.projectId, organizationId: user.organization.id } });
+    if (!existing) return reply.status(404).send({ error: "unit_not_found" });
+    const archivedAt = request.body.action === "archive" ? new Date() : null;
+    await database.client.$transaction([
+      database.client.developmentUnit.update({ where: { id: existing.id }, data: { archivedAt } }),
+      database.client.developmentUnitEvent.create({ data: { organizationId: user.organization.id, unitId: existing.id, actorId: user.id, title: request.body.action === "archive" ? "Квартира перенесена в архив" : "Квартира восстановлена" } }),
+    ]);
+    return { ok: true };
+  });
+
+  app.delete<{ Params: { projectId: string; unitId: string } }>("/development-projects/:projectId/units/:unitId", { schema: { params: unitParamsSchema } }, async (request, reply) => {
+    const user = await requireUser(request, reply, database); if (!user) return reply;
+    if (!canManageDevelopments(user)) return reply.status(403).send({ error: "forbidden" });
+    const existing = await database.client.developmentUnit.findFirst({ where: { id: request.params.unitId, projectId: request.params.projectId, organizationId: user.organization.id } });
+    if (!existing) return reply.status(404).send({ error: "unit_not_found" });
+    if (!existing.archivedAt) return reply.status(409).send({ error: "archive_required", message: "Сначала перенесите квартиру в архив." });
+    await database.client.developmentUnit.delete({ where: { id: existing.id } });
+    return { ok: true };
   });
 }
