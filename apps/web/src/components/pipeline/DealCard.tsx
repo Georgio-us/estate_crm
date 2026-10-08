@@ -92,8 +92,8 @@ function DealCardContent({ deal, menuOpen = false, busy = false, onMenuToggle, o
         <button type="button" onClick={() => { onMenuClose?.(); onOpen?.(); }}>Открыть сделку</button>
         <button type="button" onClick={() => { onMenuClose?.(); onAddTask?.(); }}>Поставить задачу</button>
         <span />
-        <button type="button" disabled={busy} onClick={() => { void onLifecycle?.("WON"); }}>Завершить успешно</button>
-        <button type="button" disabled={busy} onClick={() => { void onLifecycle?.("LOST"); }}>Закрыть неуспешно</button>
+        <button className={styles.menuSuccess} type="button" disabled={busy} onClick={() => { void onLifecycle?.("WON"); }}>Завершить успешно</button>
+        <button className={styles.menuDanger} type="button" disabled={busy} onClick={() => { void onLifecycle?.("LOST"); }}>Закрыть неуспешно</button>
         <button className={styles.menuMuted} type="button" disabled={busy} onClick={() => { void onLifecycle?.("ARCHIVED"); }}>В архив</button>
       </div>}
       {deal.phone ? <a

@@ -942,14 +942,16 @@ export function PipelineBoard() {
         </div>
 
         <div className={styles.toolbarActions}>
-          <button className={styles.secondaryButton} type="button" onClick={() => { setLoadState("loading"); setPipelineView((current) => current === "active" ? "closed" : "active"); }}>{pipelineView === "active" ? "Закрытые" : "← Активные"}</button>
+          <div className={styles.lifecycleNavigation}>
+            <button className={styles.closedDealsButton} type="button" title={pipelineView === "active" ? "Успешные, неуспешные и архивные сделки" : "Вернуться к активным сделкам"} onClick={() => { setLoadState("loading"); setPipelineView((current) => current === "active" ? "closed" : "active"); }}><UiIcon name={pipelineView === "active" ? "closed-deals" : "arrow-left"} />{pipelineView === "active" ? "Закрытые" : "Активные"}</button>
+          </div>
           {pipelineView === "active" && (
           <div className={styles.viewSwitch}>
             <button className={view === "board" ? styles.viewActive : ""} type="button" onClick={() => setView("board")}>Доска</button>
             <button className={view === "list" ? styles.viewActive : ""} type="button" onClick={() => setView("list")}>Список</button>
           </div>
           )}
-          <button className={`${styles.secondaryButton} ${filtersOpen || activeFilters ? styles.filtersActive : ""}`} type="button" onClick={() => setFiltersOpen((value) => !value)}>Фильтры{activeFilters > 0 && <span>{activeFilters}</span>}</button>
+          <button className={`${styles.secondaryButton} ${styles.filtersButton} ${filtersOpen || activeFilters ? styles.filtersActive : ""}`} type="button" aria-expanded={filtersOpen} onClick={() => setFiltersOpen((value) => !value)}><UiIcon name="filter" />Фильтры{activeFilters > 0 && <span>{activeFilters}</span>}</button>
         </div>
       </div>
 

@@ -260,7 +260,35 @@
   display: flex;
   align-items: center;
   gap: 9px;
+  flex-wrap: wrap;
 }
+
+.lifecycleNavigation {
+  margin-right: 5px;
+  padding-right: 14px;
+  border-right: 1px solid var(--border-strong);
+}
+
+.closedDealsButton {
+  display: inline-flex;
+  height: 36px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 13px;
+  border: 1px solid var(--text);
+  border-radius: var(--radius-md);
+  background: var(--text);
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--font-size-body-sm);
+}
+
+.closedDealsButton:hover { background: #40403e; }
+.closedDealsButton:focus-visible { outline: 2px solid var(--text-muted); outline-offset: 3px; }
+.filtersButton { display: inline-flex; align-items: center; gap: 7px; }
+.closedDealsButton svg, .filtersButton svg { width: 18px; height: 18px; flex-shrink: 0; }
+.secondaryButton.filtersButton span { margin-left: 0; }
 
 .viewSwitch {
   display: flex;
@@ -521,6 +549,12 @@
 .cardMenu button:disabled { opacity: 0.55; cursor: default; }
 .cardMenu > span { height: 1px; margin: 5px 3px; background: var(--border); }
 .cardMenu .menuMuted { color: var(--text-muted); }
+.cardMenu .menuSuccess { margin-bottom: 3px; background: #e8f5ed; color: #357554; }
+.cardMenu .menuDanger { background: #f8eaea; color: #a24b4b; }
+.cardMenu .menuSuccess:hover:not(:disabled),
+.cardMenu .menuSuccess:focus-visible { background: #e8f5ed; box-shadow: inset 0 0 0 1px #357554; }
+.cardMenu .menuDanger:hover:not(:disabled),
+.cardMenu .menuDanger:focus-visible { background: #f8eaea; box-shadow: inset 0 0 0 1px #a24b4b; }
 
 .cardTopline h4 {
   margin: 0;
@@ -872,6 +906,7 @@
 
   .toolbar > div:first-child { width: 100%; }
   .toolbarActions { width: 100%; justify-content: space-between; }
+  .lifecycleNavigation { margin-right: 0; padding-right: 0; border-right: 0; }
   .viewSwitch { display: flex; }
 
   .cardFooter { align-items: flex-start; gap: 10px; }

@@ -3,7 +3,7 @@ import type { SVGProps } from "react";
 export type UiIconName =
   | "home" | "pipeline" | "contacts" | "properties" | "tasks" | "calendar"
   | "integrations" | "team" | "documentation" | "subscription" | "settings"
-  | "search" | "phone" | "meeting" | "message" | "check" | "webhook"
+  | "search" | "phone" | "meeting" | "message" | "check" | "webhook" | "filter" | "closed-deals" | "arrow-left"
   | "facebook" | "instagram" | "telegram" | "csv";
 
 export function UiIcon({ name, ...props }: SVGProps<SVGSVGElement> & { name: UiIconName }) {
@@ -26,6 +26,9 @@ export function UiIcon({ name, ...props }: SVGProps<SVGSVGElement> & { name: UiI
     {name === "meeting" && <g {...common}><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 10h18"/></g>}
     {name === "message" && <g {...common}><path d="M4 4h16v12H9l-5 4Z"/><path d="M8 9h8M8 12h5"/></g>}
     {name === "check" && <path {...common} d="m5 12 4.2 4.2L19 6.5"/>}
+    {name === "filter" && <g {...common}><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="2" fill="var(--surface)"/><circle cx="16" cy="12" r="2" fill="var(--surface)"/><circle cx="10" cy="18" r="2" fill="var(--surface)"/></g>}
+    {name === "closed-deals" && <g {...common}><path d="M3 7V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/><path d="M8 12h8M8 16h8"/></g>}
+    {name === "arrow-left" && <g {...common}><path d="M20 12H4m6-6-6 6 6 6"/></g>}
     {name === "webhook" && <g {...common}><circle cx="6" cy="12" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="M9 11 15.3 7.4M9 13l6.3 3.6"/></g>}
     {name === "facebook" && <path fill="currentColor" d="M13.8 21v-8h2.8l.4-3.1h-3.2v-2c0-.9.3-1.5 1.6-1.5H17V3.6c-.3 0-1.3-.1-2.5-.1-2.5 0-4.2 1.5-4.2 4.3v2.1H7.5V13h2.8v8Z"/>}
     {name === "instagram" && <g {...common} strokeWidth="2"><rect x="3.5" y="3.5" width="17" height="17" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r=".8" fill="currentColor" stroke="none"/></g>}

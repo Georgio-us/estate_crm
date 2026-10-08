@@ -285,8 +285,8 @@ export function DealDrawer({
               {(deal.status ?? "ACTIVE") === "ACTIVE" ? <>
                 <button type="button" onClick={() => { setDealMenuOpen(false); activateTaskComposer(); }}>Поставить задачу</button>
                 <span />
-                <button type="button" disabled={lifecycleBusy} onClick={() => { void changeLifecycle("WON"); }}>Завершить успешно</button>
-                <button type="button" disabled={lifecycleBusy} onClick={() => { void changeLifecycle("LOST"); }}>Закрыть неуспешно</button>
+                <button className={styles.menuSuccess} type="button" disabled={lifecycleBusy} onClick={() => { void changeLifecycle("WON"); }}>Завершить успешно</button>
+                <button className={styles.menuDanger} type="button" disabled={lifecycleBusy} onClick={() => { void changeLifecycle("LOST"); }}>Закрыть неуспешно</button>
                 <button className={styles.entityMenuMuted} type="button" disabled={lifecycleBusy} onClick={() => { void changeLifecycle("ARCHIVED"); }}>В архив</button>
               </> : <button type="button" disabled={lifecycleBusy} onClick={() => { void changeLifecycle("ACTIVE"); }}>Вернуть в работу</button>}
             </div>}

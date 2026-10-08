@@ -154,6 +154,12 @@
 .contactHeader .entityMenu a:hover { background: var(--surface-muted); }
 .entityMenu > span { height: 1px; margin: 5px 3px; background: var(--border); }
 .entityMenu .entityMenuMuted { color: var(--text-muted); }
+.headerActions .entityMenu .menuSuccess { margin-bottom: 3px; background: #e8f5ed; color: #357554; }
+.headerActions .entityMenu .menuDanger { background: #f8eaea; color: #a24b4b; }
+.headerActions .entityMenu .menuSuccess:hover:not(:disabled),
+.headerActions .entityMenu .menuSuccess:focus-visible { background: #e8f5ed; box-shadow: inset 0 0 0 1px #357554; }
+.headerActions .entityMenu .menuDanger:hover:not(:disabled),
+.headerActions .entityMenu .menuDanger:focus-visible { background: #f8eaea; box-shadow: inset 0 0 0 1px #a24b4b; }
 
 .workspace {
   display: grid;
