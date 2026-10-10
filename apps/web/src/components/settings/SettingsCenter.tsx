@@ -7,6 +7,7 @@ import { SortableContext, arrayMove, sortableKeyboardCoordinates, useSortable, v
 import { CSS } from "@dnd-kit/utilities";
 import { useCallback, useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { MemberNotificationSettings } from "@/components/notifications/MemberNotificationSettings";
+import { PasswordInput } from "@/components/auth/PasswordInput";
 import { PilotDiagnostics } from "./PilotDiagnostics";
 import { UiIcon, type UiIconName } from "@/components/ui/UiIcon";
 import styles from "./settings.module.css";
@@ -161,6 +162,6 @@ function ProfileSettings({ onNotify }: { onNotify: (message: string) => void }) 
 }
 
 function FormSection({ title, children }: { title: string; children: ReactNode }) { return <section className={styles.formSection}><h3>{title}</h3>{children}</section>; }
-function ControlledField({ label, value, type = "text", readOnly = false, onChange }: { label: string; value: string; type?: string; readOnly?: boolean; onChange: (value: string) => void }) { return <label className={styles.field}><span>{label}</span><input type={type} value={value} readOnly={readOnly} onChange={(event) => onChange(event.target.value)} /></label>; }
+function ControlledField({ label, value, type = "text", readOnly = false, onChange }: { label: string; value: string; type?: string; readOnly?: boolean; onChange: (value: string) => void }) { return <label className={styles.field}><span>{label}</span>{type === "password" ? <PasswordInput aria-label={label} value={value} readOnly={readOnly} maxLength={256} autoComplete={label === "Текущий пароль" ? "current-password" : "new-password"} onChange={(event) => onChange(event.target.value)} /> : <input type={type} value={value} readOnly={readOnly} onChange={(event) => onChange(event.target.value)} />}</label>; }
 function ControlledSelect({ label, value, options, onChange }: { label: string; value: string; options: Array<{ value: string; label: string }>; onChange: (value: string) => void }) { return <label className={styles.field}><span>{label}</span><select value={value} onChange={(event) => onChange(event.target.value)}>{options.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select></label>; }
 function SaveBar({ saving, onCancel, onSave }: { saving: boolean; onCancel: () => void; onSave: () => void }) { return <div className={styles.saveBar}><span>Есть несохранённые изменения</span><button className={styles.cancelButton} type="button" disabled={saving} onClick={onCancel}>Отменить</button><button type="button" disabled={saving} onClick={onSave}>{saving ? "Сохраняем…" : "Сохранить"}</button></div>; }

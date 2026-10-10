@@ -1,29 +1,21 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useState } from "react";
 import Link from "next/link";
 
 import styles from "@/components/auth/auth.module.css";
 import { LogoMark } from "@/components/brand/LogoMark";
+import { PasswordInput } from "@/components/auth/PasswordInput";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [recoveryAvailable, setRecoveryAvailable] = useState(false);
-
-  useEffect(() => {
-    void fetch("/api/auth/email-status", { cache: "no-store" })
-      .then(async (response) => response.ok ? await response.json() as { available: boolean } : { available: false })
-      .then((status) => setRecoveryAvailable(status.available))
-      .catch(() => {});
-  }, []);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form = new FormData(event.currentTarget);
     setError("");
     setSubmitting(true);
 
@@ -32,7 +24,7 @@ export default function LoginPage() {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email: form.get("email"), password: form.get("password") }),
       });
 
       if (!response.ok) {
@@ -68,23 +60,24 @@ export default function LoginPage() {
           <label>
             <span>Email</span>
             <input
-              autoComplete="email"
+              name="email"
+              autoComplete="username"
               inputMode="email"
               required
               type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
+              maxLength={320}
             />
           </label>
-          <label>
+          <label htmlFor="login-password">
             <span>Пароль</span>
-            <input
+            <PasswordInput
+              aria-label="Пароль"
+              id="login-password"
+              name="password"
               autoComplete="current-password"
               minLength={8}
               required
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
+              maxLength={256}
             />
           </label>
           {error && <p className={styles.formError} role="alert">{error}</p>}
@@ -92,7 +85,7 @@ export default function LoginPage() {
             {submitting ? "Входим…" : "Войти"}
           </button>
         </form>
-        {recoveryAvailable && <Link className={styles.authLink} href="/forgot-password">Забыли пароль?</Link>}
+        <Link className={styles.authLink} href="/forgot-password">Забыли пароль?</Link>
       </section>
       <aside className={styles.loginAside}>
         <div><span>Агентство недвижимости Delmar</span><h2>Все обращения, сделки и задачи — в одном рабочем пространстве.</h2></div>

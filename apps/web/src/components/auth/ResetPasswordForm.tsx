@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { LogoMark } from "@/components/brand/LogoMark";
+import { PasswordInput } from "./PasswordInput";
 import styles from "./auth.module.css";
 
 export function ResetPasswordForm({ token }: { token: string }) {
@@ -33,8 +34,8 @@ export function ResetPasswordForm({ token }: { token: string }) {
     <header><LogoMark className={styles.logo} title="Estate CRM" /><div><strong>Estate CRM</strong><small>Рабочее пространство</small></div></header>
     <div className={styles.loginIntro}><span>Доступ к CRM</span><h1>Новый пароль</h1><p>После смены пароля все прежние сеансы завершатся. Войдите заново на своих устройствах.</p></div>
     {complete ? <p className={styles.formSuccess} role="status">Пароль изменён. Теперь войдите в CRM с новым паролем.</p> : <form onSubmit={submit}>
-      <label><span>Новый пароль</span><input autoComplete="new-password" minLength={8} required type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
-      <label><span>Повторите пароль</span><input autoComplete="new-password" minLength={8} required type="password" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></label>
+      <label htmlFor="new-password"><span>Новый пароль</span><PasswordInput id="new-password" aria-label="Новый пароль" autoComplete="new-password" minLength={8} required maxLength={256} value={password} onChange={(event) => setPassword(event.target.value)} /></label>
+      <label htmlFor="confirm-password"><span>Повторите пароль</span><PasswordInput id="confirm-password" aria-label="Повторите пароль" autoComplete="new-password" minLength={8} required maxLength={256} value={confirmation} onChange={(event) => setConfirmation(event.target.value)} /></label>
       {error && <p className={styles.formError} role="alert">{error}</p>}
       <button disabled={submitting} type="submit">{submitting ? "Сохраняем…" : "Изменить пароль"}</button>
     </form>}
