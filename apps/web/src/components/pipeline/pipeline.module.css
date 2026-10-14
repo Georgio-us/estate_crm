@@ -945,3 +945,6 @@
   .assignmentModal h3 { font-size: 23px; }
   .assignmentDelegate { grid-template-columns: 1fr; }
 }
+
+.receivedDate { display: block; margin: 8px 0; color: var(--text-subtle); font-size: var(--font-size-caption); }
+.lifecycleACTIVE { color: var(--primary); background: #eff6ff; }

@@ -33,6 +33,8 @@ import { NewDealModal, type NewDealDraft } from "./NewDealModal";
 import { PipelineDataTransfer, type ImportedDealRow } from "./PipelineDataTransfer";
 import { PipelineColumn } from "./PipelineColumn";
 import styles from "./pipeline.module.css";
+import { DealPeriodPicker } from "@/components/filters/DealPeriodPicker";
+import { dateInTimezone, matchesDealPeriod, periodLabel, type DealPeriod } from "@/lib/deal-period";
 
 const sourceFromApi = { META: "Meta", WEBSITE: "Website", CALL: "Call", REFERRAL: "Referral", MANUAL: "Manual" } as const;
 const sourceToApi = { Meta: "META", Website: "WEBSITE", Call: "CALL", Referral: "REFERRAL", Manual: "MANUAL" } as const;
@@ -163,7 +165,8 @@ function mapApiDeal(deal: ApiDeal): Deal {
     assigneeId: deal.assignee?.id,
     assignee: deal.assignee?.name || "Не назначен",
     comment: deal.comment || undefined,
-    createdAt: new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(deal.createdAt)),
+    createdAtIso: deal.createdAt,
+    createdAt: new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(deal.createdAt)),
     updatedAt: deal.updatedAt,
   };
 }
@@ -176,6 +179,13 @@ async function requestPipeline(view: "active" | "closed" | "all" = "active"): Pr
     name: payload.pipeline.name,
     stages: payload.pipeline.stages.map((stage) => ({ ...stage, deals: stage.deals.map(mapApiDeal) })),
   };
+}
+
+async function requestWorkspaceTimezone(): Promise<string> {
+  const response = await fetch("/api/crm/settings", { cache: "no-store" });
+  if (!response.ok) throw new Error("Не удалось загрузить часовой пояс.");
+  const payload = await response.json() as { workspace: { timezone: string } };
+  return payload.workspace.timezone;
 }
 
 async function requestContactOptions(): Promise<ContactOption[]> {
@@ -229,7 +239,10 @@ export function PipelineBoard() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [pipelineMenuOpen, setPipelineMenuOpen] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
-  const [pipelineView, setPipelineView] = useState<"active" | "closed">("active");
+  const [pipelineView, setPipelineView] = useState<"active" | "closed" | "all">("active");
+  const [period, setPeriod] = useState<DealPeriod>({ kind: "all" });
+  const [timeZone, setTimeZone] = useState("Europe/Kyiv");
+  const today = dateInTimezone(new Date(), timeZone);
   const [notice, setNotice] = useState("");
   const [assignmentPromptOpen, setAssignmentPromptOpen] = useState(false);
   const [assignmentChoiceId, setAssignmentChoiceId] = useState("");
@@ -266,9 +279,10 @@ export function PipelineBoard() {
 
   useEffect(() => {
     let active = true;
-    void Promise.all([requestPipeline(pipelineView), requestContactOptions()]).then(
-      ([pipeline, contactOptions]) => {
+    void Promise.all([requestPipeline(pipelineView), requestContactOptions(), requestWorkspaceTimezone()]).then(
+      ([pipeline, contactOptions, workspaceTimezone]) => {
         if (!active) return;
+        setTimeZone(workspaceTimezone);
         setPipelineName(pipeline.name);
         setStages(pipeline.stages);
         setContacts(contactOptions);
@@ -362,7 +376,7 @@ export function PipelineBoard() {
     if (!response.ok || !payload.deal || !payload.stageId) throw new Error(payload.message || "Не удалось изменить состояние сделки.");
 
     const updatedDeal = mapApiDeal(payload.deal);
-    const remainsVisible = pipelineView === "active" ? status === "ACTIVE" : status !== "ACTIVE";
+    const remainsVisible = pipelineView === "all" || (pipelineView === "active" ? status === "ACTIVE" : status !== "ACTIVE");
     setStages((current) => current.map((stage) => ({
       ...stage,
       deals: stage.deals.flatMap((deal) => deal.id === dealId ? (remainsVisible ? [updatedDeal] : []) : [deal]),
@@ -411,6 +425,7 @@ export function PipelineBoard() {
       const nextTask = dealTasks[0];
       return {
         ...deal,
+        createdAt: deal.createdAtIso ? new Intl.DateTimeFormat("ru-RU", { timeZone, day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(deal.createdAtIso)) : deal.createdAt,
         task: nextTask?.title,
         taskId: nextTask?.id,
         taskState: nextTask ? taskState(nextTask) : undefined,
@@ -418,10 +433,10 @@ export function PipelineBoard() {
         taskDueLabel: nextTask ? `${nextTask.dueLabel}${nextTask.dueTime ? `, ${nextTask.dueTime}` : ""}` : undefined,
       };
     }),
-  })), [stages, tasks]);
+  })), [stages, tasks, timeZone]);
   const dealsCount = stagesWithTasks.reduce((total, stage) => total + stage.deals.length, 0);
   const assignees = useMemo(() => ["Все", ...new Set(stagesWithTasks.flatMap((stage) => stage.deals.map((deal) => deal.assignee)))], [stagesWithTasks]);
-  const activeFilters = [assigneeFilter, sourceFilter, taskFilter].filter((value) => value !== "Все").length;
+  const activeFilters = [assigneeFilter, sourceFilter, taskFilter].filter((value) => value !== "Все").length + Number(period.kind !== "all");
   const filteredStages = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("ru");
     return stagesWithTasks.map((stage) => ({
@@ -431,10 +446,10 @@ export function PipelineBoard() {
         const matchesAssignee = assigneeFilter === "Все" || deal.assignee === assigneeFilter;
         const matchesSource = sourceFilter === "Все" || deal.source === sourceFilter;
         const matchesTask = taskFilter === "Все" || (taskFilter === "Без задачи" ? !deal.task : deal.taskState === taskFilter);
-        return matchesQuery && matchesAssignee && matchesSource && matchesTask;
+        return matchesQuery && matchesAssignee && matchesSource && matchesTask && matchesDealPeriod(deal.createdAtIso, period, today, timeZone);
       }),
     }));
-  }, [assigneeFilter, query, sourceFilter, stagesWithTasks, taskFilter]);
+  }, [assigneeFilter, query, sourceFilter, stagesWithTasks, taskFilter, period, today, timeZone]);
   const visibleDealsCount = filteredStages.reduce((total, stage) => total + stage.deals.length, 0);
   const selectedStage = selected ? stagesWithTasks.find((stage) => stage.id === selected.stageId) : undefined;
   const selectedDeal = selectedStage?.deals.find((deal) => deal.id === selected?.dealId);
@@ -753,6 +768,7 @@ export function PipelineBoard() {
     setAssigneeFilter("Все");
     setSourceFilter("Все");
     setTaskFilter("Все");
+    setPeriod({ kind: "all" });
   }
 
   async function importDeals(rows: ImportedDealRow[]) {
@@ -938,13 +954,14 @@ export function PipelineBoard() {
             </button>
             {pipelineMenuOpen && <div className={styles.pipelineMenu}>{user.organization.role === "ADMIN" && <button type="button" onClick={() => { setPipelineMenuOpen(false); router.push("/settings"); }}>Настроить этапы <span>→</span></button>}<button type="button" onClick={() => { setPipelineMenuOpen(false); setTransferOpen(true); }}>Импорт и экспорт <span>⇅</span></button></div>}
           </div>
-          <p>{visibleDealsCount === dealsCount ? `${dealsCount} ${pipelineView === "active" ? "активных" : "закрытых"} сделок` : `${visibleDealsCount} из ${dealsCount} сделок`}</p>
+          <p aria-live="polite">{visibleDealsCount} {pipelineView === "active" ? "активных" : pipelineView === "closed" ? "закрытых" : "всего"} сделок{period.kind !== "all" ? ` · ${periodLabel(period)}` : ""}{activeFilters || query ? ` · из ${dealsCount}` : ""}</p>
         </div>
 
         <div className={styles.toolbarActions}>
-          <div className={styles.lifecycleNavigation}>
-            <button className={styles.closedDealsButton} type="button" title={pipelineView === "active" ? "Успешные, неуспешные и архивные сделки" : "Вернуться к активным сделкам"} onClick={() => { setLoadState("loading"); setPipelineView((current) => current === "active" ? "closed" : "active"); }}><UiIcon name={pipelineView === "active" ? "closed-deals" : "arrow-left"} />{pipelineView === "active" ? "Закрытые" : "Активные"}</button>
+          <div className={styles.viewSwitch} aria-label="Состояние сделок">
+            {(["active", "closed", "all"] as const).map((mode) => <button key={mode} type="button" className={pipelineView === mode ? styles.viewActive : ""} aria-pressed={pipelineView === mode} onClick={() => { if (pipelineView !== mode) { setLoadState("loading"); setPipelineView(mode); } }}>{mode === "active" ? "Активные" : mode === "closed" ? "Закрытые" : "Все"}</button>)}
           </div>
+          <DealPeriodPicker value={period} onChange={setPeriod} timeZone={timeZone} />
           {pipelineView === "active" && (
           <div className={styles.viewSwitch}>
             <button className={view === "board" ? styles.viewActive : ""} type="button" onClick={() => setView("board")}>Доска</button>
@@ -982,7 +999,7 @@ export function PipelineBoard() {
         <DragOverlay dropAnimation={{ duration: 150, easing: "ease-out" }}>
           {activeDeal ? <DealCardPreview deal={activeDeal} /> : null}
         </DragOverlay>
-      </DndContext> : <DealList stages={filteredStages} closed={pipelineView === "closed"} canDeleteClosed={user.organization.role !== "MANAGER"} onDeleteClosed={deleteClosedDeals} onRestore={(dealId) => runDealLifecycle(dealId, "ACTIVE")} onOpenDeal={openDeal} />}
+      </DndContext> : <DealList stages={filteredStages} showStatus={pipelineView !== "active"} closed={pipelineView === "closed"} canDeleteClosed={user.organization.role !== "MANAGER"} onDeleteClosed={deleteClosedDeals} onRestore={(dealId) => runDealLifecycle(dealId, "ACTIVE")} onOpenDeal={openDeal} />}
 
       {selectedDeal && selectedStage && (
         <DealDrawer
@@ -1070,7 +1087,7 @@ export function PipelineBoard() {
   );
 }
 
-function DealList({ stages, closed = false, canDeleteClosed = false, onDeleteClosed, onRestore, onOpenDeal }: { stages: PipelineStage[]; closed?: boolean; canDeleteClosed?: boolean; onDeleteClosed?: (dealIds: string[]) => Promise<void>; onRestore?: (dealId: string) => Promise<void>; onOpenDeal: (dealId: string, stageId: string) => void }) {
+function DealList({ stages, showStatus = false, closed = false, canDeleteClosed = false, onDeleteClosed, onRestore, onOpenDeal }: { stages: PipelineStage[]; showStatus?: boolean; closed?: boolean; canDeleteClosed?: boolean; onDeleteClosed?: (dealIds: string[]) => Promise<void>; onRestore?: (dealId: string) => Promise<void>; onOpenDeal: (dealId: string, stageId: string) => void }) {
   const rows = stages.flatMap((stage) => stage.deals.map((deal) => ({ deal, stage })));
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [deleting, setDeleting] = useState(false);
@@ -1090,5 +1107,5 @@ function DealList({ stages, closed = false, canDeleteClosed = false, onDeleteClo
     }
   }
 
-  return <div className={styles.listView}>{closed && canDeleteClosed && <div className={styles.closedBulkBar}><label><input type="checkbox" checked={selectedIds.length === rows.length} onChange={(event) => setSelectedIds(event.target.checked ? rows.map(({ deal }) => deal.id) : [])} /> Выбрать все</label><button type="button" disabled={!selectedIds.length || deleting} onClick={() => { void removeSelected(); }}>{deleting ? "Удаляем…" : `Удалить${selectedIds.length ? ` (${selectedIds.length})` : ""}`}</button></div>}<header><span>Контакт</span><span>Сделка и запрос</span><span>Этап</span><span>Ответственный</span><span>{closed ? "Состояние" : "Следующая задача"}</span></header>{rows.map(({ deal, stage }) => <div className={styles.listRow} role="button" tabIndex={0} onClick={() => onOpenDeal(deal.id, stage.id)} onKeyDown={(event) => { if (event.key === "Enter") onOpenDeal(deal.id, stage.id); }} key={deal.id}>{closed && canDeleteClosed && <label className={styles.closedSelector} onClick={(event) => event.stopPropagation()}><input type="checkbox" aria-label={`Выбрать сделку #${deal.number}`} checked={selectedIds.includes(deal.id)} onChange={(event) => setSelectedIds((current) => event.target.checked ? [...current, deal.id] : current.filter((id) => id !== deal.id))} /></label>}<span className={styles.listContact}><i>{deal.contactName.slice(0, 1)}</i><span><strong>{deal.contactName}</strong><small>Сделка #{deal.number} · {deal.phone}</small></span></span><span className={styles.listRequest}><strong>{deal.title || deal.request}</strong><small>{deal.request || "Запрос не указан"} · {deal.budget || "Бюджет не указан"}</small></span><span className={styles.listStage}><i style={{ backgroundColor: stage.color }} />{stage.title}</span><span>{deal.assignee}</span>{closed ? <span className={`${styles.lifecycleBadge} ${styles[`lifecycle${deal.status}`]}`}>{deal.status === "WON" ? "Успешно" : deal.status === "LOST" ? "Неуспешно" : "Архив"}</span> : <span className={`${styles.listTask} ${deal.taskState ? styles[deal.taskState] : ""}`}>{deal.task || "Нет задачи"}</span>}{closed && onRestore ? <button className={styles.restoreButton} type="button" title="Вернуть сделку в работу" aria-label="Вернуть сделку в работу" onClick={(event) => { event.stopPropagation(); void onRestore(deal.id); }}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h10a6 6 0 1 1-5.2 9" /><path d="m8 5-4 4 4 4" /></svg></button> : <b>›</b>}</div>)}</div>;
+  return <div className={styles.listView}>{closed && canDeleteClosed && <div className={styles.closedBulkBar}><label><input type="checkbox" checked={selectedIds.length === rows.length} onChange={(event) => setSelectedIds(event.target.checked ? rows.map(({ deal }) => deal.id) : [])} /> Выбрать все</label><button type="button" disabled={!selectedIds.length || deleting} onClick={() => { void removeSelected(); }}>{deleting ? "Удаляем…" : `Удалить${selectedIds.length ? ` (${selectedIds.length})` : ""}`}</button></div>}<header><span>Контакт</span><span>Сделка и запрос</span><span>Этап</span><span>Ответственный</span><span>{showStatus ? "Состояние" : "Следующая задача"}</span></header>{rows.map(({ deal, stage }) => <div className={styles.listRow} role="button" tabIndex={0} onClick={() => onOpenDeal(deal.id, stage.id)} onKeyDown={(event) => { if (event.key === "Enter") onOpenDeal(deal.id, stage.id); }} key={deal.id}>{closed && canDeleteClosed && <label className={styles.closedSelector} onClick={(event) => event.stopPropagation()}><input type="checkbox" aria-label={`Выбрать сделку #${deal.number}`} checked={selectedIds.includes(deal.id)} onChange={(event) => setSelectedIds((current) => event.target.checked ? [...current, deal.id] : current.filter((id) => id !== deal.id))} /></label>}<span className={styles.listContact}><i>{deal.contactName.slice(0, 1)}</i><span><strong>{deal.contactName}</strong><small>Сделка #{deal.number} · {deal.phone}</small></span></span><span className={styles.listRequest}><strong>{deal.title || deal.request}</strong><small>{deal.request || "Запрос не указан"} · {deal.budget || "Бюджет не указан"}</small><time className={styles.receivedDate} dateTime={deal.createdAtIso}>Поступил {deal.createdAt}</time></span><span className={styles.listStage}><i style={{ backgroundColor: stage.color }} />{stage.title}</span><span>{deal.assignee}</span>{showStatus ? <span className={`${styles.lifecycleBadge} ${styles[`lifecycle${deal.status}`]}`}>{deal.status === "WON" ? "Успешно" : deal.status === "LOST" ? "Неуспешно" : deal.status === "ACTIVE" ? "Активна" : "Архив"}</span> : <span className={`${styles.listTask} ${deal.taskState ? styles[deal.taskState] : ""}`}>{deal.task || "Нет задачи"}</span>}{closed && onRestore ? <button className={styles.restoreButton} type="button" title="Вернуть сделку в работу" aria-label="Вернуть сделку в работу" onClick={(event) => { event.stopPropagation(); void onRestore(deal.id); }}><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h10a6 6 0 1 1-5.2 9" /><path d="m8 5-4 4 4 4" /></svg></button> : <b>›</b>}</div>)}</div>;
 }

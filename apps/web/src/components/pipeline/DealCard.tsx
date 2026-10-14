@@ -110,6 +110,7 @@ function DealCardContent({ deal, menuOpen = false, busy = false, onMenuToggle, o
         <span>{sourceLabels[deal.source]}</span>
       </div>
 
+      {deal.createdAt && <time className={styles.receivedDate} dateTime={deal.createdAtIso}>Поступил {deal.createdAt}</time>}
       <div className={styles.cardFooter}>
         <span className={styles.assignee} title={deal.assignee}>
           {deal.assignee === "Не назначен" ? "—" : deal.assignee.slice(0, 1)}
